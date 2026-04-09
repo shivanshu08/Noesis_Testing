@@ -3,7 +3,7 @@
   <aside class="sidebar">
     <div class="sidebar-header">
       <div class="logo">
-        <i class="pi pi-bolt logo-icon"></i>
+        <img src="assets/images/drogevate-logo.svg" alt="Drogevate" class="logo-img" />
         @if (!sidebarCollapsed()) {
           <span class="logo-text">Noesis</span>
         }
@@ -22,6 +22,18 @@
     </nav>
 
     <div class="sidebar-footer">
+      <!-- User details -->
+      @if (auth.user(); as user) {
+        <div class="sidebar-user" [class.compact]="sidebarCollapsed()">
+          <p-avatar [label]="user.fullName?.charAt(0) || 'U'" shape="circle" size="normal" [style]="{ 'background-color': 'var(--noesis-primary)', 'color': '#fff', 'font-weight': '600' }" />
+          @if (!sidebarCollapsed()) {
+            <div class="sidebar-user-info">
+              <span class="sidebar-user-name">{{ user.fullName }}</span>
+              <span class="sidebar-user-role">{{ user.role | titlecase }}</span>
+            </div>
+          }
+        </div>
+      }
       <a (click)="auth.logout()" class="nav-item logout-item" pTooltip="Logout" tooltipPosition="right">
         <i class="pi pi-sign-out"></i>
         @if (!sidebarCollapsed()) {
@@ -39,8 +51,23 @@
         <p-button icon="pi pi-bars" [rounded]="true" [text]="true" severity="secondary" (onClick)="toggleSidebar()" />
       </div>
       <div class="topbar-right">
+        <!-- Theme Selector -->
+        <div class="theme-selector">
+          <p-button icon="pi pi-palette" [rounded]="true" [text]="true" severity="secondary" (onClick)="showThemeMenu = !showThemeMenu" pTooltip="Change Theme" tooltipPosition="bottom" />
+          @if (showThemeMenu) {
+            <div class="theme-dropdown" (mouseleave)="showThemeMenu = false">
+              @for (t of themeService.themes; track t.name) {
+                <button class="theme-option" [class.active]="themeService.theme().name === t.name" (click)="themeService.setTheme(t); showThemeMenu = false">
+                  <span class="theme-swatch" [style.background]="t.primary"></span>
+                  <span>{{ t.label }}</span>
+                </button>
+              }
+            </div>
+          }
+        </div>
+
         <div class="user-info">
-          <p-avatar [label]="auth.user()?.fullName?.charAt(0) || 'U'" shape="circle" size="normal" [style]="{ 'background-color': '#6366f1', 'color': '#fff' }" />
+          <p-avatar [label]="auth.user()?.fullName?.charAt(0) || 'U'" shape="circle" size="normal" [style]="{ 'background-color': 'var(--noesis-primary)', 'color': '#fff' }" />
           @if (auth.user(); as user) {
             <div class="user-details">
               <span class="user-name">{{ user.fullName }}</span>
@@ -55,5 +82,10 @@
     <main class="page-content">
       <router-outlet />
     </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <span>Drogevate &copy; {{ currentYear }}. All rights reserved.</span>
+    </footer>
   </div>
 </div>

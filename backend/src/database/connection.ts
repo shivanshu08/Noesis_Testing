@@ -1,4 +1,4 @@
-import mysql, { Pool, PoolConnection, RowDataPacket, ResultSetHeader } from 'mysql2/promise';
+import { Pool, PoolClient, QueryResult } from 'pg';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
@@ -6,42 +6,37 @@ let pool: Pool;
 
 export function getPool(): Pool {
   if (!pool) {
-    pool = mysql.createPool({
+    pool = new Pool({
       host: config.db.host,
       port: config.db.port,
       user: config.db.user,
       password: config.db.password,
       database: config.db.database,
-      connectionLimit: config.db.connectionLimit,
-      waitForConnections: true,
-      queueLimit: 0,
-      enableKeepAlive: true,
-      keepAliveInitialDelay: 0,
+      max: config.db.connectionLimit,
     });
-    logger.info('MySQL connection pool created');
+    logger.info('PostgreSQL connection pool created');
   }
   return pool;
 }
 
-export async function query<T extends RowDataPacket[]>(sql: string, params?: any[]): Promise<T> {
-  const [rows] = await getPool().execute<T>(sql, params);
-  return rows;
+export async function query<T extends Record<string, any> = any>(sql: string, params?: any[]): Promise<T[]> {
+  const result = await getPool().query(sql, params);
+  return result.rows as T[];
 }
 
-export async function execute(sql: string, params?: any[]): Promise<ResultSetHeader> {
-  const [result] = await getPool().execute<ResultSetHeader>(sql, params);
-  return result;
+export async function execute(sql: string, params?: any[]): Promise<QueryResult> {
+  return getPool().query(sql, params);
 }
 
-export async function getConnection(): Promise<PoolConnection> {
-  return getPool().getConnection();
+export async function getConnection(): Promise<PoolClient> {
+  return getPool().connect();
 }
 
 export async function testConnection(): Promise<boolean> {
   try {
-    const conn = await getPool().getConnection();
-    await conn.ping();
-    conn.release();
+    const client = await getPool().connect();
+    await client.query('SELECT 1');
+    client.release();
     logger.info('Database connection successful');
     return true;
   } catch (error) {

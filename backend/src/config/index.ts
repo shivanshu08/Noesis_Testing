@@ -7,8 +7,8 @@ export const config = {
 
   db: {
     host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '3306', 10),
-    user: process.env.DB_USER || 'root',
+    port: parseInt(process.env.DB_PORT || '5432', 10),
+    user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'noesis_testing',
     connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT || '10', 10),

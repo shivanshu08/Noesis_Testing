@@ -13,30 +13,17 @@ async function initDatabase() {
     const schemaPath = path.join(__dirname, '../../../database/schema.sql');
     const schema = fs.readFileSync(schemaPath, 'utf8');
 
-    // Split by semicolons and execute each statement
-    const statements = schema
-      .split(';')
-      .map(s => s.trim())
-      .filter(s => s.length > 0 && !s.startsWith('--'));
-
-    for (const statement of statements) {
-      try {
-        await pool.execute(statement);
-      } catch (error: any) {
-        // Ignore "already exists" errors
-        if (error.code !== 'ER_TABLE_EXISTS_ERROR' && error.code !== 'ER_DUP_ENTRY') {
-          logger.warn(`Statement warning: ${error.message}`);
-        }
-      }
-    }
+    // Execute the entire schema as one block (PostgreSQL handles IF NOT EXISTS)
+    await pool.query(schema);
+    logger.info('Schema applied successfully.');
 
     // Create admin user with proper bcrypt hash
     const salt = await bcrypt.genSalt(12);
     const adminHash = await bcrypt.hash('admin123', salt);
 
     try {
-      await pool.execute(
-        'UPDATE users SET password_hash = ? WHERE username = ?',
+      await pool.query(
+        'UPDATE users SET password_hash = $1 WHERE username = $2',
         [adminHash, 'admin']
       );
       logger.info('Admin user password updated.');

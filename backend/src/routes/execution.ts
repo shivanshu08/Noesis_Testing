@@ -3,7 +3,6 @@ import { query, execute, getConnection } from '../database/connection';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { logger } from '../utils/logger';
 import { config } from '../config';
-import { RowDataPacket } from 'mysql2';
 import { spawn, ChildProcess } from 'child_process';
 import path from 'path';
 import { Server as SocketIOServer } from 'socket.io';
@@ -19,7 +18,7 @@ export function setSocketIO(socketIO: SocketIOServer) {
   io = socketIO;
 }
 
-interface RunRow extends RowDataPacket {
+interface RunRow {
   id: number;
   run_name: string;
   run_type: string;
@@ -37,9 +36,10 @@ interface RunRow extends RowDataPacket {
   started_at: Date | null;
   completed_at: Date | null;
   created_at: Date;
+  config_xml: string | null;
 }
 
-interface ResultRow extends RowDataPacket {
+interface ResultRow {
   id: number;
   run_id: number;
   script_id: number;
@@ -64,8 +64,8 @@ router.post('/run', async (req: AuthRequest, res: Response): Promise<void> => {
     }
 
     // Fetch script details
-    const placeholders = scriptIds.map(() => '?').join(',');
-    const scripts = await query<RowDataPacket[]>(
+    const placeholders = scriptIds.map((_: any, i: number) => `$${i + 1}`).join(',');
+    const scripts = await query<any>(
       `SELECT id, name, class_name, method_name FROM scripts WHERE id IN (${placeholders}) AND is_active = TRUE`,
       scriptIds
     );
@@ -82,25 +82,25 @@ router.post('/run', async (req: AuthRequest, res: Response): Promise<void> => {
     const testngXml = buildTestNGXml(runName, scripts);
 
     // Create execution run record
-    const conn = await getConnection();
+    const client = await getConnection();
     try {
-      await conn.beginTransaction();
+      await client.query('BEGIN');
 
-      const [runResult] = await conn.execute(
-        'INSERT INTO execution_runs (run_name, run_type, status, total_scripts, environment, config_xml, triggered_by, started_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())',
+      const runResult = await client.query(
+        'INSERT INTO execution_runs (run_name, run_type, status, total_scripts, environment, config_xml, triggered_by, started_at) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING id',
         [runName, runType, 'running', scripts.length, environment, testngXml, req.userId]
       );
-      const runId = (runResult as any).insertId;
+      const runId = runResult.rows[0].id;
 
       // Create result records for each script
       for (const script of scripts) {
-        await conn.execute(
-          'INSERT INTO execution_results (run_id, script_id, status) VALUES (?, ?, ?)',
+        await client.query(
+          'INSERT INTO execution_results (run_id, script_id, status) VALUES ($1, $2, $3)',
           [runId, script.id, 'queued']
         );
       }
 
-      await conn.commit();
+      await client.query('COMMIT');
 
       // Start execution in background
       executeScripts(runId, testngXml, scripts, req.userId!);
@@ -111,10 +111,10 @@ router.post('/run', async (req: AuthRequest, res: Response): Promise<void> => {
         totalScripts: scripts.length,
       });
     } catch (err) {
-      await conn.rollback();
+      await client.query('ROLLBACK');
       throw err;
     } finally {
-      conn.release();
+      client.release();
     }
   } catch (error) {
     logger.error('Start execution error:', error);
@@ -125,22 +125,22 @@ router.post('/run', async (req: AuthRequest, res: Response): Promise<void> => {
 // POST /api/execution/stop/:runId - Stop a running execution
 router.post('/stop/:runId', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const runId = parseInt(req.params.runId);
-    const process = activeProcesses.get(runId);
+    const runId = parseInt(req.params.runId as string);
+    const proc = activeProcesses.get(runId);
 
-    if (process) {
-      process.kill('SIGTERM');
+    if (proc) {
+      proc.kill('SIGTERM');
       activeProcesses.delete(runId);
     }
 
     await execute(
-      'UPDATE execution_runs SET status = ?, completed_at = NOW() WHERE id = ? AND status = ?',
+      "UPDATE execution_runs SET status = $1, completed_at = NOW() WHERE id = $2 AND status = $3",
       ['stopped', runId, 'running']
     );
 
     await execute(
-      'UPDATE execution_results SET status = ? WHERE run_id = ? AND status IN (?, ?)',
-      ['skipped', runId, 'queued', 'running']
+      "UPDATE execution_results SET status = $1 WHERE run_id = $2 AND status IN ('queued', 'running')",
+      ['skipped', runId]
     );
 
     if (io) {
@@ -165,16 +165,17 @@ router.get('/runs', async (req: AuthRequest, res: Response): Promise<void> => {
       WHERE 1=1
     `;
     const params: any[] = [];
+    let paramIdx = 1;
 
     if (status) {
-      sql += ' AND er.status = ?';
+      sql += ` AND er.status = $${paramIdx++}`;
       params.push(status);
     }
 
-    sql += ' ORDER BY er.created_at DESC LIMIT ? OFFSET ?';
+    sql += ` ORDER BY er.created_at DESC LIMIT $${paramIdx++} OFFSET $${paramIdx++}`;
     params.push(Number(limit), Number(offset));
 
-    const runs = await query<RunRow[]>(sql, params);
+    const runs = await query<RunRow>(sql, params);
     res.json(runs.map(r => ({
       id: r.id,
       runName: r.run_name,
@@ -202,11 +203,11 @@ router.get('/runs', async (req: AuthRequest, res: Response): Promise<void> => {
 // GET /api/execution/runs/:id - Get run details with results
 router.get('/runs/:id', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const runs = await query<RunRow[]>(`
+    const runs = await query<RunRow>(`
       SELECT er.*, u.full_name as triggered_by_name
       FROM execution_runs er
       LEFT JOIN users u ON er.triggered_by = u.id
-      WHERE er.id = ?
+      WHERE er.id = $1
     `, [req.params.id]);
 
     if (runs.length === 0) {
@@ -214,11 +215,11 @@ router.get('/runs/:id', async (req: AuthRequest, res: Response): Promise<void> =
       return;
     }
 
-    const results = await query<ResultRow[]>(`
+    const results = await query<ResultRow>(`
       SELECT eres.*, s.name as script_name, s.class_name
       FROM execution_results eres
       JOIN scripts s ON eres.script_id = s.id
-      WHERE eres.run_id = ?
+      WHERE eres.run_id = $1
       ORDER BY eres.id
     `, [req.params.id]);
 
@@ -261,33 +262,33 @@ router.get('/runs/:id', async (req: AuthRequest, res: Response): Promise<void> =
 // GET /api/execution/stats - Dashboard statistics
 router.get('/stats', async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const [totalScripts] = await query<RowDataPacket[]>('SELECT COUNT(*) as count FROM scripts WHERE is_active = TRUE');
-    const [totalRuns] = await query<RowDataPacket[]>('SELECT COUNT(*) as count FROM execution_runs');
-    const [recentRuns] = await query<RowDataPacket[]>(
-      'SELECT COUNT(*) as count FROM execution_runs WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)'
+    const [totalScripts] = await query<any>('SELECT COUNT(*) as count FROM scripts WHERE is_active = TRUE');
+    const [totalRuns] = await query<any>('SELECT COUNT(*) as count FROM execution_runs');
+    const [recentRuns] = await query<any>(
+      "SELECT COUNT(*) as count FROM execution_runs WHERE created_at >= NOW() - INTERVAL '7 days'"
     );
-    const [passRate] = await query<RowDataPacket[]>(`
+    const [passRate] = await query<any>(`
       SELECT
         ROUND(AVG(CASE WHEN status = 'passed' THEN 100 ELSE 0 END), 1) as rate
       FROM execution_runs
-      WHERE status IN ('passed', 'failed') AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+      WHERE status IN ('passed', 'failed') AND created_at >= NOW() - INTERVAL '30 days'
     `);
-    const runningRuns = await query<RowDataPacket[]>(
+    const runningRuns = await query<any>(
       "SELECT COUNT(*) as count FROM execution_runs WHERE status = 'running'"
     );
-    const recentHistory = await query<RowDataPacket[]>(`
-      SELECT DATE(created_at) as date, status, COUNT(*) as count
+    const recentHistory = await query<any>(`
+      SELECT created_at::date as date, status, COUNT(*) as count
       FROM execution_runs
-      WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-      GROUP BY DATE(created_at), status
+      WHERE created_at >= NOW() - INTERVAL '30 days'
+      GROUP BY created_at::date, status
       ORDER BY date
     `);
 
-    const categoryStats = await query<RowDataPacket[]>(`
+    const categoryStats = await query<any>(`
       SELECT sc.name, sc.color, COUNT(s.id) as count
       FROM script_categories sc
       LEFT JOIN scripts s ON sc.id = s.category_id AND s.is_active = TRUE
-      GROUP BY sc.id
+      GROUP BY sc.id, sc.name, sc.color, sc.sort_order
       ORDER BY sc.sort_order
     `);
 
@@ -309,8 +310,8 @@ router.get('/stats', async (_req: AuthRequest, res: Response): Promise<void> => 
 // GET /api/execution/logs/:runId - Get execution logs
 router.get('/logs/:runId', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const logs = await query<RowDataPacket[]>(
-      'SELECT * FROM execution_logs WHERE run_id = ? ORDER BY timestamp',
+    const logs = await query<any>(
+      'SELECT * FROM execution_logs WHERE run_id = $1 ORDER BY timestamp',
       [req.params.runId]
     );
     res.json(logs);
@@ -322,7 +323,7 @@ router.get('/logs/:runId', async (req: AuthRequest, res: Response): Promise<void
 
 // ---- Helper Functions ----
 
-function buildTestNGXml(suiteName: string, scripts: RowDataPacket[]): string {
+function buildTestNGXml(suiteName: string, scripts: any[]): string {
   let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
   xml += `<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">\n`;
   xml += `<suite name="${escapeXml(suiteName)}" parallel="false">\n`;
@@ -352,7 +353,7 @@ function escapeXml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
-async function executeScripts(runId: number, testngXml: string, scripts: RowDataPacket[], userId: number) {
+async function executeScripts(runId: number, testngXml: string, scripts: any[], userId: number) {
   const stPath = config.stAutomation.path;
   const fs = await import('fs');
   const tempXmlPath = path.join(stPath, `temp-run-${runId}.xml`);
@@ -363,7 +364,7 @@ async function executeScripts(runId: number, testngXml: string, scripts: RowData
 
     // Log start
     await execute(
-      'INSERT INTO execution_logs (run_id, log_level, message) VALUES (?, ?, ?)',
+      'INSERT INTO execution_logs (run_id, log_level, message) VALUES ($1, $2, $3)',
       [runId, 'INFO', `Execution started for ${scripts.length} script(s)`]
     );
 
@@ -404,7 +405,7 @@ async function executeScripts(runId: number, testngXml: string, scripts: RowData
         const logLevel = line.includes('ERROR') ? 'ERROR' : line.includes('WARN') ? 'WARN' : 'INFO';
 
         await execute(
-          'INSERT INTO execution_logs (run_id, log_level, message) VALUES (?, ?, ?)',
+          'INSERT INTO execution_logs (run_id, log_level, message) VALUES ($1, $2, $3)',
           [runId, logLevel, line.substring(0, 2000)]
         ).catch(() => {});
 
@@ -421,7 +422,7 @@ async function executeScripts(runId: number, testngXml: string, scripts: RowData
       output += text;
 
       await execute(
-        'INSERT INTO execution_logs (run_id, log_level, message) VALUES (?, ?, ?)',
+        'INSERT INTO execution_logs (run_id, log_level, message) VALUES ($1, $2, $3)',
         [runId, 'ERROR', text.substring(0, 2000)]
       ).catch(() => {});
 
@@ -442,19 +443,19 @@ async function executeScripts(runId: number, testngXml: string, scripts: RowData
       const { passed, failed, errors, skipped } = parseTestResults(output);
 
       await execute(
-        'UPDATE execution_runs SET status = ?, passed_count = ?, failed_count = ?, error_count = ?, skipped_count = ?, completed_at = NOW(), duration_ms = TIMESTAMPDIFF(MICROSECOND, started_at, NOW()) / 1000 WHERE id = ?',
+        'UPDATE execution_runs SET status = $1, passed_count = $2, failed_count = $3, error_count = $4, skipped_count = $5, completed_at = NOW(), duration_ms = EXTRACT(EPOCH FROM (NOW() - started_at)) * 1000 WHERE id = $6',
         [finalStatus, passed, failed, errors, skipped, runId]
       );
 
       // Update individual results based on output
       await execute(
-        `UPDATE execution_results SET status = ?, completed_at = NOW() WHERE run_id = ? AND status IN ('queued', 'running')`,
+        `UPDATE execution_results SET status = $1, completed_at = NOW() WHERE run_id = $2 AND status IN ('queued', 'running')`,
         [finalStatus, runId]
       );
 
       // Save full output
       await execute(
-        `UPDATE execution_results SET log_output = ? WHERE run_id = ?`,
+        `UPDATE execution_results SET log_output = $1 WHERE run_id = $2`,
         [output.substring(0, 65000), runId]
       );
 
@@ -475,7 +476,7 @@ async function executeScripts(runId: number, testngXml: string, scripts: RowData
       logger.error(`Run ${runId} process error:`, err);
 
       await execute(
-        "UPDATE execution_runs SET status = 'error', completed_at = NOW() WHERE id = ?",
+        "UPDATE execution_runs SET status = 'error', completed_at = NOW() WHERE id = $1",
         [runId]
       );
 
@@ -487,7 +488,7 @@ async function executeScripts(runId: number, testngXml: string, scripts: RowData
   } catch (error: any) {
     logger.error(`Execute scripts error for run ${runId}:`, error);
     await execute(
-      "UPDATE execution_runs SET status = 'error', completed_at = NOW() WHERE id = ?",
+      "UPDATE execution_runs SET status = 'error', completed_at = NOW() WHERE id = $1",
       [runId]
     );
     try { (await import('fs')).unlinkSync(tempXmlPath); } catch {}

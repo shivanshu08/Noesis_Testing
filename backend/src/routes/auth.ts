@@ -5,11 +5,10 @@ import { query, execute } from '../database/connection';
 import { config } from '../config';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { logger } from '../utils/logger';
-import { RowDataPacket } from 'mysql2';
 
 const router = Router();
 
-interface UserRow extends RowDataPacket {
+interface UserRow {
   id: number;
   username: string;
   email: string;
@@ -32,8 +31,8 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const users = await query<UserRow[]>(
-      'SELECT * FROM users WHERE (username = ? OR email = ?) AND is_active = TRUE',
+    const users = await query<UserRow>(
+      'SELECT * FROM users WHERE (username = $1 OR email = $2) AND is_active = TRUE',
       [username, username]
     );
 
@@ -50,12 +49,12 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    await execute('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
+    await execute('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
 
     const token = jwt.sign(
       { userId: user.id, role: user.role },
       config.jwt.secret,
-      { expiresIn: config.jwt.expiresIn as string }
+      { expiresIn: config.jwt.expiresIn as any }
     );
 
     logger.info(`User logged in: ${user.username}`);
@@ -92,8 +91,8 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const existing = await query<UserRow[]>(
-      'SELECT id FROM users WHERE username = ? OR email = ?',
+    const existing = await query<UserRow>(
+      'SELECT id FROM users WHERE username = $1 OR email = $2',
       [username, email]
     );
 
@@ -106,7 +105,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
     const passwordHash = await bcrypt.hash(password, salt);
 
     const result = await execute(
-      'INSERT INTO users (username, email, password_hash, full_name, role) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO users (username, email, password_hash, full_name, role) VALUES ($1, $2, $3, $4, $5) RETURNING id',
       [username, email, passwordHash, fullName, 'tester']
     );
 
@@ -114,7 +113,7 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
 
     res.status(201).json({
       message: 'Registration successful.',
-      userId: result.insertId,
+      userId: result.rows[0].id,
     });
   } catch (error) {
     logger.error('Registration error:', error);
@@ -125,8 +124,8 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
 // GET /api/auth/me
 router.get('/me', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const users = await query<UserRow[]>(
-      'SELECT id, username, email, full_name, role, avatar_url, last_login, created_at FROM users WHERE id = ?',
+    const users = await query<UserRow>(
+      'SELECT id, username, email, full_name, role, avatar_url, last_login, created_at FROM users WHERE id = $1',
       [req.userId]
     );
 
@@ -162,7 +161,7 @@ router.put('/change-password', authenticate, async (req: AuthRequest, res: Respo
       return;
     }
 
-    const users = await query<UserRow[]>('SELECT password_hash FROM users WHERE id = ?', [req.userId]);
+    const users = await query<UserRow>('SELECT password_hash FROM users WHERE id = $1', [req.userId]);
     if (users.length === 0) {
       res.status(404).json({ error: 'User not found.' });
       return;
@@ -176,7 +175,7 @@ router.put('/change-password', authenticate, async (req: AuthRequest, res: Respo
 
     const salt = await bcrypt.genSalt(12);
     const hash = await bcrypt.hash(newPassword, salt);
-    await execute('UPDATE users SET password_hash = ? WHERE id = ?', [hash, req.userId]);
+    await execute('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, req.userId]);
 
     res.json({ message: 'Password changed successfully.' });
   } catch (error) {

@@ -2,12 +2,11 @@ import { Router, Response } from 'express';
 import { query, execute, getConnection } from '../database/connection';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { logger } from '../utils/logger';
-import { RowDataPacket } from 'mysql2';
 
 const router = Router();
 router.use(authenticate);
 
-interface SuiteRow extends RowDataPacket {
+interface SuiteRow {
   id: number;
   name: string;
   description: string | null;
@@ -21,7 +20,7 @@ interface SuiteRow extends RowDataPacket {
 // GET /api/suites - List all suites
 router.get('/', async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const suites = await query<SuiteRow[]>(`
+    const suites = await query<SuiteRow>(`
       SELECT ts.*, u.full_name as created_by_name,
         (SELECT COUNT(*) FROM suite_scripts ss WHERE ss.suite_id = ts.id) as script_count
       FROM test_suites ts
@@ -35,7 +34,7 @@ router.get('/', async (_req: AuthRequest, res: Response): Promise<void> => {
       isParallel: s.is_parallel,
       threadCount: s.thread_count,
       createdBy: s.created_by_name,
-      scriptCount: s.script_count,
+      scriptCount: Number(s.script_count),
       createdAt: s.created_at,
     })));
   } catch (error) {
@@ -47,10 +46,10 @@ router.get('/', async (_req: AuthRequest, res: Response): Promise<void> => {
 // GET /api/suites/:id - Get suite with scripts
 router.get('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const suites = await query<SuiteRow[]>(`
+    const suites = await query<SuiteRow>(`
       SELECT ts.*, u.full_name as created_by_name
       FROM test_suites ts LEFT JOIN users u ON ts.created_by = u.id
-      WHERE ts.id = ?
+      WHERE ts.id = $1
     `, [req.params.id]);
 
     if (suites.length === 0) {
@@ -58,12 +57,12 @@ router.get('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
       return;
     }
 
-    const scripts = await query<RowDataPacket[]>(`
+    const scripts = await query<any>(`
       SELECT s.id, s.name, s.class_name, sc.name as category_name, sc.color as category_color, ss.execution_order
       FROM suite_scripts ss
       JOIN scripts s ON ss.script_id = s.id
       JOIN script_categories sc ON s.category_id = sc.id
-      WHERE ss.suite_id = ?
+      WHERE ss.suite_id = $1
       ORDER BY ss.execution_order
     `, [req.params.id]);
 
@@ -76,7 +75,7 @@ router.get('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
       threadCount: s.thread_count,
       createdBy: s.created_by_name,
       createdAt: s.created_at,
-      scripts: scripts.map(sc => ({
+      scripts: scripts.map((sc: any) => ({
         id: sc.id,
         name: sc.name,
         className: sc.class_name,
@@ -101,30 +100,30 @@ router.post('/', authorize('admin', 'tester'), async (req: AuthRequest, res: Res
       return;
     }
 
-    const conn = await getConnection();
+    const client = await getConnection();
     try {
-      await conn.beginTransaction();
+      await client.query('BEGIN');
 
-      const [result] = await conn.execute(
-        'INSERT INTO test_suites (name, description, is_parallel, thread_count, created_by) VALUES (?, ?, ?, ?, ?)',
+      const result = await client.query(
+        'INSERT INTO test_suites (name, description, is_parallel, thread_count, created_by) VALUES ($1, $2, $3, $4, $5) RETURNING id',
         [name, description, isParallel, threadCount, req.userId]
       );
-      const suiteId = (result as any).insertId;
+      const suiteId = result.rows[0].id;
 
       for (let i = 0; i < scriptIds.length; i++) {
-        await conn.execute(
-          'INSERT INTO suite_scripts (suite_id, script_id, execution_order) VALUES (?, ?, ?)',
+        await client.query(
+          'INSERT INTO suite_scripts (suite_id, script_id, execution_order) VALUES ($1, $2, $3)',
           [suiteId, scriptIds[i], i + 1]
         );
       }
 
-      await conn.commit();
+      await client.query('COMMIT');
       res.status(201).json({ id: suiteId, message: 'Suite created.' });
     } catch (err) {
-      await conn.rollback();
+      await client.query('ROLLBACK');
       throw err;
     } finally {
-      conn.release();
+      client.release();
     }
   } catch (error) {
     logger.error('Create suite error:', error);
@@ -137,32 +136,32 @@ router.put('/:id', authorize('admin', 'tester'), async (req: AuthRequest, res: R
   try {
     const { name, description, scriptIds, isParallel, threadCount } = req.body;
 
-    const conn = await getConnection();
+    const client = await getConnection();
     try {
-      await conn.beginTransaction();
+      await client.query('BEGIN');
 
-      await conn.execute(
-        'UPDATE test_suites SET name = COALESCE(?, name), description = COALESCE(?, description), is_parallel = COALESCE(?, is_parallel), thread_count = COALESCE(?, thread_count) WHERE id = ?',
+      await client.query(
+        'UPDATE test_suites SET name = COALESCE($1, name), description = COALESCE($2, description), is_parallel = COALESCE($3, is_parallel), thread_count = COALESCE($4, thread_count) WHERE id = $5',
         [name, description, isParallel, threadCount, req.params.id]
       );
 
       if (scriptIds && Array.isArray(scriptIds)) {
-        await conn.execute('DELETE FROM suite_scripts WHERE suite_id = ?', [req.params.id]);
+        await client.query('DELETE FROM suite_scripts WHERE suite_id = $1', [req.params.id]);
         for (let i = 0; i < scriptIds.length; i++) {
-          await conn.execute(
-            'INSERT INTO suite_scripts (suite_id, script_id, execution_order) VALUES (?, ?, ?)',
+          await client.query(
+            'INSERT INTO suite_scripts (suite_id, script_id, execution_order) VALUES ($1, $2, $3)',
             [req.params.id, scriptIds[i], i + 1]
           );
         }
       }
 
-      await conn.commit();
+      await client.query('COMMIT');
       res.json({ message: 'Suite updated.' });
     } catch (err) {
-      await conn.rollback();
+      await client.query('ROLLBACK');
       throw err;
     } finally {
-      conn.release();
+      client.release();
     }
   } catch (error) {
     logger.error('Update suite error:', error);
@@ -173,7 +172,7 @@ router.put('/:id', authorize('admin', 'tester'), async (req: AuthRequest, res: R
 // DELETE /api/suites/:id
 router.delete('/:id', authorize('admin'), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    await execute('DELETE FROM test_suites WHERE id = ?', [req.params.id]);
+    await execute('DELETE FROM test_suites WHERE id = $1', [req.params.id]);
     res.json({ message: 'Suite deleted.' });
   } catch (error) {
     logger.error('Delete suite error:', error);

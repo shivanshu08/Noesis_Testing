@@ -7,6 +7,7 @@ import { AvatarModule } from 'primeng/avatar';
 import { MenuModule } from 'primeng/menu';
 import { RippleModule } from 'primeng/ripple';
 import { AuthService } from '../../services/auth.service';
+import { ThemeService } from '../../services/theme.service';
 
 @Component({
   selector: 'app-main-layout',
@@ -17,6 +18,8 @@ import { AuthService } from '../../services/auth.service';
 })
 export class MainLayout {
   sidebarCollapsed = signal(false);
+  showThemeMenu = false;
+  currentYear = new Date().getFullYear();
 
   navItems = [
     { label: 'Dashboard', icon: 'pi pi-objects-column', route: '/dashboard' },
@@ -26,13 +29,7 @@ export class MainLayout {
     { label: 'History', icon: 'pi pi-history', route: '/history' },
   ];
 
-  userMenuItems = [
-    { label: 'Profile', icon: 'pi pi-user' },
-    { separator: true },
-    { label: 'Logout', icon: 'pi pi-sign-out', command: () => this.auth.logout() },
-  ];
-
-  constructor(public auth: AuthService) {}
+  constructor(public auth: AuthService, public themeService: ThemeService) {}
 
   toggleSidebar() {
     this.sidebarCollapsed.update(v => !v);

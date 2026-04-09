@@ -7,12 +7,25 @@ import { PasswordModule } from 'primeng/password';
 import { ButtonModule } from 'primeng/button';
 import { MessageModule } from 'primeng/message';
 import { CheckboxModule } from 'primeng/checkbox';
+import { IconFieldModule } from 'primeng/iconfield';
+import { InputIconModule } from 'primeng/inputicon';
+import { InputGroupModule } from 'primeng/inputgroup';
+import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
+import { CardModule } from 'primeng/card';
+import { DividerModule } from 'primeng/divider';
+import { FloatLabelModule } from 'primeng/floatlabel';
+import { SelectModule } from 'primeng/select';
 import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, FormsModule, InputTextModule, PasswordModule, ButtonModule, MessageModule, CheckboxModule],
+  imports: [
+    CommonModule, FormsModule, InputTextModule, PasswordModule, ButtonModule,
+    MessageModule, CheckboxModule, IconFieldModule, InputIconModule,
+    InputGroupModule, InputGroupAddonModule, CardModule, DividerModule,
+    FloatLabelModule, SelectModule,
+  ],
   templateUrl: './login.html',
   styleUrl: './login.scss',
 })
@@ -22,9 +35,12 @@ export class Login {
   fullName = '';
   email = '';
   confirmPassword = '';
+  showPassword = false;
+  rememberMe = false;
   isRegister = signal(false);
   loading = signal(false);
   error = signal('');
+  currentYear = new Date().getFullYear();
 
   constructor(private auth: AuthService, private router: Router) {}
 

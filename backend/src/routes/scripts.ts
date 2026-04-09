@@ -2,12 +2,11 @@ import { Router, Response } from 'express';
 import { query, execute } from '../database/connection';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { logger } from '../utils/logger';
-import { RowDataPacket } from 'mysql2';
 
 const router = Router();
 router.use(authenticate);
 
-interface ScriptRow extends RowDataPacket {
+interface ScriptRow {
   id: number;
   name: string;
   class_name: string;
@@ -20,11 +19,11 @@ interface ScriptRow extends RowDataPacket {
   file_path: string;
   config_file: string | null;
   is_active: boolean;
-  tags: string | null;
+  tags: any | null;
   created_at: Date;
 }
 
-interface CategoryRow extends RowDataPacket {
+interface CategoryRow {
   id: number;
   name: string;
   description: string | null;
@@ -45,23 +44,25 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
       WHERE 1=1
     `;
     const params: any[] = [];
+    let paramIdx = 1;
 
     if (category) {
-      sql += ' AND s.category_id = ?';
+      sql += ` AND s.category_id = $${paramIdx++}`;
       params.push(Number(category));
     }
     if (search) {
-      sql += ' AND (s.name LIKE ? OR s.class_name LIKE ?)';
+      sql += ` AND (s.name ILIKE $${paramIdx} OR s.class_name ILIKE $${paramIdx + 1})`;
       params.push(`%${search}%`, `%${search}%`);
+      paramIdx += 2;
     }
     if (active !== undefined) {
-      sql += ' AND s.is_active = ?';
-      params.push(active === 'true' ? 1 : 0);
+      sql += ` AND s.is_active = $${paramIdx++}`;
+      params.push(active === 'true');
     }
 
     sql += ' ORDER BY sc.sort_order, s.name';
 
-    const scripts = await query<ScriptRow[]>(sql, params);
+    const scripts = await query<ScriptRow>(sql, params);
     res.json(scripts.map(s => ({
       id: s.id,
       name: s.name,
@@ -75,7 +76,7 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
       filePath: s.file_path,
       configFile: s.config_file,
       isActive: s.is_active,
-      tags: s.tags ? JSON.parse(s.tags) : [],
+      tags: s.tags || [],
       createdAt: s.created_at,
     })));
   } catch (error) {
@@ -87,7 +88,7 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
 // GET /api/scripts/categories - List categories with counts
 router.get('/categories', async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const categories = await query<CategoryRow[]>(`
+    const categories = await query<CategoryRow>(`
       SELECT sc.*, COUNT(s.id) as script_count
       FROM script_categories sc
       LEFT JOIN scripts s ON sc.id = s.category_id AND s.is_active = TRUE
@@ -101,7 +102,7 @@ router.get('/categories', async (_req: AuthRequest, res: Response): Promise<void
       icon: c.icon,
       color: c.color,
       sortOrder: c.sort_order,
-      scriptCount: c.script_count,
+      scriptCount: Number(c.script_count),
     })));
   } catch (error) {
     logger.error('List categories error:', error);
@@ -112,11 +113,11 @@ router.get('/categories', async (_req: AuthRequest, res: Response): Promise<void
 // GET /api/scripts/:id - Get script details
 router.get('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const scripts = await query<ScriptRow[]>(`
+    const scripts = await query<ScriptRow>(`
       SELECT s.*, sc.name as category_name, sc.icon as category_icon, sc.color as category_color
       FROM scripts s
       JOIN script_categories sc ON s.category_id = sc.id
-      WHERE s.id = ?
+      WHERE s.id = $1
     `, [req.params.id]);
 
     if (scripts.length === 0) {
@@ -138,7 +139,7 @@ router.get('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
       filePath: s.file_path,
       configFile: s.config_file,
       isActive: s.is_active,
-      tags: s.tags ? JSON.parse(s.tags) : [],
+      tags: s.tags || [],
       createdAt: s.created_at,
     });
   } catch (error) {
@@ -152,7 +153,7 @@ router.put('/:id', authorize('admin', 'tester'), async (req: AuthRequest, res: R
   try {
     const { name, description, methodName, isActive, tags } = req.body;
     await execute(
-      'UPDATE scripts SET name = COALESCE(?, name), description = COALESCE(?, description), method_name = COALESCE(?, method_name), is_active = COALESCE(?, is_active), tags = COALESCE(?, tags) WHERE id = ?',
+      'UPDATE scripts SET name = COALESCE($1, name), description = COALESCE($2, description), method_name = COALESCE($3, method_name), is_active = COALESCE($4, is_active), tags = COALESCE($5, tags) WHERE id = $6',
       [name, description, methodName, isActive, tags ? JSON.stringify(tags) : null, req.params.id]
     );
     res.json({ message: 'Script updated.' });

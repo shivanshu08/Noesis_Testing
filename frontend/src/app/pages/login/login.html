@@ -1,83 +1,142 @@
-<div class="login-container">
-  <div class="login-left">
-    <div class="brand-content">
-      <div class="brand-icon">
-        <i class="pi pi-bolt"></i>
+<div class="login-page">
+  <div class="login-container">
+    <!-- Left Illustration Panel -->
+    <div class="login-left">
+      <div class="illustration-content">
+        <img src="assets/images/login/login-illustration.png" alt="Secure Login" class="login-illustration" />
       </div>
-      <h1>Noesis Testing</h1>
-      <p>ST Automation Platform</p>
-      <div class="features">
-        <div class="feature-item">
-          <i class="pi pi-play-circle"></i>
-          <span>Execute ST scripts with one click</span>
-        </div>
-        <div class="feature-item">
-          <i class="pi pi-chart-line"></i>
-          <span>Real-time execution monitoring</span>
-        </div>
-        <div class="feature-item">
-          <i class="pi pi-history"></i>
-          <span>Complete execution history & analytics</span>
-        </div>
-        <div class="feature-item">
-          <i class="pi pi-sitemap"></i>
-          <span>Test suite management</span>
-        </div>
-      </div>
+    </div>
+
+    <!-- Right Form Panel -->
+    <div class="login-right">
+      <p-card styleClass="login-card">
+        @if (!isRegister()) {
+          <!-- Login Form -->
+          <div class="card-header">
+            <h2>Noesis Login</h2>
+          </div>
+
+          @if (error()) {
+            <p-message severity="error" [text]="error()" styleClass="w-full mb-4" />
+          }
+
+          <div class="form-field">
+            <label for="username">Username</label>
+            <p-inputgroup>
+              <p-inputgroup-addon>
+                <i class="pi pi-user"></i>
+              </p-inputgroup-addon>
+              <input pInputText id="username" [(ngModel)]="username" placeholder="User login ID" (keydown.enter)="onLogin()" />
+            </p-inputgroup>
+          </div>
+
+          <div class="form-field">
+            <label for="password">Password</label>
+            <p-inputgroup>
+              <p-inputgroup-addon>
+                <i class="pi pi-lock"></i>
+              </p-inputgroup-addon>
+              <input pInputText id="password" [(ngModel)]="password" [type]="showPassword ? 'text' : 'password'" placeholder="Password" (keydown.enter)="onLogin()" />
+              <p-inputgroup-addon class="toggle-pw" (click)="showPassword = !showPassword">
+                <i [class]="showPassword ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
+              </p-inputgroup-addon>
+            </p-inputgroup>
+          </div>
+
+          <div class="form-field">
+            <div class="remember-row">
+              <p-checkbox [(ngModel)]="rememberMe" [binary]="true" inputId="remember" />
+              <label for="remember" class="remember-label">Remember me</label>
+            </div>
+          </div>
+
+          <p-button label="Log in" [loading]="loading()" (onClick)="onLogin()" styleClass="w-full login-btn" />
+
+          <p-divider />
+
+          <div class="toggle-mode">
+            <span>Don't have an account?</span>
+            <a (click)="toggleMode()" class="toggle-link">Create Account</a>
+          </div>
+        } @else {
+          <!-- Register Form -->
+          <div class="card-header">
+            <h2>Create Account</h2>
+            <p class="subtitle">Sign up to get started</p>
+          </div>
+
+          @if (error()) {
+            <p-message severity="error" [text]="error()" styleClass="w-full mb-4" />
+          }
+
+          <div class="form-field">
+            <label for="fullName">Full Name</label>
+            <p-inputgroup>
+              <p-inputgroup-addon>
+                <i class="pi pi-id-card"></i>
+              </p-inputgroup-addon>
+              <input pInputText id="fullName" [(ngModel)]="fullName" placeholder="Enter your full name" />
+            </p-inputgroup>
+          </div>
+
+          <div class="form-field">
+            <label for="regUsername">Username</label>
+            <p-inputgroup>
+              <p-inputgroup-addon>
+                <i class="pi pi-user"></i>
+              </p-inputgroup-addon>
+              <input pInputText id="regUsername" [(ngModel)]="username" placeholder="Choose a username" />
+            </p-inputgroup>
+          </div>
+
+          <div class="form-field">
+            <label for="email">Email</label>
+            <p-inputgroup>
+              <p-inputgroup-addon>
+                <i class="pi pi-envelope"></i>
+              </p-inputgroup-addon>
+              <input pInputText id="email" [(ngModel)]="email" placeholder="Enter your email" type="email" />
+            </p-inputgroup>
+          </div>
+
+          <div class="form-field">
+            <label for="regPassword">Password</label>
+            <p-inputgroup>
+              <p-inputgroup-addon>
+                <i class="pi pi-lock"></i>
+              </p-inputgroup-addon>
+              <input pInputText id="regPassword" [(ngModel)]="password" [type]="showPassword ? 'text' : 'password'" placeholder="Create password (min 6 chars)" />
+              <p-inputgroup-addon class="toggle-pw" (click)="showPassword = !showPassword">
+                <i [class]="showPassword ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
+              </p-inputgroup-addon>
+            </p-inputgroup>
+          </div>
+
+          <div class="form-field">
+            <label for="confirmPassword">Confirm Password</label>
+            <p-inputgroup>
+              <p-inputgroup-addon>
+                <i class="pi pi-lock"></i>
+              </p-inputgroup-addon>
+              <input pInputText id="confirmPassword" [(ngModel)]="confirmPassword" type="password" placeholder="Confirm password" (keydown.enter)="onRegister()" />
+            </p-inputgroup>
+          </div>
+
+          <p-button label="Create Account" icon="pi pi-user-plus" [loading]="loading()" (onClick)="onRegister()" styleClass="w-full login-btn" />
+
+          <p-divider />
+
+          <div class="toggle-mode">
+            <span>Already have an account?</span>
+            <a (click)="toggleMode()" class="toggle-link">Sign In</a>
+          </div>
+        }
+      </p-card>
     </div>
   </div>
 
-  <div class="login-right">
-    <div class="login-form-wrapper">
-      <div class="form-header">
-        <h2>{{ isRegister() ? 'Create Account' : 'Welcome Back' }}</h2>
-        <p>{{ isRegister() ? 'Sign up to get started' : 'Sign in to your account' }}</p>
-      </div>
-
-      @if (error()) {
-        <p-message severity="error" [text]="error()" styleClass="w-full mb-3" />
-      }
-
-      @if (!isRegister()) {
-        <!-- Login Form -->
-        <div class="form-group">
-          <label for="username">Username or Email</label>
-          <input pInputText id="username" [(ngModel)]="username" placeholder="Enter username or email" class="w-full" (keydown.enter)="onLogin()" />
-        </div>
-        <div class="form-group">
-          <label for="password">Password</label>
-          <p-password id="password" [(ngModel)]="password" [toggleMask]="true" [feedback]="false" placeholder="Enter password" styleClass="w-full" inputStyleClass="w-full" (keydown.enter)="onLogin()" />
-        </div>
-        <p-button label="Sign In" icon="pi pi-sign-in" [loading]="loading()" (onClick)="onLogin()" styleClass="w-full mt-3" severity="primary" />
-      } @else {
-        <!-- Register Form -->
-        <div class="form-group">
-          <label for="fullName">Full Name</label>
-          <input pInputText id="fullName" [(ngModel)]="fullName" placeholder="Enter your full name" class="w-full" />
-        </div>
-        <div class="form-group">
-          <label for="regUsername">Username</label>
-          <input pInputText id="regUsername" [(ngModel)]="username" placeholder="Choose a username" class="w-full" />
-        </div>
-        <div class="form-group">
-          <label for="email">Email</label>
-          <input pInputText id="email" [(ngModel)]="email" placeholder="Enter your email" class="w-full" type="email" />
-        </div>
-        <div class="form-group">
-          <label for="regPassword">Password</label>
-          <p-password id="regPassword" [(ngModel)]="password" [toggleMask]="true" placeholder="Create password (min 6 chars)" styleClass="w-full" inputStyleClass="w-full" />
-        </div>
-        <div class="form-group">
-          <label for="confirmPassword">Confirm Password</label>
-          <p-password id="confirmPassword" [(ngModel)]="confirmPassword" [toggleMask]="true" [feedback]="false" placeholder="Confirm password" styleClass="w-full" inputStyleClass="w-full" (keydown.enter)="onRegister()" />
-        </div>
-        <p-button label="Create Account" icon="pi pi-user-plus" [loading]="loading()" (onClick)="onRegister()" styleClass="w-full mt-3" severity="primary" />
-      }
-
-      <div class="toggle-mode">
-        <span>{{ isRegister() ? 'Already have an account?' : "Don't have an account?" }}</span>
-        <a (click)="toggleMode()" class="toggle-link">{{ isRegister() ? 'Sign In' : 'Sign Up' }}</a>
-      </div>
-    </div>
-  </div>
+  <!-- Footer -->
+  <footer class="login-footer">
+    <span>Drogevate &copy; {{ currentYear }}. All rights reserved.</span>
+  </footer>
 </div>
