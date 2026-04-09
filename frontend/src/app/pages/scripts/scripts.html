@@ -1,0 +1,90 @@
+<div class="scripts-page">
+  <div class="page-header">
+    <div>
+      <h1>Scripts</h1>
+      <p class="subtitle">Manage your ST automation test scripts</p>
+    </div>
+    <div class="header-actions">
+      <p-button label="Sync from Project" icon="pi pi-sync" severity="secondary" [loading]="syncing()" (onClick)="syncScripts()" />
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters-bar">
+    <p-iconfield>
+      <p-inputicon styleClass="pi pi-search" />
+      <input type="text" pInputText placeholder="Search scripts..." [(ngModel)]="searchTerm" (input)="onSearch()" />
+    </p-iconfield>
+
+    <p-select
+      [options]="categories()"
+      [(ngModel)]="selectedCategory"
+      optionLabel="name"
+      optionValue="id"
+      placeholder="All Categories"
+      [showClear]="true"
+      (onChange)="onCategoryChange()"
+      [style]="{ minWidth: '200px' }"
+    />
+
+    <span class="result-count">{{ filteredScripts().length }} scripts</span>
+  </div>
+
+  <!-- Scripts Table -->
+  <p-card styleClass="scripts-table-card">
+    <p-table
+      [value]="filteredScripts()"
+      [paginator]="true"
+      [rows]="15"
+      [rowsPerPageOptions]="[10, 15, 25, 50]"
+      [loading]="loading()"
+      responsiveLayout="scroll"
+      styleClass="p-datatable-sm"
+      [globalFilterFields]="['name', 'className']"
+    >
+      <ng-template #header>
+        <tr>
+          <th pSortableColumn="name">Name <p-sortIcon field="name" /></th>
+          <th>Category</th>
+          <th>Class</th>
+          <th pSortableColumn="isActive">Status <p-sortIcon field="isActive" /></th>
+          <th style="width: 100px">Active</th>
+        </tr>
+      </ng-template>
+      <ng-template #body let-script>
+        <tr>
+          <td>
+            <div class="script-name">
+              <i class="pi pi-file-code"></i>
+              <span>{{ script.name }}</span>
+            </div>
+          </td>
+          <td>
+            <p-tag [value]="getCategoryName(script.categoryId)" [severity]="getCategorySeverity(getCategoryName(script.categoryId))" />
+          </td>
+          <td>
+            <code class="class-name" [pTooltip]="script.className">{{ script.className.split('.').pop() }}</code>
+          </td>
+          <td>
+            <span class="status-dot" [class.active]="script.isActive"></span>
+            {{ script.isActive ? 'Enabled' : 'Disabled' }}
+          </td>
+          <td>
+            <p-toggleSwitch [ngModel]="script.isActive" (onChange)="toggleScript(script)" />
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template #emptymessage>
+        <tr>
+          <td colspan="5" class="empty-row">
+            <div class="empty-state">
+              <i class="pi pi-file-code"></i>
+              <p>No scripts found</p>
+              <p-button label="Sync Scripts" icon="pi pi-sync" severity="secondary" (onClick)="syncScripts()" />
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </p-card>
+</div>

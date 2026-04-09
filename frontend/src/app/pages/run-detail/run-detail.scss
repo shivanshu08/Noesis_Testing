@@ -1,0 +1,135 @@
+.run-detail-page {
+  max-width: 1400px;
+}
+
+.breadcrumb {
+  margin-bottom: 16px;
+
+  a {
+    color: var(--noesis-text-secondary);
+    text-decoration: none;
+    font-size: 0.88rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: color 0.2s;
+
+    &:hover { color: var(--noesis-primary); }
+  }
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 64px;
+  color: var(--noesis-text-secondary);
+  font-size: 1rem;
+}
+
+.run-stats {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  background: var(--noesis-surface);
+  border: 1px solid var(--noesis-border);
+  border-radius: 12px;
+  padding: 20px 24px;
+
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 100px;
+
+    .stat-label {
+      font-size: 0.78rem;
+      color: var(--noesis-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 500;
+    }
+
+    .stat-value {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--noesis-text);
+
+      &.date {
+        font-size: 0.9rem;
+        font-weight: 500;
+      }
+    }
+
+    &.passed .stat-value { color: #22c55e; }
+    &.failed .stat-value { color: #ef4444; }
+  }
+}
+
+// Results
+.results-card {
+  margin-bottom: 20px;
+
+  .script-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+
+    i { color: #6366f1; }
+  }
+
+  .error-msg {
+    background: rgba(239, 68, 68, 0.08);
+    color: #ef4444;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+    cursor: help;
+  }
+}
+
+// Logs
+.logs-card {
+  .log-viewer {
+    background: #0d1117;
+    border-radius: 8px;
+    padding: 16px;
+    max-height: 500px;
+    overflow-y: auto;
+    font-family: 'JetBrains Mono', 'Cascadia Code', monospace;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    color: #c9d1d9;
+
+    .log-line {
+      display: flex;
+      gap: 12px;
+      white-space: pre-wrap;
+
+      .log-time {
+        color: #484f58;
+        min-width: 70px;
+        flex-shrink: 0;
+      }
+
+      &.error .log-msg { color: #f87171; }
+      &.warn .log-msg { color: #fbbf24; }
+      &.info .log-msg { color: #60a5fa; }
+      &.live { color: #c9d1d9; }
+    }
+
+    .log-empty {
+      text-align: center;
+      padding: 32px;
+      color: #484f58;
+    }
+  }
+}

@@ -1,0 +1,42 @@
+.history-page {
+  max-width: 1400px;
+}
+
+.history-card {
+  code {
+    background: var(--noesis-hover);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.82rem;
+  }
+
+  .run-name {
+    font-weight: 500;
+  }
+
+  .passed-count {
+    color: #22c55e;
+    font-weight: 600;
+  }
+
+  .failed-count {
+    color: #ef4444;
+    font-weight: 600;
+  }
+}
+
+.empty-row {
+  text-align: center;
+  padding: 48px !important;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--noesis-text-secondary);
+
+  i { font-size: 2.5rem; opacity: 0.4; }
+  p { margin: 0; }
+}

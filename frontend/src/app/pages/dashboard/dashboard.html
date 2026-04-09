@@ -1,0 +1,142 @@
+<div class="dashboard-page">
+  <div class="page-header">
+    <div>
+      <h1>Dashboard</h1>
+      <p class="subtitle">Overview of your ST automation scripts</p>
+    </div>
+    <div class="header-actions">
+      <p-button label="Run Scripts" icon="pi pi-play" routerLink="/runner" />
+    </div>
+  </div>
+
+  <!-- Stats Cards -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon scripts">
+        <i class="pi pi-file-code"></i>
+      </div>
+      <div class="stat-info">
+        <span class="stat-value">{{ stats()?.totalScripts || 0 }}</span>
+        <span class="stat-label">Total Scripts</span>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon runs">
+        <i class="pi pi-play-circle"></i>
+      </div>
+      <div class="stat-info">
+        <span class="stat-value">{{ stats()?.totalRuns || 0 }}</span>
+        <span class="stat-label">Total Runs</span>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon passed">
+        <i class="pi pi-check-circle"></i>
+      </div>
+      <div class="stat-info">
+        <span class="stat-value">{{ getPassRate() }}%</span>
+        <span class="stat-label">Pass Rate</span>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon running">
+        <i class="pi pi-spinner pi-spin"></i>
+      </div>
+      <div class="stat-info">
+        <span class="stat-value">{{ stats()?.runningCount || 0 }}</span>
+        <span class="stat-label">Running Now</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Category Distribution + Quick Actions -->
+  <div class="content-grid">
+    <p-card header="Script Categories" styleClass="categories-card">
+      <div class="category-list">
+        @for (cat of categories(); track cat.id) {
+          <div class="category-item">
+            <div class="category-info">
+              <span class="category-name">{{ cat.name }}</span>
+              <span class="category-count">{{ cat.scriptCount }} scripts</span>
+            </div>
+            <p-progressBar [value]="cat.scriptCount && stats()?.totalScripts ? (cat.scriptCount / stats()!.totalScripts) * 100 : 0" [showValue]="false" [style]="{ height: '6px' }" />
+          </div>
+        }
+        @if (categories().length === 0) {
+          <p class="empty-message">No categories found</p>
+        }
+      </div>
+    </p-card>
+
+    <p-card header="Quick Actions" styleClass="actions-card">
+      <div class="quick-actions">
+        <a routerLink="/runner" class="action-item">
+          <div class="action-icon run"><i class="pi pi-play"></i></div>
+          <div>
+            <span class="action-label">Run All Scripts</span>
+            <span class="action-desc">Execute complete test suite</span>
+          </div>
+        </a>
+        <a routerLink="/scripts" class="action-item">
+          <div class="action-icon manage"><i class="pi pi-cog"></i></div>
+          <div>
+            <span class="action-label">Manage Scripts</span>
+            <span class="action-desc">Enable/disable & configure tests</span>
+          </div>
+        </a>
+        <a routerLink="/suites" class="action-item">
+          <div class="action-icon suite"><i class="pi pi-sitemap"></i></div>
+          <div>
+            <span class="action-label">Test Suites</span>
+            <span class="action-desc">Create custom test suites</span>
+          </div>
+        </a>
+        <a routerLink="/history" class="action-item">
+          <div class="action-icon history"><i class="pi pi-history"></i></div>
+          <div>
+            <span class="action-label">View History</span>
+            <span class="action-desc">Browse past execution results</span>
+          </div>
+        </a>
+      </div>
+    </p-card>
+  </div>
+
+  <!-- Recent Runs -->
+  <p-card header="Recent Executions" styleClass="runs-card">
+    <p-table [value]="recentRuns()" [rows]="8" responsiveLayout="scroll" styleClass="p-datatable-sm">
+      <ng-template #header>
+        <tr>
+          <th>Run #</th>
+          <th>Name</th>
+          <th>Status</th>
+          <th>Scripts</th>
+          <th>Duration</th>
+          <th>Started</th>
+          <th></th>
+        </tr>
+      </ng-template>
+      <ng-template #body let-run>
+        <tr>
+          <td><code>#{{ run.id }}</code></td>
+          <td>{{ run.runName || 'Unnamed Run' }}</td>
+          <td><p-tag [value]="run.status" [severity]="getStatusSeverity(run.status)" /></td>
+          <td>{{ run.totalScripts || '-' }}</td>
+          <td>{{ formatDuration(run.durationMs ? run.durationMs / 1000 : null) }}</td>
+          <td>{{ formatDate(run.startedAt) }}</td>
+          <td>
+            <p-button icon="pi pi-eye" [rounded]="true" [text]="true" size="small" [routerLink]="'/run/' + run.id" pTooltip="View Details" />
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template #emptymessage>
+        <tr>
+          <td colspan="7" class="empty-row">No executions yet. Start by running some scripts!</td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </p-card>
+</div>

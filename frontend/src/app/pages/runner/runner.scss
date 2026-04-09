@@ -1,0 +1,234 @@
+.runner-page {
+  max-width: 1600px;
+}
+
+.runner-layout {
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  gap: 20px;
+  min-height: calc(100vh - 200px);
+}
+
+// Selection Panel
+.selection-panel {
+  .selection-card {
+    height: 100%;
+  }
+
+  .selection-header {
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+
+    .selection-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+
+      h3 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 700;
+      }
+
+      .selection-badge {
+        background: rgba(99, 102, 241, 0.12);
+        color: #6366f1;
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 0.78rem;
+        font-weight: 600;
+      }
+    }
+
+    .selection-actions {
+      display: flex;
+      gap: 4px;
+    }
+  }
+
+  .selection-filters {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .category-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 4px;
+
+    .cat-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 16px;
+      border: 1px solid var(--noesis-border);
+      background: transparent;
+      font-size: 0.78rem;
+      color: var(--noesis-text-secondary);
+      cursor: pointer;
+      transition: all 0.2s;
+
+      .chip-count {
+        background: var(--noesis-hover);
+        padding: 0 6px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.72rem;
+      }
+
+      &:hover {
+        border-color: #6366f1;
+        color: #6366f1;
+        background: rgba(99, 102, 241, 0.06);
+      }
+    }
+  }
+
+  .script-list {
+    max-height: calc(100vh - 450px);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    .script-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+
+      &:hover {
+        background: var(--noesis-hover);
+      }
+
+      &.selected {
+        background: rgba(99, 102, 241, 0.08);
+      }
+
+      .script-info {
+        flex: 1;
+        min-width: 0;
+
+        .script-name {
+          display: block;
+          font-weight: 500;
+          font-size: 0.85rem;
+          color: var(--noesis-text);
+        }
+
+        .script-class {
+          display: block;
+          font-size: 0.75rem;
+          color: var(--noesis-text-secondary);
+          font-family: 'JetBrains Mono', monospace;
+        }
+      }
+    }
+  }
+
+  .loading-state, .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 32px;
+    color: var(--noesis-text-secondary);
+
+    i { font-size: 1.5rem; opacity: 0.5; }
+    p { margin: 0; }
+  }
+}
+
+// Log Panel
+.log-panel {
+  .log-card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .log-header {
+    padding: 16px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    .log-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+
+      h3 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 700;
+      }
+    }
+  }
+
+  .log-viewer {
+    background: #0d1117;
+    border-radius: 8px;
+    padding: 16px;
+    min-height: calc(100vh - 300px);
+    max-height: calc(100vh - 300px);
+    overflow-y: auto;
+    font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    color: #c9d1d9;
+
+    .log-line {
+      white-space: pre-wrap;
+      word-break: break-all;
+
+      &.error { color: #f87171; }
+      &.success { color: #4ade80; }
+      &.info { color: #60a5fa; font-weight: 600; }
+    }
+
+    .log-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      min-height: 300px;
+      color: #484f58;
+      text-align: center;
+
+      i {
+        font-size: 3rem;
+        margin-bottom: 16px;
+        opacity: 0.4;
+      }
+
+      p {
+        margin: 4px 0;
+        font-size: 0.9rem;
+      }
+
+      .hint {
+        font-size: 0.78rem;
+        opacity: 0.6;
+      }
+    }
+  }
+}
+
+@media (max-width: 1100px) {
+  .runner-layout {
+    grid-template-columns: 1fr;
+  }
+}

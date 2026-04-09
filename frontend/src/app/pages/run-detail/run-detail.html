@@ -1,0 +1,115 @@
+<div class="run-detail-page">
+  <!-- Breadcrumb -->
+  <div class="breadcrumb">
+    <a routerLink="/history"><i class="pi pi-arrow-left"></i> Back to History</a>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <i class="pi pi-spinner pi-spin"></i>
+      <span>Loading run details...</span>
+    </div>
+  } @else if (run(); as r) {
+    <!-- Header -->
+    <div class="page-header">
+      <div>
+        <h1>Run #{{ r.id }} <p-tag [value]="r.status" [severity]="getStatusSeverity(r.status)" /></h1>
+        <p class="subtitle">{{ r.runName || 'Manual Run' }}</p>
+      </div>
+      <div class="header-actions">
+        @if (r.status === 'running') {
+          <p-button label="Stop Run" icon="pi pi-stop" severity="danger" (onClick)="stopRun()" />
+        }
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="run-stats">
+      <div class="stat-item">
+        <span class="stat-label">Total Scripts</span>
+        <span class="stat-value">{{ r.totalScripts || 0 }}</span>
+      </div>
+      <div class="stat-item passed">
+        <span class="stat-label">Passed</span>
+        <span class="stat-value">{{ r.passedCount || 0 }}</span>
+      </div>
+      <div class="stat-item failed">
+        <span class="stat-label">Failed</span>
+        <span class="stat-value">{{ r.failedCount || 0 }}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Pass Rate</span>
+        <span class="stat-value">{{ passRate }}%</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Duration</span>
+        <span class="stat-value">{{ formatDuration(r.durationMs ? r.durationMs / 1000 : null) }}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Started</span>
+        <span class="stat-value date">{{ formatDate(r.startedAt) }}</span>
+      </div>
+    </div>
+
+    @if (r.status === 'running') {
+      <p-progressBar mode="indeterminate" [style]="{ height: '3px', 'margin-bottom': '20px' }" />
+    }
+
+    <!-- Results Table -->
+    @if (r.results && r.results.length > 0) {
+      <p-card header="Test Results" styleClass="results-card">
+        <p-table [value]="r.results" responsiveLayout="scroll" styleClass="p-datatable-sm">
+          <ng-template #header>
+            <tr>
+              <th>Script</th>
+              <th>Status</th>
+              <th>Duration</th>
+              <th>Error</th>
+            </tr>
+          </ng-template>
+          <ng-template #body let-result>
+            <tr>
+              <td>
+                <div class="script-name">
+                  <i class="pi pi-file-code"></i>
+                  {{ result.scriptName || 'Script #' + result.scriptId }}
+                </div>
+              </td>
+              <td>
+                <p-tag [value]="result.status" [severity]="getStatusSeverity(result.status)" />
+              </td>
+              <td>{{ formatDuration(result.durationMs ? result.durationMs / 1000 : null) }}</td>
+              <td>
+                @if (result.errorMessage) {
+                  <code class="error-msg" [pTooltip]="result.errorMessage">{{ result.errorMessage }}</code>
+                } @else {
+                  -
+                }
+              </td>
+            </tr>
+          </ng-template>
+        </p-table>
+      </p-card>
+    }
+
+    <!-- Logs -->
+    <p-card header="Execution Logs" styleClass="logs-card">
+      <div class="log-viewer">
+        @if (logs().length > 0) {
+          @for (log of logs(); track $index) {
+            <div class="log-line" [class]="log.level">
+              <span class="log-time">{{ log.timestamp | date: 'HH:mm:ss' }}</span>
+              <span class="log-msg">{{ log.message }}</span>
+            </div>
+          }
+        }
+        @for (line of liveLogs(); track $index) {
+          <div class="log-line live">{{ line }}</div>
+        }
+        @if (logs().length === 0 && liveLogs().length === 0) {
+          <div class="log-empty">No logs available for this run</div>
+        }
+      </div>
+    </p-card>
+  }
+</div>

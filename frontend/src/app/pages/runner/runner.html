@@ -1,0 +1,129 @@
+<div class="runner-page">
+  <div class="page-header">
+    <div>
+      <h1>Run Scripts</h1>
+      <p class="subtitle">Select and execute your ST automation scripts</p>
+    </div>
+    <div class="header-actions">
+      @if (!running()) {
+        <p-button label="Run Selected ({{ selectedCount }})" icon="pi pi-play" [disabled]="selectedCount === 0" (onClick)="runSelected()" />
+      } @else {
+        <p-button label="Stop Execution" icon="pi pi-stop" severity="danger" (onClick)="stopExecution()" />
+      }
+    </div>
+  </div>
+
+  <div class="runner-layout">
+    <!-- Script Selection Panel -->
+    <div class="selection-panel">
+      <p-card styleClass="selection-card">
+        <ng-template #header>
+          <div class="selection-header">
+            <div class="selection-title">
+              <h3>Select Scripts</h3>
+              <span class="selection-badge">{{ selectedCount }} selected</span>
+            </div>
+            <div class="selection-actions">
+              <p-button label="Select All" size="small" [text]="true" (onClick)="selectAll()" />
+              <p-button label="Clear" size="small" [text]="true" severity="secondary" (onClick)="clearSelection()" [disabled]="selectedCount === 0" />
+            </div>
+          </div>
+        </ng-template>
+
+        <!-- Filters -->
+        <div class="selection-filters">
+          <input type="text" pInputText placeholder="Search scripts..." [(ngModel)]="searchTerm" class="w-full" />
+          <p-select
+            [options]="categories()"
+            [(ngModel)]="selectedCategory"
+            optionLabel="name"
+            optionValue="id"
+            placeholder="All Categories"
+            [showClear]="true"
+            [style]="{ width: '100%' }"
+          />
+        </div>
+
+        <!-- Quick Category Select -->
+        <div class="category-chips">
+          @for (cat of categories(); track cat.id) {
+            <button class="cat-chip" (click)="selectCategory(cat.id)" pTooltip="Select all {{ cat.name }} scripts">
+              {{ cat.name }}
+              <span class="chip-count">{{ cat.scriptCount }}</span>
+            </button>
+          }
+        </div>
+
+        <p-divider />
+
+        <!-- Script List -->
+        <div class="script-list">
+          @if (loading()) {
+            <div class="loading-state">
+              <i class="pi pi-spinner pi-spin"></i>
+              <span>Loading scripts...</span>
+            </div>
+          } @else {
+            @for (script of filteredScripts; track script.id) {
+              <div class="script-item" [class.selected]="script.selected" (click)="toggleScript(script.id)">
+                <p-checkbox [ngModel]="script.selected" [binary]="true" (onChange)="toggleScript(script.id)" />
+                <div class="script-info">
+                  <span class="script-name">{{ script.name }}</span>
+                  <span class="script-class">{{ script.className.split('.').pop() }}</span>
+                </div>
+                <p-tag [value]="getCategoryName(script.categoryId)" size="small" severity="secondary" />
+              </div>
+            }
+            @if (filteredScripts.length === 0) {
+              <div class="empty-state">
+                <i class="pi pi-search"></i>
+                <p>No scripts match your filter</p>
+              </div>
+            }
+          }
+        </div>
+      </p-card>
+    </div>
+
+    <!-- Log Panel -->
+    <div class="log-panel">
+      <p-card styleClass="log-card">
+        <ng-template #header>
+          <div class="log-header">
+            <div class="log-title">
+              <h3>Execution Output</h3>
+              @if (running()) {
+                <p-tag value="RUNNING" severity="warn" />
+              } @else if (runStatus() === 'stopped') {
+                <p-tag value="STOPPED" severity="secondary" />
+              } @else if (runStatus() === 'error') {
+                <p-tag value="ERROR" severity="danger" />
+              }
+            </div>
+            <div class="log-actions">
+              <p-button icon="pi pi-trash" [text]="true" size="small" severity="secondary" pTooltip="Clear Logs" (onClick)="clearLogs()" [disabled]="running()" />
+            </div>
+          </div>
+        </ng-template>
+
+        @if (running()) {
+          <p-progressBar mode="indeterminate" [style]="{ height: '3px' }" />
+        }
+
+        <div class="log-viewer" #logContainer>
+          @if (logs().length === 0) {
+            <div class="log-empty">
+              <i class="pi pi-terminal"></i>
+              <p>Select scripts and click "Run Selected" to begin</p>
+              <p class="hint">Live output will appear here</p>
+            </div>
+          } @else {
+            @for (line of logs(); track $index) {
+              <div class="log-line" [class.error]="line.startsWith('✗') || line.includes('ERROR') || line.includes('FAILED')" [class.success]="line.includes('PASSED') || line.includes('BUILD SUCCESS')" [class.info]="line.startsWith('▶') || line.startsWith('⏹')">{{ line }}</div>
+            }
+          }
+        </div>
+      </p-card>
+    </div>
+  </div>
+</div>

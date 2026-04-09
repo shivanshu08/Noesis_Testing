@@ -1,0 +1,59 @@
+<div class="layout-wrapper" [class.sidebar-collapsed]="sidebarCollapsed()">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <i class="pi pi-bolt logo-icon"></i>
+        @if (!sidebarCollapsed()) {
+          <span class="logo-text">Noesis</span>
+        }
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      @for (item of navItems; track item.route) {
+        <a [routerLink]="item.route" routerLinkActive="active" class="nav-item" [pTooltip]="sidebarCollapsed() ? item.label : ''" tooltipPosition="right">
+          <i [class]="item.icon"></i>
+          @if (!sidebarCollapsed()) {
+            <span>{{ item.label }}</span>
+          }
+        </a>
+      }
+    </nav>
+
+    <div class="sidebar-footer">
+      <a (click)="auth.logout()" class="nav-item logout-item" pTooltip="Logout" tooltipPosition="right">
+        <i class="pi pi-sign-out"></i>
+        @if (!sidebarCollapsed()) {
+          <span>Logout</span>
+        }
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <!-- Topbar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <p-button icon="pi pi-bars" [rounded]="true" [text]="true" severity="secondary" (onClick)="toggleSidebar()" />
+      </div>
+      <div class="topbar-right">
+        <div class="user-info">
+          <p-avatar [label]="auth.user()?.fullName?.charAt(0) || 'U'" shape="circle" size="normal" [style]="{ 'background-color': '#6366f1', 'color': '#fff' }" />
+          @if (auth.user(); as user) {
+            <div class="user-details">
+              <span class="user-name">{{ user.fullName }}</span>
+              <span class="user-role">{{ user.role | titlecase }}</span>
+            </div>
+          }
+        </div>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <main class="page-content">
+      <router-outlet />
+    </main>
+  </div>
+</div>

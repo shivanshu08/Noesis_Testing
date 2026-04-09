@@ -1,0 +1,101 @@
+<div class="suites-page">
+  <div class="page-header">
+    <div>
+      <h1>Test Suites</h1>
+      <p class="subtitle">Create and manage custom test suites</p>
+    </div>
+    <div class="header-actions">
+      <p-button label="Create Suite" icon="pi pi-plus" (onClick)="openCreate()" />
+    </div>
+  </div>
+
+  <p-card styleClass="suites-card">
+    <p-table [value]="suites()" [loading]="loading()" responsiveLayout="scroll" styleClass="p-datatable-sm">
+      <ng-template #header>
+        <tr>
+          <th>Name</th>
+          <th>Description</th>
+          <th>Scripts</th>
+          <th>Created</th>
+          <th style="width: 200px">Actions</th>
+        </tr>
+      </ng-template>
+      <ng-template #body let-suite>
+        <tr>
+          <td>
+            <div class="suite-name">
+              <i class="pi pi-sitemap"></i>
+              <strong>{{ suite.name }}</strong>
+            </div>
+          </td>
+          <td>{{ suite.description || '-' }}</td>
+          <td>
+            <p-tag [value]="(suite.scripts?.length || 0) + ' scripts'" severity="info" />
+          </td>
+          <td>{{ suite.createdAt | date: 'mediumDate' }}</td>
+          <td>
+            <div class="action-buttons">
+              <p-button icon="pi pi-play" [rounded]="true" [text]="true" severity="success" pTooltip="Run Suite" (onClick)="runSuite(suite)" [disabled]="!suite.scripts?.length" />
+              <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" pTooltip="Edit" (onClick)="openEdit(suite)" />
+              <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger" pTooltip="Delete" (onClick)="deleteSuite(suite)" />
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template #emptymessage>
+        <tr>
+          <td colspan="5" class="empty-row">
+            <div class="empty-state">
+              <i class="pi pi-sitemap"></i>
+              <p>No test suites created yet</p>
+              <p-button label="Create Your First Suite" icon="pi pi-plus" (onClick)="openCreate()" />
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </p-card>
+</div>
+
+<!-- Create/Edit Dialog -->
+<p-dialog
+  [header]="editing ? 'Edit Suite' : 'Create Suite'"
+  [(visible)]="dialogVisible"
+  [modal]="true"
+  [style]="{ width: '550px' }"
+  [draggable]="false"
+>
+  <div class="suite-form">
+    <div class="form-field">
+      <label for="suiteName">Suite Name</label>
+      <input id="suiteName" type="text" pInputText [(ngModel)]="form.name" placeholder="e.g. Smoke Tests" class="w-full" />
+    </div>
+
+    <div class="form-field">
+      <label for="suiteDesc">Description</label>
+      <textarea id="suiteDesc" pTextarea [(ngModel)]="form.description" placeholder="Describe what this suite tests..." [rows]="3" class="w-full"></textarea>
+    </div>
+
+    <div class="form-field">
+      <label>Scripts</label>
+      <p-multiSelect
+        [options]="allScripts()"
+        [(ngModel)]="form.scriptIds"
+        optionLabel="name"
+        optionValue="id"
+        placeholder="Select scripts"
+        [filter]="true"
+        filterPlaceHolder="Search scripts..."
+        [maxSelectedLabels]="3"
+        [style]="{ width: '100%' }"
+      />
+    </div>
+  </div>
+
+  <ng-template #footer>
+    <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="dialogVisible = false" />
+    <p-button [label]="editing ? 'Update' : 'Create'" icon="pi pi-check" (onClick)="saveSuite()" [disabled]="!form.name.trim()" />
+  </ng-template>
+</p-dialog>
+
+<p-confirmDialog />

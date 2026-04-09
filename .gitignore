@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+*.log
+.angular/
+out-tsc/
+backend/node_modules/
+backend/dist/
+backend/logs/
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+frontend/out-tsc/
