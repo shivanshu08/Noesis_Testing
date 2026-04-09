@@ -1,6 +1,6 @@
 # Noesis Testing Platform
 
-A full-stack platform for managing and executing ST (Structured Text) automation scripts.
+A full-stack platform for managing and executing ST (System Testing) automation scripts.
 
 ## Architecture
 
