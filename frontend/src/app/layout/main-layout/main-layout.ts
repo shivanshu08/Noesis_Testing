@@ -23,7 +23,7 @@ export class MainLayout {
 
   navItems = [
     { label: 'Dashboard', icon: 'pi pi-objects-column', route: '/dashboard' },
-    { label: 'Scripts', icon: 'pi pi-file-code', route: '/scripts' },
+    { label: 'Scripts', icon: 'pi pi-file-edit', route: '/scripts' },
     { label: 'Run Scripts', icon: 'pi pi-play', route: '/runner' },
     { label: 'Test Suites', icon: 'pi pi-sitemap', route: '/suites' },
     { label: 'History', icon: 'pi pi-history', route: '/history' },

@@ -13,7 +13,7 @@
   <div class="stats-grid">
     <div class="stat-card">
       <div class="stat-icon scripts">
-        <i class="pi pi-file-code"></i>
+        <i class="pi pi-file-edit"></i>
       </div>
       <div class="stat-info">
         <span class="stat-value">{{ stats()?.totalScripts || 0 }}</span>
@@ -50,16 +50,6 @@
         <span class="stat-label">Running Now</span>
       </div>
     </div>
-
-    <div class="stat-card">
-      <div class="stat-icon">
-        <i class="pi pi-database"></i>
-      </div>
-      <div class="stat-info">
-        <span class="stat-value">{{ stats()?.totalRecords || 0 }}</span>
-        <span class="stat-label">Total Records</span>
-      </div>
-    </div>
   </div>
 
   <!-- Category Distribution + Quick Actions -->
@@ -72,7 +62,11 @@
               <span class="category-name">{{ cat.name }}</span>
               <span class="category-count">{{ cat.scriptCount }} scripts</span>
             </div>
-            <p-progressBar [value]="cat.scriptCount && stats()?.totalScripts ? (cat.scriptCount / stats()!.totalScripts) * 100 : 0" [showValue]="false" [style]="{ height: '6px' }" />
+            <p-progressBar
+              [value]="cat.scriptCount && stats()?.totalScripts ? (cat.scriptCount / stats()!.totalScripts) * 100 : 0"
+              [showValue]="false"
+              [style]="{ height: '6px' }"
+            />
           </div>
         }
         @if (categories().length === 0) {
@@ -89,6 +83,7 @@
             <span class="action-label">Run All Scripts</span>
             <span class="action-desc">Execute complete test suite</span>
           </div>
+          <i class="pi pi-chevron-right" style="margin-left:auto; opacity:0.3; font-size:0.75rem"></i>
         </a>
         <a routerLink="/scripts" class="action-item">
           <div class="action-icon manage"><i class="pi pi-cog"></i></div>
@@ -96,6 +91,7 @@
             <span class="action-label">Manage Scripts</span>
             <span class="action-desc">Enable/disable & configure tests</span>
           </div>
+          <i class="pi pi-chevron-right" style="margin-left:auto; opacity:0.3; font-size:0.75rem"></i>
         </a>
         <a routerLink="/suites" class="action-item">
           <div class="action-icon suite"><i class="pi pi-sitemap"></i></div>
@@ -103,6 +99,7 @@
             <span class="action-label">Test Suites</span>
             <span class="action-desc">Create custom test suites</span>
           </div>
+          <i class="pi pi-chevron-right" style="margin-left:auto; opacity:0.3; font-size:0.75rem"></i>
         </a>
         <a routerLink="/history" class="action-item">
           <div class="action-icon history"><i class="pi pi-history"></i></div>
@@ -110,6 +107,7 @@
             <span class="action-label">View History</span>
             <span class="action-desc">Browse past execution results</span>
           </div>
+          <i class="pi pi-chevron-right" style="margin-left:auto; opacity:0.3; font-size:0.75rem"></i>
         </a>
       </div>
     </p-card>
@@ -144,7 +142,12 @@
       </ng-template>
       <ng-template #emptymessage>
         <tr>
-          <td colspan="7" class="empty-row">No executions yet. Start by running some scripts!</td>
+          <td colspan="7" class="empty-row">
+            <div class="empty-state">
+              <i class="pi pi-inbox"></i>
+              <p>No executions yet. Start by running some scripts!</p>
+            </div>
+          </td>
         </tr>
       </ng-template>
     </p-table>

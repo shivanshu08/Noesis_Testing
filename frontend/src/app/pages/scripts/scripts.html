@@ -5,7 +5,7 @@
       <p class="subtitle">Manage your ST automation test scripts</p>
     </div>
     <div class="header-actions">
-      <p-button label="Sync from Project" icon="pi pi-sync" severity="secondary" [loading]="syncing()" (onClick)="syncScripts()" />
+      <p-button label="Sync from Project" icon="pi pi-play" severity="secondary" [loading]="syncing()" (onClick)="syncScripts()" />
     </div>
   </div>
 
@@ -55,7 +55,7 @@
         <tr>
           <td>
             <div class="script-name">
-              <i class="pi pi-file-code"></i>
+              <i class="pi pi-file-edit"></i>
               <span>{{ script.name }}</span>
             </div>
           </td>
