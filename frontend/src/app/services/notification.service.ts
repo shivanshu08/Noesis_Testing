@@ -170,12 +170,12 @@ export class NotificationService {
 
   getSeverityIcon(severity: string): string {
     const icons: Record<string, string> = {
-      success: 'pi pi-check-circle',
-      error: 'pi pi-exclamation-circle',
+      success: 'pi pi-check',
+      error: 'pi pi-bolt',
       warn: 'pi pi-exclamation-triangle',
-      info: 'pi pi-info-circle'
+      info: 'pi pi-bell'
     };
-    return icons[severity] || 'pi pi-info-circle';
+    return icons[severity] || 'pi pi-bell';
   }
 
   getUniqueSources(): string[] {

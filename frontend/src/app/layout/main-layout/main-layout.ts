@@ -41,18 +41,22 @@ export class MainLayout implements OnInit, OnDestroy {
     const items = [
       { label: 'Dashboard', icon: 'pi pi-objects-column', route: '/dashboard' },
       { label: 'Scripts', icon: 'pi pi-file-edit', route: '/scripts' },
+        { label: 'Test Suites', icon: 'pi pi-sitemap', route: '/suites' },
     ];
+
     if (this.auth.canEdit()) {
       items.push({ label: 'Run Scripts', icon: 'pi pi-play', route: '/runner' });
     }
-    items.push(
-      { label: 'Test Suites', icon: 'pi pi-sitemap', route: '/suites' },
-      { label: 'History', icon: 'pi pi-history', route: '/history' },
-      { label: 'Logs', icon: 'pi pi-list', route: '/logs' }
-    );
+
+      items.push({ label: 'History', icon: 'pi pi-history', route: '/history' });
+
     if (this.auth.isAdmin()) {
       items.push({ label: 'User Management', icon: 'pi pi-users', route: '/users' });
     }
+
+      // System diagnostics always at the absolute bottom
+      items.push({ label: 'Logs', icon: 'pi pi-list', route: '/logs' });
+
     return items;
   });
 
@@ -99,7 +103,7 @@ export class MainLayout implements OnInit, OnDestroy {
         summary,
         detail,
         time: new Date(),
-        icon: data.status === 'passed' ? 'pi pi-check-circle' : 'pi pi-times-circle',
+        icon: data.status === 'passed' ? 'pi pi-check' : 'pi pi-bolt',
         read: false
       }, ...n]);
       this.notificationService.unreadCount.update(c => c + 1);

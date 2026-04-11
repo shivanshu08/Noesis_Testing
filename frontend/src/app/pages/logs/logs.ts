@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, computed, signal, NO_ERRORS_SCHEMA } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
@@ -35,6 +35,8 @@ interface GlobalLog {
   category?: string;
   runStatus?: string | null;
   timestamp: string;
+  time?: string;
+  detail?: string;
 }
 
 interface FilterOption {
@@ -71,6 +73,7 @@ interface PdfColumn {
   providers: [MessageService, ConfirmationService],
   templateUrl: './logs.html',
   styleUrl: './logs.scss',
+  schemas: [NO_ERRORS_SCHEMA],
 })
 export class LogsPage implements OnInit, OnDestroy {
   private readonly cacheKey = 'noesis_global_logs_cache_v2';
@@ -89,15 +92,15 @@ export class LogsPage implements OnInit, OnDestroy {
   searchTerm = '';
   selectedSeverity: string | null = null;
   selectedRunId: number | null = null;
-  startDate = '';
-  endDate = '';
+  dateFrom = '';
+  dateTo = '';
 
   // Draft filters
   draftSearchTerm = '';
   draftSelectedSeverity: string | null = null;
   draftSelectedRunId: number | null = null;
-  draftStartDate = '';
-  draftEndDate = '';
+  draftDateFrom = '';
+  draftDateTo = '';
 
   rowsPerPage = 10;
   readonly rowsPerPageOptions = [10, 20, 30, 40, 50];
@@ -111,6 +114,8 @@ export class LogsPage implements OnInit, OnDestroy {
     { label: 'Info', value: 'info' },
     { label: 'Debug', value: 'debug' },
   ];
+
+  expandedRows: { [key: string]: boolean } = {};
 
   readonly runOptions = computed<FilterOption[]>(() => {
     const map = new Map<number, string>();
@@ -251,16 +256,16 @@ export class LogsPage implements OnInit, OnDestroy {
   }
 
   applySelectedFilters(): void {
-    const prevStart = this.startDate;
-    const prevEnd = this.endDate;
+    const prevStart = this.dateFrom;
+    const prevEnd = this.dateTo;
 
     this.searchTerm = this.draftSearchTerm;
     this.selectedSeverity = this.draftSelectedSeverity;
     this.selectedRunId = this.draftSelectedRunId;
-    this.startDate = this.draftStartDate;
-    this.endDate = this.draftEndDate;
+    this.dateFrom = this.draftDateFrom;
+    this.dateTo = this.draftDateTo;
 
-    const dateChanged = prevStart !== this.startDate || prevEnd !== this.endDate;
+    const dateChanged = prevStart !== this.dateFrom || prevEnd !== this.dateTo;
     if (dateChanged) {
       this.fetchLogs(false);
       return;
@@ -274,8 +279,8 @@ export class LogsPage implements OnInit, OnDestroy {
       this.draftSearchTerm !== this.searchTerm ||
       this.draftSelectedSeverity !== this.selectedSeverity ||
       this.draftSelectedRunId !== this.selectedRunId ||
-      this.draftStartDate !== this.startDate ||
-      this.draftEndDate !== this.endDate
+      this.draftDateFrom !== this.dateFrom ||
+      this.draftDateTo !== this.dateTo
     );
   }
 
@@ -289,8 +294,8 @@ export class LogsPage implements OnInit, OnDestroy {
     const from = new Date();
     from.setDate(to.getDate() - days);
 
-    this.draftStartDate = this.toDateInput(from);
-    this.draftEndDate = this.toDateInput(to);
+    this.draftDateFrom = this.toDateInput(from);
+    this.draftDateTo = this.toDateInput(to);
   }
 
   onAutoRefreshToggle(enabled: boolean): void {
@@ -388,22 +393,35 @@ export class LogsPage implements OnInit, OnDestroy {
     this.confirmAndDelete(ids, `Delete all ${ids.length} filtered log(s)?`);
   }
 
+  deleteSelected(): void {
+    this.deleteSelectedLogs();
+  }
+
   clearSelection(): void {
     this.selectedLogs.set([]);
+  }
+
+  toggleLogSelection(log: GlobalLog): void {
+    const current = this.selectedLogs();
+    if (current.some(l => l.id === log.id)) {
+      this.selectedLogs.set(current.filter(l => l.id !== log.id));
+    } else {
+      this.selectedLogs.set([...current, log]);
+    }
   }
 
   clearFilters(): void {
     this.searchTerm = '';
     this.selectedSeverity = null;
     this.selectedRunId = null;
-    this.startDate = '';
-    this.endDate = '';
+    this.dateFrom = '';
+    this.dateTo = '';
 
     this.draftSearchTerm = '';
     this.draftSelectedSeverity = null;
     this.draftSelectedRunId = null;
-    this.draftStartDate = '';
-    this.draftEndDate = '';
+    this.draftDateFrom = '';
+    this.draftDateTo = '';
 
     this.applyFilters();
     this.fetchLogs(false);
@@ -500,6 +518,14 @@ export class LogsPage implements OnInit, OnDestroy {
     });
   }
 
+  formatDate(timestamp: string): string {
+    return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+  }
+
+  formatTime(timestamp: string): string {
+    return new Date(timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
   formatLastSynced(timestamp: string | null): string {
     if (!timestamp) return 'Not synced yet';
     return `Last synced: ${this.formatDateTime(timestamp)}`;
@@ -541,6 +567,19 @@ export class LogsPage implements OnInit, OnDestroy {
         return 'Debug';
       default:
         return 'Info';
+    }
+  }
+
+  getSeverityIcon(severity: string): string {
+    switch (severity) {
+      case 'error':
+        return 'pi pi-bug'; // Modern tech error representation
+      case 'warn':
+        return 'pi pi-exclamation-triangle'; // Universal warning symbol
+      case 'debug':
+        return 'pi pi-cog'; // Classic debug representation
+      default:
+        return 'pi pi-align-left'; // Represents textual log data
     }
   }
 
@@ -619,6 +658,9 @@ export class LogsPage implements OnInit, OnDestroy {
           ? normalizedSeverity
           : 'info';
 
+    const timestamp = raw?.time || raw?.timestamp || new Date().toISOString();
+    const detailDesc = String(raw?.detailedDescription || raw?.detailed_description || raw?.detail || raw?.message || '');
+
     const parsedId = Number(raw?.id);
 
     return {
@@ -630,11 +672,13 @@ export class LogsPage implements OnInit, OnDestroy {
       summary: String(raw?.summary || raw?.message || raw?.detail || ''),
       source: String(raw?.source || 'Execution'),
       sourceComponent: raw?.sourceComponent ? String(raw.sourceComponent) : 'execution-engine',
-      detailedDescription: String(raw?.detailedDescription || raw?.detailed_description || raw?.detail || raw?.message || ''),
+      detailedDescription: detailDesc,
       context: this.parseContext(raw?.context || raw?.logContext),
       category: raw?.category ? String(raw.category) : undefined,
       runStatus: raw?.runStatus ? String(raw.runStatus) : null,
-      timestamp: raw?.time || raw?.timestamp || new Date().toISOString(),
+      timestamp: timestamp,
+      time: timestamp,
+      detail: detailDesc,
     };
   }
 
@@ -665,14 +709,14 @@ export class LogsPage implements OnInit, OnDestroy {
     let fromIso: string | undefined;
     let toIso: string | undefined;
 
-    if (this.startDate) {
-      const from = new Date(this.startDate);
+    if (this.dateFrom) {
+      const from = new Date(this.dateFrom);
       from.setHours(0, 0, 0, 0);
       fromIso = from.toISOString();
     }
 
-    if (this.endDate) {
-      const to = new Date(this.endDate);
+    if (this.dateTo) {
+      const to = new Date(this.dateTo);
       to.setHours(23, 59, 59, 999);
       toIso = to.toISOString();
     }

@@ -88,12 +88,12 @@ export class LogService {
 
   getSeverityIcon(severity: string): string {
     const icons: Record<string, string> = {
-      success: 'pi pi-check-circle',
-      error: 'pi pi-exclamation-circle',
+      success: 'pi pi-check',
+      error: 'pi pi-bug',
       warn: 'pi pi-exclamation-triangle',
-      info: 'pi pi-info-circle'
+      info: 'pi pi-align-left'
     };
-    return icons[severity] || 'pi pi-info-circle';
+    return icons[severity] || 'pi pi-align-left';
   }
 
   getSeverityColor(severity: string): string {
