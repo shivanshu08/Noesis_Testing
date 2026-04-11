@@ -109,7 +109,7 @@ CREATE TRIGGER update_scripts_updated_at BEFORE UPDATE ON scripts
 -- ============================================================
 CREATE TABLE IF NOT EXISTS test_suites (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(200) NOT NULL,
+    name VARCHAR(200) NOT NULL UNIQUE,
     description TEXT DEFAULT NULL,
     config_xml TEXT DEFAULT NULL,
     is_parallel BOOLEAN NOT NULL DEFAULT FALSE,
@@ -190,6 +190,9 @@ CREATE TABLE IF NOT EXISTS execution_logs (
     result_id INT DEFAULT NULL REFERENCES execution_results(id) ON DELETE CASCADE,
     log_level log_level NOT NULL DEFAULT 'INFO',
     message TEXT NOT NULL,
+    detailed_description TEXT DEFAULT NULL,
+    source_component VARCHAR(120) DEFAULT NULL,
+    log_context JSONB DEFAULT NULL,
     timestamp TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -216,83 +219,32 @@ CREATE TABLE IF NOT EXISTS scheduled_runs (
 -- ============================================================
 
 -- Default admin user (password: admin123 - bcrypt hashed)
-INSERT INTO users (username, email, password_hash, full_name, role) VALUES
-('admin', 'admin@noesis.com', '$2b$12$LJ3m4ys4Fp/hMN2K3EXAMPLE_HASH_REPLACE_ON_SETUP', 'System Admin', 'admin');
+INSERT INTO users (username, email, password_hash, full_name, role) 
+SELECT 'admin', 'admin@noesis.com', '$2b$12$LJ3m4ys4Fp/hMN2K3EXAMPLE_HASH_REPLACE_ON_SETUP', 'System Admin', 'admin'
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin');
 
 -- Script Categories
-INSERT INTO script_categories (name, description, icon, color, sort_order) VALUES
-('Configuration', 'Configuration screen test scripts', 'pi-cog', '#6366f1', 1),
-('Feature', 'Feature-based test scripts', 'pi-star', '#f59e0b', 2),
-('Manual', 'Manual screen E2E test scripts', 'pi-file-edit', '#10b981', 3),
-('Sanity', 'Sanity and smoke test scripts', 'pi-check-circle', '#ef4444', 4),
-('API', 'API integration test scripts', 'pi-server', '#8b5cf6', 5),
-('Dashboard', 'Dashboard and UI test scripts', 'pi-chart-bar', '#06b6d4', 6),
-('Security', 'Access and security test scripts', 'pi-shield', '#f97316', 7),
-('Intake', 'Intake and processing test scripts', 'pi-inbox', '#ec4899', 8);
+INSERT INTO script_categories (name, description, icon, color, sort_order) 
+SELECT * FROM (VALUES
+  ('Configuration', 'Configuration screen test scripts', 'pi-cog', '#6366f1', 1),
+  ('Feature', 'Feature-based test scripts', 'pi-star', '#f59e0b', 2),
+  ('Manual', 'Manual screen E2E test scripts', 'pi-file-edit', '#10b981', 3),
+  ('Sanity', 'Sanity and smoke test scripts', 'pi-check-circle', '#ef4444', 4),
+  ('API', 'API integration test scripts', 'pi-server', '#8b5cf6', 5),
+  ('Dashboard', 'Dashboard and UI test scripts', 'pi-chart-bar', '#06b6d4', 6),
+  ('Security', 'Access and security test scripts', 'pi-shield', '#f97316', 7),
+  ('Intake', 'Intake and processing test scripts', 'pi-inbox', '#ec4899', 8)
+) AS t(name, description, icon, color, sort_order)
+WHERE NOT EXISTS (SELECT 1 FROM script_categories sc WHERE sc.name = t.name);
 
--- Register all discovered ST Scripts
-INSERT INTO scripts (name, class_name, category_id, file_path, is_active) VALUES
--- Configuration Scripts
-('Affiliate Screen Test', 'org.example.scripts.configuration.AffiliateScreenTest', 1, 'src/test/java/org/example/scripts/configuration/AffiliateScreenTest.java', TRUE),
-('Folder Configuration E2E', 'org.example.scripts.configuration.FolderConfigurationE2ETest', 1, 'src/test/java/org/example/scripts/configuration/FolderConfigurationE2ETest.java', TRUE),
-('Company Info Screen', 'org.example.scripts.configuration.CompanyInfoScreenTest', 1, 'src/test/java/org/example/scripts/configuration/CompanyInfoScreenTest.java', TRUE),
-('Advance Rules E2E', 'org.example.scripts.configuration.AdvanceRulesE2ETest', 1, 'src/test/java/org/example/scripts/configuration/AdvanceRulesE2ETest.java', TRUE),
-('Integration Screen', 'org.example.scripts.configuration.IntegrationScreenTest', 1, 'src/test/java/org/example/scripts/configuration/IntegrationScreenTest.java', TRUE),
-('Literature Monitoring', 'org.example.scripts.configuration.LiteratureMonitoringTest', 1, 'src/test/java/org/example/scripts/configuration/LiteratureMonitoringTest.java', TRUE),
-('Mailbox Configuration E2E', 'org.example.scripts.configuration.MailboxConfigurationE2ETest', 1, 'src/test/java/org/example/scripts/configuration/MailboxConfigurationE2ETest.java', TRUE),
-('Reporting Destination E2E', 'org.example.scripts.configuration.ReportingDestinationE2ETest', 1, 'src/test/java/org/example/scripts/configuration/ReportingDestinationE2ETest.java', TRUE),
-('User Group Configuration', 'org.example.scripts.configuration.UserGroupConfiguration', 1, 'src/test/java/org/example/scripts/configuration/UserGroupConfiguration.java', TRUE),
-('User Screen E2E', 'org.example.scripts.configuration.UserScreenE2E', 1, 'src/test/java/org/example/scripts/configuration/UserScreenE2E.java', TRUE),
-('User Screen Test', 'org.example.scripts.configuration.UserScreenTest', 1, 'src/test/java/org/example/scripts/configuration/UserScreenTest.java', TRUE),
-('Auto Narrative Screen', 'org.example.scripts.configuration.AutoNarrativeScreen', 1, 'src/test/java/org/example/scripts/configuration/AutoNarrativeScreen.java', TRUE),
-
--- Feature Scripts
-('Follow Up Query Management', 'org.example.scripts.feature.FollowUpQueryManagement', 2, 'src/test/java/org/example/scripts/feature/FollowUpQueryManagement.java', TRUE),
-('Test Feature', 'org.example.scripts.feature.TestFeature', 2, 'src/test/java/org/example/scripts/feature/TestFeature.java', TRUE),
-('Test HTML Feature', 'org.example.scripts.feature.TestHTMLFeature', 2, 'src/test/java/org/example/scripts/feature/TestHTMLFeature.java', TRUE),
-('Test Single Case Feature', 'org.example.scripts.feature.TestSingleCaseFeature', 2, 'src/test/java/org/example/scripts/feature/TestSingleCaseFeature.java', TRUE),
-('Test Text Feature', 'org.example.scripts.feature.TestTextFeature', 2, 'src/test/java/org/example/scripts/feature/TestTextFeature.java', TRUE),
-
--- Manual Scripts
-('Manual Screen E2E Script 1', 'org.example.scripts.manual.ManualScreenE2E_Script1', 3, 'src/test/java/org/example/scripts/manual/ManualScreenE2E_Script1.java', TRUE),
-('Manual Screen E2E Script 2', 'org.example.scripts.manual.ManualScreenE2E_Script2', 3, 'src/test/java/org/example/scripts/manual/ManualScreenE2E_Script2.java', TRUE),
-('Manual Screen E2E Script 3', 'org.example.scripts.manual.ManualScreenE2E_Script3', 3, 'src/test/java/org/example/scripts/manual/ManualScreenE2E_Script3.java', TRUE),
-('Manual Screen E2E Script 4', 'org.example.scripts.manual.ManualScreenE2E_Script4', 3, 'src/test/java/org/example/scripts/manual/ManualScreenE2E_Script4.java', TRUE),
-('Manual Screen E2E Script 5', 'org.example.scripts.manual.ManualScreenE2E_Script5', 3, 'src/test/java/org/example/scripts/manual/ManualScreenE2E_Script5.java', TRUE),
-
--- Sanity Scripts
-('RFC Sanity', 'org.example.scripts.RFCSanity', 4, 'src/test/java/org/example/scripts/RFCSanity.java', TRUE),
-('Login Screen Test', 'org.example.scripts.LoginScreenTestCase', 4, 'src/test/java/org/example/scripts/LoginScreenTestCase.java', TRUE),
-
--- API Scripts
-('API Test', 'org.example.scripts.APITest', 5, 'src/test/java/org/example/scripts/APITest.java', TRUE),
-
--- Dashboard Scripts
-('User Dashboard', 'org.example.scripts.UserDashboard', 6, 'src/test/java/org/example/scripts/UserDashboard.java', TRUE),
-('Worklist Screen', 'org.example.scripts.WorklistScreenTest', 6, 'src/test/java/org/example/scripts/WorklistScreenTest.java', TRUE),
-('Action Logs', 'org.example.scripts.ActionLogsTest', 6, 'src/test/java/org/example/scripts/ActionLogsTest.java', TRUE),
-('Audit Log Screen', 'org.example.scripts.AuditLogScreenTest', 6, 'src/test/java/org/example/scripts/AuditLogScreenTest.java', TRUE),
-('Request Log Screen', 'org.example.scripts.RequestLogScreenTest', 6, 'src/test/java/org/example/scripts/RequestLogScreenTest.java', TRUE),
-('Error Log', 'org.example.scripts.ErrorLog', 6, 'src/test/java/org/example/scripts/ErrorLog.java', TRUE),
-
--- Security Scripts
-('Access Security Screen', 'org.example.scripts.AccessSecurityScreenTest', 7, 'src/test/java/org/example/scripts/AccessSecurityScreenTest.java', TRUE),
-
--- Intake & Processing Scripts
-('R3 Intake', 'org.example.scripts.R3Intake', 8, 'src/test/java/org/example/scripts/R3Intake.java', TRUE),
-('Auto Narrative', 'org.example.scripts.AutoNarrativeTest', 8, 'src/test/java/org/example/scripts/AutoNarrativeTest.java', TRUE),
-('Doc Manual Translation', 'org.example.scripts.DocManualTranslation', 8, 'src/test/java/org/example/scripts/DocManualTranslation.java', TRUE),
-('Inline Quota', 'org.example.scripts.InlineQuotaTest', 8, 'src/test/java/org/example/scripts/InlineQuotaTest.java', TRUE),
-('Review Excel Extraction', 'org.example.scripts.ReviewExcelExtractionTest', 8, 'src/test/java/org/example/scripts/ReviewExcelExtractionTest.java', TRUE),
-('Auto Archival Phase 1', 'org.example.scripts.AutoArchivalSystemPhase1Test', 8, 'src/test/java/org/example/scripts/AutoArchivalSystemPhase1Test.java', TRUE),
-('Auto Archival Phase 2', 'org.example.scripts.AutoArchivalSystemPhase2Test', 8, 'src/test/java/org/example/scripts/AutoArchivalSystemPhase2Test.java', TRUE),
-('Interim Manual Report', 'org.example.scripts.InterimManualReportTest', 8, 'src/test/java/org/example/scripts/InterimManualReportTest.java', TRUE),
-('Post Processing Actions', 'org.example.scripts.PostProcessingActionsSystemTest', 8, 'src/test/java/org/example/scripts/PostProcessingActionsSystemTest.java', TRUE),
-('Auto Assign', 'org.example.scripts.AutoAssign', 8, 'src/test/java/org/example/scripts/AutoAssign.java', TRUE),
-('Download Rename', 'org.example.scripts.DownloadRename', 8, 'src/test/java/org/example/scripts/DownloadRename.java', TRUE);
+-- Register all discovered ST Scripts (inserted via init script)
+-- (See backend/src/database/init.ts for seed data)
 
 -- Default Test Suites
-INSERT INTO test_suites (name, description, created_by) VALUES
-('Full Regression Suite', 'Complete regression suite with Configuration, Manual, and Feature tests', 1),
-('Sanity Suite', 'Quick sanity checks for build verification', 1),
-('Configuration Suite', 'All configuration screen tests', 1);
+INSERT INTO test_suites (name, description, created_by) 
+SELECT * FROM (VALUES
+  ('Full Regression Suite', 'Complete regression suite with Configuration, Manual, and Feature tests', 1),
+  ('Sanity Suite', 'Quick sanity checks for build verification', 1),
+  ('Configuration Suite', 'All configuration screen tests', 1)
+) AS t(name, description, created_by)
+WHERE NOT EXISTS (SELECT 1 FROM test_suites ts WHERE ts.name = t.name);

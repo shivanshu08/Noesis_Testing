@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { query, execute, getConnection } from '../database/connection';
-import { authenticate, AuthRequest } from '../middleware/auth';
+import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { logger } from '../utils/logger';
 import { config } from '../config';
 import { spawn, ChildProcess } from 'child_process';
@@ -53,8 +53,17 @@ interface ResultRow {
   completed_at: Date | null;
 }
 
+interface LogContext {
+  phase: 'start' | 'stdout' | 'stderr' | 'status' | 'system';
+  runName: string;
+  capturedAt: string;
+  lineLength?: number;
+  keyword?: string;
+  scriptCount?: number;
+}
+
 // POST /api/execution/run - Execute scripts
-router.post('/run', async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/run', authorize('admin', 'tester'), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { scriptIds, suiteName, environment = 'local' } = req.body;
 
@@ -103,7 +112,7 @@ router.post('/run', async (req: AuthRequest, res: Response): Promise<void> => {
       await client.query('COMMIT');
 
       // Start execution in background
-      executeScripts(runId, testngXml, scripts, req.userId!);
+      executeScripts(runId, testngXml, scripts, req.userId!, runName);
 
       res.status(201).json({
         runId,
@@ -123,7 +132,7 @@ router.post('/run', async (req: AuthRequest, res: Response): Promise<void> => {
 });
 
 // POST /api/execution/stop/:runId - Stop a running execution
-router.post('/stop/:runId', async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/stop/:runId', authorize('admin', 'tester'), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const runId = parseInt(req.params.runId as string);
     const proc = activeProcesses.get(runId);
@@ -143,8 +152,22 @@ router.post('/stop/:runId', async (req: AuthRequest, res: Response): Promise<voi
       ['skipped', runId]
     );
 
+    await insertExecutionLog(runId, 'WARN', 'Execution was manually stopped by user action.', {
+      phase: 'status',
+      runName: `Run #${runId}`,
+      capturedAt: new Date().toISOString(),
+      keyword: 'manual_stop',
+    }).catch(() => {});
+
+    await execute(
+      `INSERT INTO notifications (user_id, severity, summary, detail, icon, source, category) 
+       SELECT triggered_by, $1, $2, $3, $4, $5, $6 FROM execution_runs WHERE id = $7`,
+      ['warn', 'Execution Stopped', `Run #${runId} was manually stopped.`, 'pi pi-stop-circle', 'Script Execution', 'Warning', runId]
+    ).catch(e => logger.error('Notification error', e));
+
     if (io) {
       io.to(`run-${runId}`).emit('run-stopped', { runId });
+      io.emit('global-run-status', { runId, runName: `Run #${runId}`, status: 'stopped' });
     }
 
     res.json({ message: 'Execution stopped.' });
@@ -307,6 +330,143 @@ router.get('/stats', async (_req: AuthRequest, res: Response): Promise<void> => 
   }
 });
 
+// DELETE /api/execution/global-logs/:id - Delete a specific log
+router.delete('/global-logs/:id', authorize('admin', 'tester'), async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    await execute('DELETE FROM execution_logs WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete log.' });
+  }
+});
+
+// POST /api/execution/global-logs/delete-multiple - Delete multiple logs
+router.post('/global-logs/delete-multiple', authorize('admin', 'tester'), async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) { res.status(400).json({ error: 'Invalid IDs' }); return; }
+    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
+    await execute(`DELETE FROM execution_logs WHERE id IN (${placeholders})`, ids);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete logs.' });
+  }
+});
+
+// GET /api/execution/global-logs - Get all execution logs across all runs (up to 1 year)
+router.get('/global-logs', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const daysRaw = Number.parseInt(req.query.days as string, 10);
+    const days = Number.isFinite(daysRaw) && daysRaw > 0 ? daysRaw : null;
+    const severity = (req.query.severity as string | undefined)?.toUpperCase();
+    const runId = Number.parseInt(req.query.runId as string, 10);
+    const search = (req.query.q as string | undefined)?.trim();
+    const from = req.query.from as string | undefined;
+    const to = req.query.to as string | undefined;
+    const limitRaw = Number.parseInt(req.query.limit as string, 10);
+    const offsetRaw = Number.parseInt(req.query.offset as string, 10);
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 2000) : 500;
+    const offset = Number.isFinite(offsetRaw) ? Math.max(offsetRaw, 0) : 0;
+
+    const whereClauses: string[] = [];
+    const params: any[] = [];
+    let idx = 1;
+
+    if (days !== null) {
+      whereClauses.push(`el.timestamp >= NOW() - INTERVAL '1 day' * $${idx++}`);
+      params.push(days);
+    }
+
+    if (severity && ['INFO', 'WARN', 'ERROR', 'DEBUG'].includes(severity)) {
+      whereClauses.push(`el.log_level = $${idx++}`);
+      params.push(severity);
+    }
+
+    if (Number.isFinite(runId)) {
+      whereClauses.push(`el.run_id = $${idx++}`);
+      params.push(runId);
+    }
+
+    if (search) {
+      const searchParamIdx = idx++;
+      whereClauses.push(`(el.message ILIKE $${searchParamIdx} OR COALESCE(el.detailed_description, '') ILIKE $${searchParamIdx})`);
+      params.push(`%${search}%`);
+    }
+
+    if (from) {
+      whereClauses.push(`el.timestamp >= $${idx++}::timestamp`);
+      params.push(from);
+    }
+
+    if (to) {
+      whereClauses.push(`el.timestamp <= $${idx++}::timestamp`);
+      params.push(to);
+    }
+
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    const totalRows = await query<{ count: string }>(
+      `
+      SELECT COUNT(*)::text as count
+      FROM execution_logs el
+      ${whereSql}
+      `,
+      params
+    );
+    const total = Number(totalRows[0]?.count || 0);
+
+    const dataParams = [...params, limit, offset];
+    const logs = await query<any>(
+      `
+      SELECT
+        el.id,
+        el.run_id as "runId",
+        el.result_id as "resultId",
+        el.log_level as severity,
+        el.message as detail,
+        el.detailed_description as "detailedDescription",
+        el.source_component as "sourceComponent",
+        el.log_context as context,
+        el.timestamp as time,
+        COALESCE(er.run_name, 'System Execution') as source,
+        er.status as "runStatus",
+        'Execution' as category
+      FROM execution_logs el
+      LEFT JOIN execution_runs er ON el.run_id = er.id
+      ${whereSql}
+      ORDER BY el.timestamp DESC
+      LIMIT $${idx++} OFFSET $${idx}
+      `,
+      dataParams
+    );
+
+    const transformedLogs = logs.map((log) => ({
+      ...log,
+      severity: (log.severity || 'info').toLowerCase(),
+      summary:
+        log.detail && log.detail.length > 120
+          ? `${log.detail.substring(0, 120)}...`
+          : log.detail || '',
+      message: log.detail,
+      detailedDescription: log.detailedDescription || log.detail || '',
+      sourceComponent: log.sourceComponent || 'execution-engine',
+      context: log.context || {},
+    }));
+
+    res.json({
+      data: transformedLogs,
+      meta: {
+        total,
+        limit,
+        offset,
+      },
+    });
+  } catch (error) {
+    logger.error('Get global logs error:', error);
+    res.status(500).json({ error: 'Failed to fetch global logs.' });
+  }
+});
+
 // GET /api/execution/logs/:runId - Get execution logs
 router.get('/logs/:runId', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -353,7 +513,61 @@ function escapeXml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
-async function executeScripts(runId: number, testngXml: string, scripts: any[], userId: number) {
+function sanitizeLogLine(value: string): string {
+  return value
+    .replace(/\u001b\[[0-9;]*m/g, '')
+    .replace(/\r/g, '')
+    .trim();
+}
+
+function inferKeyword(message: string): string | undefined {
+  const upper = message.toUpperCase();
+  if (upper.includes('BUILD SUCCESS')) return 'build_success';
+  if (upper.includes('BUILD FAILURE')) return 'build_failure';
+  if (upper.includes('SKIPPED')) return 'skipped';
+  if (upper.includes('FAIL')) return 'failure';
+  if (upper.includes('PASS')) return 'pass';
+  if (upper.includes('ERROR')) return 'error';
+  if (upper.includes('WARN')) return 'warn';
+  return undefined;
+}
+
+function buildDetailedDescription(
+  runId: number,
+  logLevel: string,
+  message: string,
+  context: LogContext
+): string {
+  const readableLevel = logLevel.toUpperCase();
+  const header = `Run #${runId} ${readableLevel} event`;
+  const phaseInfo = `Phase: ${context.phase}`;
+  const runInfo = `Run Name: ${context.runName}`;
+  const keywordInfo = context.keyword ? `Keyword: ${context.keyword}` : '';
+  const lengthInfo = typeof context.lineLength === 'number' ? `Line Length: ${context.lineLength}` : '';
+
+  return [header, runInfo, phaseInfo, keywordInfo, lengthInfo, `Message: ${message}`]
+    .filter(Boolean)
+    .join(' | ')
+    .substring(0, 3900);
+}
+
+async function insertExecutionLog(
+  runId: number,
+  logLevel: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG',
+  message: string,
+  context: LogContext
+): Promise<void> {
+  const sanitizedMessage = sanitizeLogLine(message).substring(0, 2000);
+  const detailedDescription = buildDetailedDescription(runId, logLevel, sanitizedMessage, context);
+
+  await execute(
+    `INSERT INTO execution_logs (run_id, log_level, message, detailed_description, source_component, log_context)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [runId, logLevel, sanitizedMessage, detailedDescription, 'execution-engine', JSON.stringify(context)]
+  );
+}
+
+async function executeScripts(runId: number, testngXml: string, scripts: any[], userId: number, runName: string) {
   const stPath = config.stAutomation.path;
   const fs = await import('fs');
   const tempXmlPath = path.join(stPath, `temp-run-${runId}.xml`);
@@ -363,9 +577,16 @@ async function executeScripts(runId: number, testngXml: string, scripts: any[], 
     fs.writeFileSync(tempXmlPath, testngXml, 'utf8');
 
     // Log start
-    await execute(
-      'INSERT INTO execution_logs (run_id, log_level, message) VALUES ($1, $2, $3)',
-      [runId, 'INFO', `Execution started for ${scripts.length} script(s)`]
+    await insertExecutionLog(
+      runId,
+      'INFO',
+      `Execution started for ${scripts.length} script(s)`,
+      {
+        phase: 'start',
+        runName,
+        scriptCount: scripts.length,
+        capturedAt: new Date().toISOString(),
+      }
     );
 
     if (io) {
@@ -402,12 +623,16 @@ async function executeScripts(runId: number, testngXml: string, scripts: any[], 
       // Parse and emit real-time logs
       const lines = text.split('\n').filter((l: string) => l.trim());
       for (const line of lines) {
-        const logLevel = line.includes('ERROR') ? 'ERROR' : line.includes('WARN') ? 'WARN' : 'INFO';
+        const cleanLine = sanitizeLogLine(line);
+        const logLevel = cleanLine.includes('ERROR') ? 'ERROR' : cleanLine.includes('WARN') ? 'WARN' : 'INFO';
 
-        await execute(
-          'INSERT INTO execution_logs (run_id, log_level, message) VALUES ($1, $2, $3)',
-          [runId, logLevel, line.substring(0, 2000)]
-        ).catch(() => {});
+        await insertExecutionLog(runId, logLevel, cleanLine, {
+          phase: 'stdout',
+          runName,
+          capturedAt: new Date().toISOString(),
+          lineLength: cleanLine.length,
+          keyword: inferKeyword(cleanLine),
+        }).catch(() => {});
 
         if (io) {
           io.to(`run-${runId}`).emit('run-log', {
@@ -421,10 +646,14 @@ async function executeScripts(runId: number, testngXml: string, scripts: any[], 
       const text = data.toString();
       output += text;
 
-      await execute(
-        'INSERT INTO execution_logs (run_id, log_level, message) VALUES ($1, $2, $3)',
-        [runId, 'ERROR', text.substring(0, 2000)]
-      ).catch(() => {});
+      const cleanError = sanitizeLogLine(text);
+      await insertExecutionLog(runId, 'ERROR', cleanError, {
+        phase: 'stderr',
+        runName,
+        capturedAt: new Date().toISOString(),
+        lineLength: cleanError.length,
+        keyword: inferKeyword(cleanError),
+      }).catch(() => {});
 
       if (io) {
         io.to(`run-${runId}`).emit('run-log', {
@@ -459,9 +688,35 @@ async function executeScripts(runId: number, testngXml: string, scripts: any[], 
         [output.substring(0, 65000), runId]
       );
 
+      await insertExecutionLog(
+        runId,
+        finalStatus === 'passed' ? 'INFO' : 'ERROR',
+        `Execution completed with status ${finalStatus}. Passed=${passed}, Failed=${failed}, Errors=${errors}, Skipped=${skipped}`,
+        {
+          phase: 'status',
+          runName,
+          capturedAt: new Date().toISOString(),
+          keyword: finalStatus,
+        }
+      ).catch(() => {});
+
+      // Log Notification to Database automatically
+      const severity = finalStatus === 'passed' ? 'success' : 'error';
+      const summary = `Execution ${finalStatus === 'passed' ? 'Passed' : 'Failed'}`;
+      const detail = `Suite "${runName}" finished executing with ${passed} passed, ${failed} failed, ${errors} errors, ${skipped} skipped.`;
+      const icon = finalStatus === 'passed' ? 'pi pi-check-circle' : 'pi pi-times-circle';
+      await execute(
+        `INSERT INTO notifications (user_id, severity, summary, detail, icon, source, category) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [userId, severity, summary, detail, icon, 'Script Execution', 'Test Run']
+      ).catch(e => logger.error('Notification error', e));
+
       if (io) {
         io.to(`run-${runId}`).emit('run-completed', {
           runId, status: finalStatus, passed, failed, errors, skipped,
+        });
+        io.emit('global-run-status', {
+          runId, runName, status: finalStatus, passed, failed, errors, skipped,
         });
       }
 
@@ -480,8 +735,23 @@ async function executeScripts(runId: number, testngXml: string, scripts: any[], 
         [runId]
       );
 
+      await insertExecutionLog(runId, 'ERROR', `Execution engine crashed: ${err.message}`, {
+        phase: 'status',
+        runName,
+        capturedAt: new Date().toISOString(),
+        keyword: 'engine_error',
+      }).catch(() => {});
+
+      // Log Crash Notification
+      await execute(
+        `INSERT INTO notifications (user_id, severity, summary, detail, icon, source, category) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [userId, 'error', 'Execution Error', `Run "${runName}" failed to start or crashed.`, 'pi pi-exclamation-triangle', 'Script Execution', 'Error']
+      ).catch(e => logger.error('Notification error', e));
+
       if (io) {
         io.to(`run-${runId}`).emit('run-error', { runId, error: err.message });
+        io.emit('global-run-status', { runId, runName, status: 'error', error: err.message });
       }
     });
 

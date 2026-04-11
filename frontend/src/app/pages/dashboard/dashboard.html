@@ -5,7 +5,7 @@
       <p class="subtitle">Overview of your ST automation scripts</p>
     </div>
     <div class="header-actions">
-      <p-button label="Run Scripts" icon="pi pi-play" routerLink="/runner" />
+      <p-button *ngIf="auth.canEdit()" label="Run Scripts" icon="pi pi-play" routerLink="/runner" />
     </div>
   </div>
 
@@ -77,7 +77,7 @@
 
     <p-card header="Quick Actions" styleClass="actions-card">
       <div class="quick-actions">
-        <a routerLink="/runner" class="action-item">
+        <a *ngIf="auth.canEdit()" routerLink="/runner" class="action-item">
           <div class="action-icon run"><i class="pi pi-play"></i></div>
           <div>
             <span class="action-label">Run All Scripts</span>
@@ -113,36 +113,81 @@
     </p-card>
   </div>
 
+  <!-- Scripts Overview -->
+  <div style="margin-bottom: 24px;">
+    <p-card styleClass="report-sources-card chart-card">
+      <h3 class="mb-3" style="font-size: 1.1rem; font-weight: 600;">Scripts Overview</h3>
+      <div class="advanced-pie-layout">
+        <div class="pie-chart-wrapper">
+          <p-chart type="doughnut" [data]="categoryChartData" [options]="doughnutChartOptions" height="140px" width="140px" />
+        </div>
+        <div class="pie-legend-wrapper">
+          <div class="total-indicator">
+            <span class="total-val">{{ stats()?.totalScripts || 0 }}</span>
+            <span class="total-lbl">Total Scripts</span>
+          </div>
+          <div class="legend-list">
+            @for (cat of stats()?.categoryStats; track cat.name) {
+              <div class="legend-item">
+                <div class="color-swatch" [style.border-left]="'4px solid ' + cat.color"></div>
+                <div class="item-val">{{ cat.count }}</div>
+                <div class="item-lbl">{{ cat.name }}</div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    </p-card>
+  </div>
+
+  <!-- Execution Trend -->
+  <div style="margin-bottom: 24px;">
+    <p-card styleClass="chart-card">
+      <h3 class="mb-4" style="font-size: 1.1rem; font-weight: 600;">Execution Trend (Last 30 Days)</h3>
+      @if (historyChartData) {
+        <p-chart type="line" [data]="historyChartData" [options]="chartOptions" height="300px" />
+      } @else {
+        <div class="empty-state" style="height: 260px; display: flex; align-items: center; justify-content: center; color: var(--text-color-secondary);">Insufficient data to render chart</div>
+      }
+    </p-card>
+  </div>
+
   <!-- Recent Runs -->
-  <p-card header="Recent Executions" styleClass="runs-card">
-    <p-table [value]="recentRuns()" [rows]="8" responsiveLayout="scroll" styleClass="p-datatable-sm">
+  <p-card styleClass="runs-card">
+    <ng-template pTemplate="title">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <span style="font-size: 1.1rem; font-weight: 600;">Execution Activity</span>
+        <p-button label="View All" icon="pi pi-arrow-right" iconPos="right" [text]="true" size="small" routerLink="/history" />
+      </div>
+    </ng-template>
+    <p-table [value]="recentRuns()" [rows]="5" responsiveLayout="scroll" styleClass="p-datatable-sm">
       <ng-template #header>
         <tr>
-          <th>Run #</th>
-          <th>Name</th>
+          <th>Execution ID</th>
+          <th>Suite / Run Name</th>
+          <th>Environment</th>
           <th>Status</th>
-          <th>Scripts</th>
           <th>Duration</th>
-          <th>Started</th>
-          <th></th>
+          <th>Triggered At</th>
+          <th style="width: 60px;"></th>
         </tr>
       </ng-template>
       <ng-template #body let-run>
         <tr>
-          <td><code>#{{ run.id }}</code></td>
-          <td>{{ run.runName || 'Unnamed Run' }}</td>
-          <td><p-tag [value]="run.status" [severity]="getStatusSeverity(run.status)" /></td>
-          <td>{{ run.totalScripts || '-' }}</td>
-          <td>{{ formatDuration(run.durationMs ? run.durationMs / 1000 : null) }}</td>
+          <td><span class="run-id">#{{ run.id }}</span></td>
+          <td style="font-weight: 500; color: var(--text-color);">{{ run.runName || 'Manual Run' }}</td>
+          <td><span class="env-tag">{{ run.environment || 'local' }}</span></td>
+          <td><p-tag [value]="run.status | titlecase" [severity]="getStatusSeverity(run.status)" /></td>
+          <td><i class="pi pi-clock" style="font-size: 0.8rem; color: var(--text-color-secondary); margin-right: 4px;"></i> {{ formatDuration(run.durationMs ? run.durationMs / 1000 : null) }}</td>
           <td>{{ formatDate(run.startedAt) }}</td>
           <td>
-            <p-button icon="pi pi-eye" [rounded]="true" [text]="true" size="small" [routerLink]="'/run/' + run.id" pTooltip="View Details" />
+            <p-button icon="pi pi-eye" [rounded]="true" [text]="true" size="small" severity="secondary" [routerLink]="'/run/' + run.id" pTooltip="View Details" tooltipPosition="left" />
           </td>
         </tr>
       </ng-template>
       <ng-template #emptymessage>
         <tr>
-          <td colspan="7" class="empty-row">
+          <td colspan="6" class="empty-row">
             <div class="empty-state">
               <i class="pi pi-inbox"></i>
               <p>No executions yet. Start by running some scripts!</p>

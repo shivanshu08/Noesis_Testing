@@ -1,0 +1,368 @@
+<!-- Notifications Page -->
+<div class="notifications-page">
+  <!-- Page Header -->
+  <div class="page-header">
+    <div>
+      <h1>Notifications</h1>
+      <p class="subtitle">Manage system alerts from the last 30 days</p>
+    </div>
+    <div class="header-actions">
+      <p-button 
+        label="Export CSV" 
+        icon="pi pi-download" 
+        severity="info" 
+        (onClick)="exportToCSV()"
+        [disabled]="filteredNotifications().length === 0"
+      />
+    </div>
+  </div>
+
+  <!-- Filters Section -->
+  <p-card styleClass="filters-card">
+    <ng-template #header>
+      <div class="filters-header">
+        <h3><i class="pi pi-filter"></i> Advanced Filters</h3>
+        <p-button 
+          label="Clear All" 
+          icon="pi pi-times" 
+          [text]="true"
+          severity="secondary"
+          size="small"
+          (onClick)="clearFilters()"
+        />
+      </div>
+    </ng-template>
+
+    <div class="filters-grid">
+      <!-- Search -->
+      <div class="filter-group">
+        <label>Search</label>
+        <p-iconfield>
+          <p-inputicon styleClass="pi pi-search" />
+          <input 
+            type="text" 
+            pInputText 
+            placeholder="Search by summary, detail, source..."
+            [(ngModel)]="searchTerm"
+            (input)="onFilterChange()"
+          />
+        </p-iconfield>
+      </div>
+
+      <!-- Severity -->
+      <div class="filter-group">
+        <label>Severity</label>
+        <p-select
+          [options]="severityOptions"
+          [(ngModel)]="selectedSeverity"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="All Severities"
+          (onChange)="onFilterChange()"
+          styleClass="w-full"
+        />
+      </div>
+
+      <!-- Source -->
+      <div class="filter-group">
+        <label>Source</label>
+        <p-select
+          [options]="sourceOptions()"
+          [(ngModel)]="selectedSource"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="All Sources"
+          (onChange)="onFilterChange()"
+          styleClass="w-full"
+        />
+      </div>
+
+      <!-- Category -->
+      <div class="filter-group">
+        <label>Category</label>
+        <p-select
+          [options]="categoryOptions()"
+          [(ngModel)]="selectedCategory"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="All Categories"
+          (onChange)="onFilterChange()"
+          styleClass="w-full"
+        />
+      </div>
+
+      <!-- Read Status -->
+      <div class="filter-group">
+        <label>Status</label>
+        <p-select
+          [options]="readStatusOptions"
+          [(ngModel)]="selectedReadStatus"
+          optionLabel="label"
+          optionValue="value"
+          placeholder="All"
+          (onChange)="onFilterChange()"
+          styleClass="w-full"
+        />
+      </div>
+
+      <!-- Date Range -->
+      <div class="filter-group">
+        <label>From Date</label>
+        <input 
+          type="date" 
+          pInputText 
+          [(ngModel)]="dateFromFilter"
+          (change)="onFilterChange()"
+          class="date-input"
+        />
+      </div>
+
+      <div class="filter-group">
+        <label>To Date</label>
+        <input 
+          type="date" 
+          pInputText 
+          [(ngModel)]="dateToFilter"
+          (change)="onFilterChange()"
+          class="date-input"
+        />
+      </div>
+
+      <!-- Stats -->
+      <div class="filter-group stats">
+        <label>Results</label>
+        <div class="stats-display">
+          <span class="stat-item">
+            <strong>{{ filteredNotifications().length }}</strong>
+            <small>Total</small>
+          </span>
+          <span class="stat-item">
+            <strong>{{ filteredNotifications().filter(n => !n.read).length }}</strong>
+            <small>Unread</small>
+          </span>
+          <span class="stat-item">
+            <strong>{{ filteredNotifications().filter(n => n.severity === 'error').length }}</strong>
+            <small>Errors</small>
+          </span>
+        </div>
+      </div>
+    </div>
+  </p-card>
+
+  <!-- Bulk Actions -->
+  <div class="bulk-actions">
+    <span class="selection-info" *ngIf="selectedNotifications().length > 0">
+      {{ selectedNotifications().length }} selected
+    </span>
+    <div class="action-buttons">
+      <p-button 
+        label="Mark as Read" 
+        icon="pi pi-check" 
+        severity="info"
+        [text]="true"
+        size="small"
+        (onClick)="markSelectedAsRead()"
+        [disabled]="selectedNotifications().length === 0"
+      />
+      <p-button 
+        label="Delete Selected" 
+        icon="pi pi-trash" 
+        severity="danger"
+        [text]="true"
+        size="small"
+        (onClick)="deleteSelected()"
+        [disabled]="selectedNotifications().length === 0"
+      />
+      <p-button 
+        label="Clear All" 
+        icon="pi pi-times" 
+        severity="danger"
+        [text]="true"
+        size="small"
+        (onClick)="clearAllNotifications()"
+        [disabled]="filteredNotifications().length === 0"
+      />
+    </div>
+  </div>
+
+  <!-- Notifications Table -->
+  <p-card styleClass="notifications-table-card">
+    <p-table
+      [value]="filteredNotifications()"
+      [paginator]="true"
+      [rows]="rows()"
+      [rowsPerPageOptions]="[5, 10, 20, 50]"
+      [loading]="notificationService.loading()"
+      [globalFilterFields]="['summary', 'detail', 'source']"
+      responsiveLayout="scroll"
+      styleClass="p-datatable-sm notifications-table"
+      [rowHover]="true"
+      dataKey="id"
+      [(selection)]="selectedNotifications"
+    >
+      <!-- Checkbox Column -->
+      <p-tableHeaderCheckbox></p-tableHeaderCheckbox>
+      <p-tableCheckbox></p-tableCheckbox>
+
+      <!-- Type/Icon Column -->
+      <ng-template #header>
+        <tr>
+          <th style="width: 3%"></th>
+          <th style="width: 3%">
+            <p-tableHeaderCheckbox></p-tableHeaderCheckbox>
+          </th>
+          <th pSortableColumn="severity" style="width: 8%">
+            Type <p-sortIcon field="severity" />
+          </th>
+          <th style="width: 35%">Summary</th>
+          <th style="width: 12%">Source</th>
+          <th style="width: 12%">Category</th>
+          <th pSortableColumn="time" style="width: 15%">
+            Date <p-sortIcon field="time" />
+          </th>
+          <th pSortableColumn="read" style="width: 8%">
+            Status <p-sortIcon field="read" />
+          </th>
+          <th style="width: 7%">Actions</th>
+        </tr>
+      </ng-template>
+
+      <!-- Table Body -->
+      <ng-template #body let-notification>
+        <tr [class.unread-row]="!notification.read">
+          <!-- Expand Button -->
+          <td style="text-align: center;">
+            <p-button
+              *ngIf="notification.detail"
+              [icon]="expandedRows[notification.id] ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"
+              [text]="true"
+              [rounded]="true"
+              size="small"
+              (onClick)="toggleExpanded(notification.id)"
+              pTooltip="View details"
+            />
+          </td>
+
+          <!-- Checkbox -->
+          <td>
+            <p-tableCheckbox [value]="notification"></p-tableCheckbox>
+          </td>
+
+          <!-- Severity/Type -->
+          <td>
+            <div class="severity-badge" [style.background-color]="getSeverityColor(notification.severity) + '20'">
+              <i [class]="getSeverityIcon(notification.severity)" [style.color]="getSeverityColor(notification.severity)"></i>
+              <span class="severity-text">{{ notification.severity | titlecase }}</span>
+            </div>
+          </td>
+
+          <!-- Summary -->
+          <td>
+            <div class="summary-content">
+              <p class="summary-title">{{ notification.summary }}</p>
+              <p class="summary-preview" *ngIf="notification.detail">{{ notification.detail.substring(0, 60) }}...</p>
+            </div>
+          </td>
+
+          <!-- Source -->
+          <td>
+            <p-tag [value]="notification.source || 'System'" severity="info" />
+          </td>
+
+          <!-- Category -->
+          <td>
+            <p-tag [value]="notification.category || 'General'" severity="secondary" />
+          </td>
+
+          <!-- Date -->
+          <td>
+            <span class="date-text" [pTooltip]="formatDate(notification.time)" tooltipPosition="top">
+              {{ notification.time | date: 'short' }}
+            </span>
+          </td>
+
+          <!-- Status -->
+          <td>
+            <p-tag 
+              [value]="getReadStatus(notification.read)"
+              [severity]="notification.read ? 'success' : 'warn'"
+            />
+          </td>
+
+          <!-- Actions -->
+          <td>
+            <div class="action-cell">
+              <p-button
+                *ngIf="!notification.read"
+                icon="pi pi-check"
+                severity="success"
+                [text]="true"
+                [rounded]="true"
+                size="small"
+                pTooltip="Mark as read"
+                (onClick)="markAsRead(notification)"
+              />
+              <p-button
+                icon="pi pi-trash"
+                severity="danger"
+                [text]="true"
+                [rounded]="true"
+                size="small"
+                pTooltip="Delete"
+                (onClick)="deleteNotification(notification)"
+              />
+            </div>
+          </td>
+        </tr>
+
+        <!-- Expandable Detail Row -->
+        <tr *ngIf="expandedRows[notification.id]" class="detail-row">
+          <td colspan="9">
+            <div class="detail-content">
+              <div class="detail-grid">
+                <div class="detail-item">
+                  <span class="detail-label">Full Summary</span>
+                  <p class="detail-value">{{ notification.summary }}</p>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Description</span>
+                  <p class="detail-value">{{ notification.detail }}</p>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Notification Details</span>
+                  <div class="detail-meta">
+                    <span><strong>Source:</strong> {{ notification.source || 'System' }}</span>
+                    <span><strong>Category:</strong> {{ notification.category || 'General' }}</span>
+                    <span><strong>Severity:</strong> {{ notification.severity | titlecase }}</span>
+                    <span><strong>Status:</strong> {{ getReadStatus(notification.read) }}</span>
+                    <span><strong>Created:</strong> {{ formatDate(notification.time) }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+
+      <!-- Empty Message -->
+      <ng-template #emptymessage>
+        <tr>
+          <td colspan="9" class="empty-row">
+            <div class="empty-state">
+              <i class="pi pi-bell-slash"></i>
+              <p>No notifications found</p>
+              <p class="empty-subtitle">Try adjusting your filters or check back later</p>
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </p-card>
+</div>
+
+<!-- Confirm Dialog -->
+<p-confirmDialog header="Confirm" icon="pi pi-exclamation-triangle" />
+
+<!-- Toast Notifications -->
+<p-toast position="bottom-right" />
+

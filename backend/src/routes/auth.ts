@@ -37,7 +37,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     );
 
     if (users.length === 0) {
-      res.status(401).json({ error: 'Invalid credentials.' });
+      res.status(401).json({ error: 'User does not exist.' });
       return;
     }
 
@@ -54,7 +54,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     const token = jwt.sign(
       { userId: user.id, role: user.role },
       config.jwt.secret,
-      { expiresIn: config.jwt.expiresIn as any }
+      { expiresIn: '2h' } // Strict 2-hour session timeout
     );
 
     logger.info(`User logged in: ${user.username}`);
@@ -73,51 +73,6 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
   } catch (error) {
     logger.error('Login error:', error);
     res.status(500).json({ error: 'Login failed.' });
-  }
-});
-
-// POST /api/auth/register
-router.post('/register', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { username, email, password, fullName } = req.body;
-
-    if (!username || !email || !password || !fullName) {
-      res.status(400).json({ error: 'All fields are required.' });
-      return;
-    }
-
-    if (password.length < 6) {
-      res.status(400).json({ error: 'Password must be at least 6 characters.' });
-      return;
-    }
-
-    const existing = await query<UserRow>(
-      'SELECT id FROM users WHERE username = $1 OR email = $2',
-      [username, email]
-    );
-
-    if (existing.length > 0) {
-      res.status(409).json({ error: 'Username or email already exists.' });
-      return;
-    }
-
-    const salt = await bcrypt.genSalt(12);
-    const passwordHash = await bcrypt.hash(password, salt);
-
-    const result = await execute(
-      'INSERT INTO users (username, email, password_hash, full_name, role) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-      [username, email, passwordHash, fullName, 'tester']
-    );
-
-    logger.info(`New user registered: ${username}`);
-
-    res.status(201).json({
-      message: 'Registration successful.',
-      userId: result.rows[0].id,
-    });
-  } catch (error) {
-    logger.error('Registration error:', error);
-    res.status(500).json({ error: 'Registration failed.' });
   }
 });
 
@@ -181,6 +136,80 @@ router.put('/change-password', authenticate, async (req: AuthRequest, res: Respo
   } catch (error) {
     logger.error('Change password error:', error);
     res.status(500).json({ error: 'Failed to change password.' });
+  }
+});
+
+// PUT /api/auth/profile
+router.put('/profile', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    logger.info(`Received profile update request for user ID: ${req.userId}`);
+    const { fullName, email, avatarUrl } = req.body;
+
+    if (!fullName) {
+      res.status(400).json({ error: 'Full name is required.' });
+      return;
+    }
+
+    // Brute-force the DB schema to ensure it can hold massive Base64 strings before updating
+    try { await execute('ALTER TABLE users ALTER COLUMN avatar_url TYPE TEXT'); } catch(e) {}
+
+    let sql = 'UPDATE users SET full_name = $1, email = $2';
+    const params: any[] = [fullName, email];
+
+    if (avatarUrl !== undefined) {
+      sql += ', avatar_url = $3 WHERE id = $4';
+      params.push(avatarUrl === '' ? null : avatarUrl, req.userId);
+    } else {
+      sql += ' WHERE id = $3';
+      params.push(req.userId);
+    }
+
+    const result = await execute(sql, params);
+    if (result.rowCount === 0) {
+      res.status(404).json({ error: 'User not found in database.' });
+      return;
+    }
+
+    logger.info(`User profile updated successfully: ${req.userId}`);
+    res.json({ message: 'Profile updated successfully.' });
+  } catch (error: any) {
+    logger.error('Profile update error:', error);
+
+    // Gracefully handle specific MySQL/PostgreSQL constraint errors
+    if (error.code === 'ER_DUP_ENTRY' || error.code === '23505') {
+      res.status(409).json({ error: 'This email address is already in use.' });
+      return;
+    }
+    if (error.code === 'ER_DATA_TOO_LONG' || error.code === '22001') {
+      res.status(400).json({ error: 'Image is too large. Please use a smaller photo or ask the admin to update the DB avatar column to LONGTEXT.' });
+      return;
+    }
+
+    // Send the exact database error message to the frontend so it's not a mystery
+    res.status(500).json({ error: error.message || 'Failed to update profile.' });
+  }
+});
+
+// POST /api/auth/forgot-password
+router.post('/forgot-password', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ error: 'Email is required.' });
+      return;
+    }
+
+    // Check if user exists (in a real app, generate a secure token and send an email via SMTP)
+    const users = await query<UserRow>('SELECT id FROM users WHERE email = $1', [email]);
+    if (users.length > 0) {
+      logger.info(`Password reset requested for: ${email}.`);
+    }
+
+    // Always return generic success to prevent email enumeration attacks
+    res.json({ message: 'If an account with that email exists, a password reset link has been sent.' });
+  } catch (error) {
+    logger.error('Forgot password error:', error);
+    res.status(500).json({ error: 'Failed to process password reset request.' });
   }
 });
 

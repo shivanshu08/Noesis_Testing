@@ -12,8 +12,10 @@ import authRoutes from './routes/auth';
 import scriptRoutes from './routes/scripts';
 import executionRoutes, { setSocketIO } from './routes/execution';
 import suiteRoutes from './routes/suites';
+import userRoutes from './routes/users';
 import path from 'path';
 import fs from 'fs';
+import notificationRoutes from './routes/notifications';
 
 const app = express();
 const httpServer = createServer(app);
@@ -55,8 +57,16 @@ if (!fs.existsSync(logsDir)) {
 // Middleware
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: config.cors.origin, credentials: true }));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Catch Payload Too Large errors and force a JSON response
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'The uploaded image is too large. Please use a smaller file.' });
+  }
+  next(err);
+});
 
 // Rate limiting
 const limiter = rateLimit({
@@ -80,6 +90,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/scripts', scriptRoutes);
 app.use('/api/execution', executionRoutes);
 app.use('/api/suites', suiteRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

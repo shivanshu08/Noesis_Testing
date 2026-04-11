@@ -15,6 +15,8 @@ import { ProgressBarModule } from 'primeng/progressbar';
 import { ScriptService } from '../../services/script.service';
 import { ExecutionService } from '../../services/execution.service';
 import { Script, ScriptCategory } from '../../models/interfaces';
+import { AuthService } from '../../services/auth.service';
+import { MessageService } from 'primeng/api';
 
 interface SelectableScript extends Script {
   selected: boolean;
@@ -49,6 +51,8 @@ export class Runner implements OnInit, OnDestroy {
   constructor(
     private scriptService: ScriptService,
     private executionService: ExecutionService,
+    private messageService: MessageService,
+    public auth: AuthService
   ) {}
 
   ngOnInit() {
@@ -120,12 +124,16 @@ export class Runner implements OnInit, OnDestroy {
   }
 
   runSelected() {
+    if (!this.auth.canEdit()) return;
     const scriptIds = this.selectedScripts.map(s => s.id);
     if (scriptIds.length === 0) return;
 
     this.running.set(true);
     this.logs.set([]);
     this.runStatus.set('running');
+
+    // Show toast notification for execution started
+    this.messageService.add({ severity: 'info', summary: 'Execution Started', detail: `Running ${scriptIds.length} script(s)...` });
 
     this.executionService.runScripts(scriptIds).subscribe({
       next: (res) => {
@@ -153,6 +161,23 @@ export class Runner implements OnInit, OnDestroy {
             this.running.set(false);
             this.runStatus.set(status);
             clearInterval(checkInterval);
+
+            // Show completion toast notification
+            if (status === 'completed') {
+              // Parse logs to get passed/failed counts
+              const logText = this.logs().join('\n');
+              const passedMatch = logText.match(/(\d+)\s+passed/i);
+              const failedMatch = logText.match(/(\d+)\s+failed/i);
+              const passed = passedMatch ? parseInt(passedMatch[1]) : 0;
+              const failed = failedMatch ? parseInt(failedMatch[1]) : scriptIds.length;
+              const total = passed + failed;
+
+              this.messageService.add({ severity: 'success', summary: 'Execution Completed', detail: `Total: ${total}, Passed: ${passed}, Failed: ${failed}` });
+            } else if (status === 'error') {
+              this.messageService.add({ severity: 'error', summary: 'Execution Failed', detail: 'An error occurred during execution' });
+            } else if (status === 'stopped') {
+              this.messageService.add({ severity: 'warn', summary: 'Execution Stopped', detail: 'The execution was manually stopped' });
+            }
           }
         }, 500);
       },
@@ -160,11 +185,13 @@ export class Runner implements OnInit, OnDestroy {
         this.logs.update(l => [...l, `✗ Error: ${err.error?.message || 'Failed to start execution'}`]);
         this.running.set(false);
         this.runStatus.set('error');
+        this.messageService.add({ severity: 'error', summary: 'Execution Failed', detail: err.error?.message || 'Failed to start execution' });
       },
     });
   }
 
   stopExecution() {
+    if (!this.auth.canEdit()) return;
     const runId = this.currentRunId();
     if (!runId) return;
 
@@ -174,9 +201,11 @@ export class Runner implements OnInit, OnDestroy {
         this.running.set(false);
         this.runStatus.set('stopped');
         this.executionService.disconnectFromRun();
+        this.messageService.add({ severity: 'warn', summary: 'Execution Stopped', detail: 'The test run was manually stopped' });
       },
       error: () => {
         this.logs.update(l => [...l, '✗ Failed to stop execution']);
+        this.messageService.add({ severity: 'error', summary: 'Failed to Stop', detail: 'Could not stop the test run' });
       },
     });
   }

@@ -1,0 +1,388 @@
+
+> frontend@0.0.0 build
+> ng build
+
+[33mΓ¥»[39m Building...
+[32mΓ£ö[39m Building...
+Application bundle generation failed. [10.310 seconds] - 2026-04-11T17:26:22.088Z
+
+X [ERROR] NG8002: Can't bind to 'expandedRows' since it isn't a known property of 'p-table'.
+1. If 'p-table' is an Angular component and it has 'expandedRows' input, then verify that it is included in the '@Component.imports' of this component.
+2. If 'p-table' is a Web Component then add 'CUSTOM_ELEMENTS_SCHEMA' to the '@Component.schemas' of this component to suppress this message.
+3. To allow any property add 'NO_ERRORS_SCHEMA' to the '@Component.schemas' of this component. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:176:6:
+      176 Γöé       [expandedRows]="expandedRows"
+          Γò╡       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'selectedSeverity' does not exist on type 'LogsPage'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:381:23:
+      381 Γöé           [(ngModel)]="selectedSeverity"
+          Γò╡                        ~~~~~~~~~~~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'selectedSeverity' does not exist on type 'LogsPage'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:381:23:
+      381 Γöé           [(ngModel)]="selectedSeverity"
+          Γò╡                        ~~~~~~~~~~~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'severityOptions' does not exist on type 'LogsPage'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:384:23:
+      384 Γöé           @for (opt of severityOptions; track opt.value) {
+          Γò╡                        ~~~~~~~~~~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'dateFrom' does not exist on type 'LogsPage'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:396:25:
+      396 Γöé             [(ngModel)]="dateFrom"
+          Γò╡                          ~~~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'dateFrom' does not exist on type 'LogsPage'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:396:25:
+      396 Γöé             [(ngModel)]="dateFrom"
+          Γò╡                          ~~~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'dateTo' does not exist on type 'LogsPage'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:402:25:
+      402 Γöé             [(ngModel)]="dateTo"
+          Γò╡                          ~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'dateTo' does not exist on type 'LogsPage'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:402:25:
+      402 Γöé             [(ngModel)]="dateTo"
+          Γò╡                          ~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'selectedSeverity' does not exist on type 'LogsPage'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:426:103:
+      426 Γöé ...bled]="!searchTerm && !selectedSeverity && !dateFrom && !dateT...
+          Γò╡                           ~~~~~~~~~~~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'dateFrom' does not exist on type 'LogsPage'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:426:124:
+      426 Γöé ...m && !selectedSeverity && !dateFrom && !dateTo" title="Clear a...
+          Γò╡                               ~~~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'dateTo' does not exist on type 'LogsPage'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:426:137:
+      426 Γöé ...ectedSeverity && !dateFrom && !dateTo" title="Clear all filters">
+          Γò╡                                   ~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'deleteSelected' does not exist on type 'LogsPage'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:474:55:
+      474 Γöé ...-selected-btn" (click)="deleteSelected()" title="Delete select...
+          Γò╡                            ~~~~~~~~~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'id' does not exist on type 'AppLog'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:482:47:
+      482 Γöé         @for (log of filteredLogs(); track log.id) {
+          Γò╡                                                ~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'severity' does not exist on type 'AppLog'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:483:59:
+      483 Γöé ...      <div class="log-card" [class]="'severity-' + log.severity">
+          Γò╡                                                           ~~~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'id' does not exist on type 'AppLog'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:488:54:
+      488 Γöé ...            [checked]="selectedLogs().some(l => l.id === log.id)"
+          Γò╡                                                      ~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'id' does not exist on type 'AppLog'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:488:65:
+      488 Γöé ...            [checked]="selectedLogs().some(l => l.id === log.id)"
+          Γò╡                                                                 ~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'toggleLogSelection' does not exist on type 'LogsPage'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:489:26:
+      489 Γöé                 (change)="toggleLogSelection(log)"
+          Γò╡                           ~~~~~~~~~~~~~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'getSeverityColor' does not exist on type 'LogsPage'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:492:54:
+      492 Γöé ... class="log-type" [style.color]="getSeverityColor(log.severity)">
+          Γò╡                                     ~~~~~~~~~~~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'severity' does not exist on type 'AppLog'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:492:75:
+      492 Γöé ... class="log-type" [style.color]="getSeverityColor(log.severity)">
+          Γò╡                                                          ~~~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'getSeverityIcon' does not exist on type 'LogsPage'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:493:30:
+      493 Γöé                   <i [class]="getSeverityIcon(log.severity)"></i>
+          Γò╡                               ~~~~~~~~~~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'severity' does not exist on type 'AppLog'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:493:50:
+      493 Γöé                   <i [class]="getSeverityIcon(log.severity)"></i>
+          Γò╡                                                   ~~~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'severity' does not exist on type 'AppLog'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:494:25:
+      494 Γöé                   {{ log.severity | uppercase }}
+          Γò╡                          ~~~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'time' does not exist on type 'AppLog'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:496:57:
+      496 Γöé ...         <span class="log-time">{{ formatTime(log.time) }}</span>
+          Γò╡                                                      ~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'summary' does not exist on type 'AppLog'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:503:44:
+      503 Γöé             <div class="log-summary">{{ log.summary }}</div>
+          Γò╡                                             ~~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'detail' does not exist on type 'AppLog'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:505:49:
+      505 Γöé ...iv class="log-detail" [title]="log.detail">{{ log.detail }}</div>
+          Γò╡                                       ~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'detail' does not exist on type 'AppLog'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:505:64:
+      505 Γöé ...iv class="log-detail" [title]="log.detail">{{ log.detail }}</div>
+          Γò╡                                                      ~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'time' does not exist on type 'AppLog'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:508:55:
+      508 Γöé ...         <span class="log-date">{{ formatDate(log.time) }}</span>
+          Γò╡                                                      ~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'source' does not exist on type 'AppLog'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:509:23:
+      509 Γöé               @if (log.source) {
+          Γò╡                        ~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+
+X [ERROR] TS2339: Property 'source' does not exist on type 'AppLog'. [plugin angular-compiler]
+
+    src/app/pages/logs/logs.html:510:46:
+      510 Γöé                 <span class="log-meta">{{ log.source }}</span>
+          Γò╡                                               ~~~~~~
+
+  Error occurs in the template of component LogsPage.
+
+    src/app/pages/logs/logs.ts:59:15:
+      59 Γöé   templateUrl: './logs.html',
+         Γò╡                ~~~~~~~~~~~~~
+
+

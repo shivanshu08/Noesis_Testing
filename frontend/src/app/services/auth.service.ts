@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { Observable, tap, catchError, throwError } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { User, LoginRequest, LoginResponse, RegisterRequest } from '../models/interfaces';
+import { User, LoginRequest, LoginResponse } from '../models/interfaces';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -15,6 +15,11 @@ export class AuthService {
   readonly user = this.currentUser.asReadonly();
   readonly isLoggedIn = computed(() => !!this.currentUser());
   readonly isAdmin = computed(() => this.currentUser()?.role === 'admin');
+  readonly isViewer = computed(() => this.currentUser()?.role === 'viewer');
+  readonly canEdit = computed(() => {
+    const role = this.currentUser()?.role;
+    return role === 'admin' || role === 'tester';
+  });
 
   constructor(private http: HttpClient, private router: Router) {}
 
@@ -27,10 +32,6 @@ export class AuthService {
       }),
       catchError(err => throwError(() => err))
     );
-  }
-
-  register(data: RegisterRequest): Observable<any> {
-    return this.http.post(`${this.apiUrl}/register`, data);
   }
 
   logout(): void {
@@ -46,6 +47,10 @@ export class AuthService {
 
   changePassword(currentPassword: string, newPassword: string): Observable<any> {
     return this.http.put(`${this.apiUrl}/change-password`, { currentPassword, newPassword });
+  }
+
+  forgotPassword(email: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/forgot-password`, { email });
   }
 
   fetchProfile(): Observable<User> {

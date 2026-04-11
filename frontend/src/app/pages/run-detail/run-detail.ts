@@ -10,6 +10,7 @@ import { TooltipModule } from 'primeng/tooltip';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { ExecutionService } from '../../services/execution.service';
 import { ExecutionRun, ExecutionLog } from '../../models/interfaces';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-run-detail',
@@ -28,6 +29,7 @@ export class RunDetail implements OnInit, OnDestroy {
   constructor(
     private route: ActivatedRoute,
     private executionService: ExecutionService,
+    public auth: AuthService
   ) {}
 
   ngOnInit() {
@@ -62,6 +64,7 @@ export class RunDetail implements OnInit, OnDestroy {
   }
 
   stopRun() {
+    if (!this.auth.canEdit()) return;
     this.executionService.stopRun(this.runId).subscribe({
       next: () => this.loadRunDetails(),
     });

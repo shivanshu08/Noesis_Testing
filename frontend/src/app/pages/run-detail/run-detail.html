@@ -13,12 +13,14 @@
     <!-- Header -->
     <div class="page-header">
       <div>
-        <h1>Run #{{ r.id }} <p-tag [value]="r.status" [severity]="getStatusSeverity(r.status)" /></h1>
+        <h1>Run #{{ r.id }} <p-tag [value]="r.status | titlecase" [severity]="getStatusSeverity(r.status)" /></h1>
         <p class="subtitle">{{ r.runName || 'Manual Run' }}</p>
       </div>
       <div class="header-actions">
+        <a pButton class="p-button-secondary p-button" label="Re-run" icon="pi pi-refresh" routerLink="/runner" [queryParams]="{ rerun: r.id }" style="text-decoration: none;"></a>
+        <p-button label="Download Report" icon="pi pi-download" severity="info" class="ml-2" />
         @if (r.status === 'running') {
-          <p-button label="Stop Run" icon="pi pi-stop" severity="danger" (onClick)="stopRun()" />
+          <p-button label="Stop Run" icon="pi pi-stop" severity="danger" (onClick)="stopRun()" class="ml-2" />
         }
       </div>
     </div>
@@ -76,7 +78,7 @@
                 </div>
               </td>
               <td>
-                <p-tag [value]="result.status" [severity]="getStatusSeverity(result.status)" />
+                <p-tag [value]="result.status | titlecase" [severity]="getStatusSeverity(result.status)" />
               </td>
               <td>{{ formatDuration(result.durationMs ? result.durationMs / 1000 : null) }}</td>
               <td>

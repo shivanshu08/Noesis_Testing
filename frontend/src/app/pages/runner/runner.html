@@ -4,8 +4,9 @@
       <h1>Run Scripts</h1>
       <p class="subtitle">Select and execute your ST automation scripts</p>
     </div>
-    <div class="header-actions">
+    <div class="header-actions" style="display: flex; gap: 12px;">
       @if (!running()) {
+        <p-button label="Schedule Run" icon="pi pi-calendar" severity="secondary" [disabled]="selectedCount === 0" />
         <p-button label="Run Selected ({{ selectedCount }})" icon="pi pi-play" [disabled]="selectedCount === 0" (onClick)="runSelected()" />
       } @else {
         <p-button label="Stop Execution" icon="pi pi-stop" severity="danger" (onClick)="stopExecution()" />

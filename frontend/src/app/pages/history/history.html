@@ -4,7 +4,8 @@
       <h1>Execution History</h1>
       <p class="subtitle">Browse past test execution results</p>
     </div>
-    <div class="header-actions">
+    <div class="header-actions" style="display: flex; gap: 12px;">
+      <p-button label="Export CSV" icon="pi pi-file-excel" severity="secondary" />
       <p-select
         [options]="statusOptions"
         [(ngModel)]="statusFilter"
@@ -49,7 +50,7 @@
         <tr>
           <td><code>#{{ run.id }}</code></td>
           <td class="run-name">{{ run.runName || 'Manual Run' }}</td>
-          <td><p-tag [value]="run.status" [severity]="getStatusSeverity(run.status)" /></td>
+          <td><p-tag [value]="run.status | titlecase" [severity]="getStatusSeverity(run.status)" /></td>
           <td>{{ run.totalScripts || '-' }}</td>
           <td class="passed-count">{{ run.passedCount || 0 }}</td>
           <td class="failed-count">{{ run.failedCount || 0 }}</td>

@@ -1,5 +1,5 @@
-import { Component, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, signal, OnInit, OnDestroy, Inject } from '@angular/core';
+import { CommonModule, DOCUMENT } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { InputTextModule } from 'primeng/inputtext';
@@ -15,7 +15,10 @@ import { CardModule } from 'primeng/card';
 import { DividerModule } from 'primeng/divider';
 import { FloatLabelModule } from 'primeng/floatlabel';
 import { SelectModule } from 'primeng/select';
+import { ToastModule } from 'primeng/toast';
+import { MessageService } from 'primeng/api';
 import { AuthService } from '../../services/auth.service';
+import { ThemeService } from '../../services/theme.service';
 
 @Component({
   selector: 'app-login',
@@ -24,33 +27,47 @@ import { AuthService } from '../../services/auth.service';
     CommonModule, FormsModule, InputTextModule, PasswordModule, ButtonModule,
     MessageModule, CheckboxModule, IconFieldModule, InputIconModule,
     InputGroupModule, InputGroupAddonModule, CardModule, DividerModule,
-    FloatLabelModule, SelectModule,
+    FloatLabelModule, SelectModule, ToastModule
   ],
+  providers: [MessageService],
   templateUrl: './login.html',
   styleUrl: './login.scss',
 })
-export class Login {
+export class Login implements OnInit, OnDestroy {
   username = '';
   password = '';
-  fullName = '';
-  email = '';
-  confirmPassword = '';
   showPassword = false;
-  rememberMe = false;
-  isRegister = signal(false);
   loading = signal(false);
   error = signal('');
+  successMsg = signal('');
   currentYear = new Date().getFullYear();
 
-  constructor(private auth: AuthService, private router: Router) {}
+  constructor(
+    private auth: AuthService,
+    private router: Router,
+    public themeService: ThemeService,
+    private messageService: MessageService,
+    @Inject(DOCUMENT) private document: Document
+  ) {}
+
+  ngOnInit() {
+    // Force Light Mode strictly for the Login page
+    this.document.documentElement.classList.remove('dark-mode', 'p-dark');
+  }
+
+  ngOnDestroy() {
+    // Restore global dark mode preference when leaving login
+    if (this.themeService.isDarkMode()) {
+      this.document.documentElement.classList.add('dark-mode', 'p-dark');
+    }
+  }
 
   onLogin() {
     if (!this.username || !this.password) {
-      this.error.set('Please enter username and password.');
+      this.messageService.add({ severity: 'warn', summary: 'Required', detail: 'Please enter username and password.' });
       return;
     }
     this.loading.set(true);
-    this.error.set('');
 
     this.auth.login({ username: this.username, password: this.password }).subscribe({
       next: () => {
@@ -59,44 +76,8 @@ export class Login {
       },
       error: (err) => {
         this.loading.set(false);
-        this.error.set(err.error?.error || 'Login failed. Please try again.');
+        this.messageService.add({ severity: 'error', summary: 'Authentication Failed', detail: err.error?.error || 'Login failed. Please try again.' });
       },
     });
-  }
-
-  onRegister() {
-    if (!this.username || !this.email || !this.password || !this.fullName) {
-      this.error.set('All fields are required.');
-      return;
-    }
-    if (this.password !== this.confirmPassword) {
-      this.error.set('Passwords do not match.');
-      return;
-    }
-    if (this.password.length < 6) {
-      this.error.set('Password must be at least 6 characters.');
-      return;
-    }
-    this.loading.set(true);
-    this.error.set('');
-
-    this.auth.register({ username: this.username, email: this.email, password: this.password, fullName: this.fullName }).subscribe({
-      next: () => {
-        this.loading.set(false);
-        this.isRegister.set(false);
-        this.error.set('');
-        this.password = '';
-        this.confirmPassword = '';
-      },
-      error: (err) => {
-        this.loading.set(false);
-        this.error.set(err.error?.error || 'Registration failed.');
-      },
-    });
-  }
-
-  toggleMode() {
-    this.isRegister.update(v => !v);
-    this.error.set('');
   }
 }

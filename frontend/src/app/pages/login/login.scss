@@ -1,8 +1,38 @@
 .login-page {
+  // --- CSS VARIABLE FIREWALL ---
+  // Forces PrimeNG to render in light mode locally, ignoring the global p-dark class
+  --p-surface-0: #ffffff !important;
+  --p-surface-50: #f8fafc !important;
+  --p-surface-100: #f1f5f9 !important;
+  --p-surface-200: #e2e8f0 !important;
+  --p-surface-300: #cbd5e1 !important;
+  --p-surface-400: #94a3b8 !important;
+  --p-surface-500: #64748b !important;
+  --p-surface-600: #475569 !important;
+  --p-surface-700: #334155 !important;
+  --p-surface-800: #1e293b !important;
+  --p-surface-900: #0f172a !important;
+  --p-surface-950: #020617 !important;
+  --p-text-color: #0f172a !important;
+  --p-text-muted-color: #64748b !important;
+  --p-content-background: #ffffff !important;
+  --p-content-hover-background: #f1f5f9 !important;
+  --p-content-border-color: #cbd5e1 !important;
+
+  // Explicitly force PrimeNG Input and Icon variables to Light Mode
+  --p-inputtext-background: #ffffff !important;
+  --p-inputtext-color: #0f172a !important;
+  --p-inputtext-border-color: #cbd5e1 !important;
+  --p-inputgroupaddon-background: #f8fafc !important;
+  --p-inputgroupaddon-color: #64748b !important;
+  --p-inputgroupaddon-border-color: #cbd5e1 !important;
+  --p-card-background: #ffffff !important;
+  --p-card-color: #0f172a !important;
+
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background: var(--noesis-bg);
+  background: #f8fafc !important;
 }
 
 .login-container {
@@ -11,7 +41,7 @@
 }
 
 .login-left, .login-right {
-  background: transparent; // Remove any separate background
+  background: transparent;
 }
 
 // Left illustration panel
@@ -76,7 +106,9 @@
   width: 100%;
   max-width: 440px;
   border-radius: 16px !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
 
   .p-card-body {
     padding: 40px !important;
@@ -91,12 +123,12 @@
   h2 {
     font-size: 1.6rem;
     font-weight: 700;
-    color: #1e293b;
+    color: #1e293b !important;
     margin: 0;
   }
 
   .subtitle {
-    color: #64748b;
+    color: #64748b !important;
     font-size: 0.9rem;
     margin-top: 4px;
   }
@@ -110,7 +142,7 @@
     display: block;
     font-size: 0.85rem;
     font-weight: 600;
-    color: #475569;
+    color: #1e293b !important;
     margin-bottom: 6px;
   }
 }
@@ -119,13 +151,22 @@
 :host ::ng-deep {
   .p-inputgroup {
     .p-inputgroup-addon {
-      background: #f8fafc;
-      border-color: #cbd5e1;
-      color: #64748b;
+      background: #f8fafc !important;
+      border-color: #cbd5e1 !important;
+      color: #64748b !important;
+      border-right: none !important;
       min-width: 42px;
       display: flex;
       align-items: center;
       justify-content: center;
+
+      i, .pi {
+        color: #64748b !important;
+      }
+      
+      svg {
+        fill: #64748b !important;
+      }
 
       i {
         font-size: 0.95rem;
@@ -136,17 +177,24 @@
         transition: background 0.2s;
 
         &:hover {
-          background: #e2e8f0;
+          background: #e2e8f0 !important;
         }
       }
     }
 
     input.p-inputtext {
-      border-color: #cbd5e1;
+      background: #ffffff !important;
+      border-color: #cbd5e1 !important;
+      color: #0f172a !important;
+      border-left: none !important;
+
+      &::placeholder {
+        color: #94a3b8 !important;
+      }
 
       &:focus {
-        border-color: var(--noesis-primary, #4f46e5);
-        box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 20%, transparent);
       }
     }
   }
@@ -156,8 +204,13 @@
     margin-top: 6px;
 
     .p-button {
-      background: var(--noesis-primary, #4f46e5);
-      border-color: var(--noesis-primary, #4f46e5);
+      background: var(--primary-color) !important;
+      border-color: var(--primary-color) !important;
+      color: #ffffff !important; // Force text login of dark mode to white
+
+      .p-button-label {
+        color: #ffffff !important;
+      }
       font-weight: 600;
       font-size: 0.95rem;
       padding: 0.7rem 1.25rem;
@@ -166,7 +219,7 @@
 
       &:hover {
         filter: brightness(1.08);
-        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+        box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 30%, transparent);
       }
 
       &:active {
@@ -180,7 +233,7 @@
     margin: 20px 0 12px;
 
     &::before {
-      border-color: #e2e8f0;
+      border-color: #e2e8f0 !important;
     }
   }
 
@@ -194,14 +247,30 @@
 .remember-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+
+  .checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
 
   .remember-label {
     font-size: 0.85rem;
     font-weight: 500;
-    color: #64748b;
+    color: var(--text-color-secondary);
     margin-bottom: 0;
     cursor: pointer;
+  }
+
+  .forgot-password-link {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--primary-color);
+    text-decoration: none;
+    cursor: pointer;
+    
+    &:hover { text-decoration: underline; }
   }
 }
 
@@ -209,10 +278,10 @@
 .toggle-mode {
   text-align: center;
   font-size: 0.9rem;
-  color: #64748b;
+  color: var(--text-color-secondary);
 
   .toggle-link {
-    color: var(--noesis-primary, #4f46e5);
+    color: var(--primary-color);
     font-weight: 600;
     cursor: pointer;
     margin-left: 4px;
@@ -223,11 +292,50 @@
   }
 }
 
+// Divider with text
+.divider-with-text {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 24px 0;
+  color: var(--text-color-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  
+  &::before, &::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--surface-border);
+  }
+  
+  &:not(:empty)::before { margin-right: .5em; }
+  &:not(:empty)::after { margin-left: .5em; }
+}
+
+// Social Login Buttons
+.social-login-container {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+
+  .social-btn {
+    flex: 1;
+    background: var(--surface-card);
+    border: 1px solid var(--surface-border);
+    color: var(--text-color);
+    
+    &:hover {
+      background: var(--surface-hover);
+      border-color: var(--text-color-secondary);
+    }
+  }
+}
+
 // Footer
 .login-footer {
   padding: 14px 32px;
   background: transparent;
-  color: var(--noesis-text-secondary);
+  color: #64748b !important;
   text-align: center;
   font-size: 0.8rem;
   letter-spacing: 0.3px;

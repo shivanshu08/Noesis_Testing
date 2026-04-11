@@ -3,7 +3,9 @@
   <aside class="sidebar">
     <div class="sidebar-header">
       <div class="logo">
-        <img src="assets/images/drogevate-logo.svg" alt="Drogevate" class="logo-img" />
+        <div class="logo-icon-box">
+          <span class="logo-letter">N</span>
+        </div>
         @if (!sidebarCollapsed()) {
           <span class="logo-text">Noesis</span>
         }
@@ -11,7 +13,7 @@
     </div>
 
     <nav class="sidebar-nav">
-      @for (item of navItems; track item.route) {
+      @for (item of navItems(); track item.route) {
         <a [routerLink]="item.route" routerLinkActive="active" class="nav-item" [pTooltip]="sidebarCollapsed() ? item.label : ''" tooltipPosition="right">
           <i [class]="item.icon"></i>
           @if (!sidebarCollapsed()) {
@@ -25,7 +27,7 @@
       <!-- User details -->
       @if (auth.user(); as user) {
         <div class="sidebar-user" [class.compact]="sidebarCollapsed()">
-          <p-avatar [label]="user.fullName?.charAt(0) || 'U'" shape="circle" size="normal" [style]="{ 'background-color': 'var(--noesis-primary)', 'color': '#fff', 'font-weight': '600' }" />
+          <p-avatar [label]="!user.avatarUrl ? (user.fullName.charAt(0) || 'U') : ''" [image]="user.avatarUrl || undefined" shape="circle" [style]="{ 'width': '40px', 'height': '40px', 'background': 'linear-gradient(135deg, var(--noesis-primary), var(--noesis-accent))', 'color': '#fff', 'font-weight': '600' }" />
           @if (!sidebarCollapsed()) {
             <div class="sidebar-user-info">
               <span class="sidebar-user-name">{{ user.fullName }}</span>
@@ -51,6 +53,48 @@
         <p-button icon="pi pi-bars" [rounded]="true" [text]="true" severity="secondary" (onClick)="toggleSidebar()" />
       </div>
       <div class="topbar-right">
+        <!-- Notifications Bell -->
+        <div class="notification-btn" style="position: relative; margin-right: 0.5rem;">
+          <p-button icon="pi pi-bell" [rounded]="true" [text]="true" severity="secondary" pTooltip="Notifications" tooltipPosition="bottom" (onClick)="toggleNotifications()" />
+          @if (notificationService.unreadCount() > 0) {
+            <span style="position: absolute; top: 4px; right: 8px; background: #ef4444; color: white; font-size: 0.7rem; padding: 2px 6px; border-radius: 10px; font-weight: bold; pointer-events: none;">{{ notificationService.unreadCount() }}</span>
+          }
+          
+          @if (showNotifications) {
+            <div class="theme-dropdown notifications-dropdown" (mouseleave)="showNotifications = false" style="width: 350px; right: -10px; max-height: 450px; overflow-y: auto; padding: 0; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+              <div style="padding: 12px 16px; border-bottom: 1px solid var(--surface-border); font-weight: 600; color: var(--text-color); background: var(--surface-section); position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center;">
+                <span>Notifications</span>
+                @if (notificationService.notifications().length > 0) {
+                  <p-button label="Clear All" [text]="true" size="small" severity="secondary" (onClick)="clearNotifications($event)" />
+                }
+              </div>
+              @if (notificationService.notifications().length === 0) {
+                <div style="padding: 30px 20px; text-align: center; color: var(--text-color-secondary); font-size: 0.85rem;">
+                  <i class="pi pi-bell-slash" style="font-size: 2rem; margin-bottom: 10px; opacity: 0.5;"></i><br>
+                  No new notifications
+                </div>
+              }
+              @for (n of notificationService.notifications(); track n.id) {
+                <div style="padding: 12px 16px; border-bottom: 1px solid var(--surface-border); display: flex; gap: 12px; align-items: flex-start; transition: background 0.2s; position: relative; cursor: pointer;" onmouseover="this.style.background='var(--surface-hover)'" onmouseout="this.style.background='transparent'">
+                  <i [class]="n.icon" [style.color]="n.severity === 'success' ? '#10b981' : (n.severity === 'error' ? '#ef4444' : '#f59e0b')" style="font-size: 1.25rem; margin-top: 2px;"></i>
+                  <div style="display: flex; flex-direction: column; gap: 4px; width: 100%; padding-right: 24px;">
+                    <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-color);">{{ n.summary }}</span>
+                    <span style="font-size: 0.8rem; color: var(--text-color-secondary); line-height: 1.4;">{{ n.detail }}</span>
+                    <span style="font-size: 0.7rem; color: var(--text-color-secondary); opacity: 0.7; margin-top: 4px;">{{ n.time | date:'shortTime' }}</span>
+                  </div>
+                  <p-button icon="pi pi-times" [text]="true" [rounded]="true" severity="secondary" size="small" [style]="{ position: 'absolute', right: '8px', top: '12px', width: '24px', height: '24px' }" (onClick)="notificationService.delete(n.id); $event.stopPropagation()" pTooltip="Dismiss" tooltipPosition="left" />
+                </div>
+              }
+              <div style="padding: 8px; text-align: center; border-top: 1px solid var(--surface-border); background: var(--surface-section); position: sticky; bottom: 0;">
+                <p-button label="View All Logs" [text]="true" size="small" routerLink="/logs" (onClick)="showNotifications = false" />
+              </div>
+            </div>
+          }
+        </div>
+
+        <!-- Dark Mode Toggle -->
+        <p-button [icon]="themeService.isDarkMode() ? 'pi pi-sun' : 'pi pi-moon'" [rounded]="true" [text]="true" severity="secondary" (onClick)="toggleDarkMode()" [pTooltip]="themeService.isDarkMode() ? 'Switch to Light Mode' : 'Switch to Dark Mode'" tooltipPosition="bottom" />
+
         <!-- Theme Selector -->
         <div class="theme-selector">
           <p-button icon="pi pi-palette" [rounded]="true" [text]="true" severity="secondary" (onClick)="showThemeMenu = !showThemeMenu" pTooltip="Change Theme" tooltipPosition="bottom" />
@@ -66,15 +110,17 @@
           }
         </div>
 
-        <div class="user-info">
-          <p-avatar [label]="auth.user()?.fullName?.charAt(0) || 'U'" shape="circle" size="normal" [style]="{ 'background-color': 'var(--noesis-primary)', 'color': '#fff' }" />
+        <!-- User Profile Dropdown -->
+        <div class="user-info cursor-pointer" (click)="userMenu.toggle($event)" style="cursor: pointer;">
+          <p-avatar [label]="!auth.user()?.avatarUrl ? (auth.user()?.fullName?.charAt(0) || 'U') : ''" [image]="auth.user()?.avatarUrl || undefined" shape="circle" [style]="{ 'width': '40px', 'height': '40px', 'background': 'linear-gradient(135deg, var(--noesis-primary), var(--noesis-accent))', 'color': '#fff' }" />
           @if (auth.user(); as user) {
             <div class="user-details">
-              <span class="user-name">{{ user.fullName }}</span>
+              <span class="user-name">{{ user.fullName }} <i class="pi pi-angle-down" style="font-size: 0.75rem; margin-left: 4px;"></i></span>
               <span class="user-role">{{ user.role | titlecase }}</span>
             </div>
           }
         </div>
+        <p-menu #userMenu [model]="userMenuItems" [popup]="true" appendTo="body" />
       </div>
     </header>
 
@@ -89,3 +135,52 @@
     </footer>
   </div>
 </div>
+
+<!-- User Profile Settings Dialog -->
+<p-dialog header="Profile Settings" [(visible)]="profileVisible" [modal]="true" [style]="{ width: '450px' }" [draggable]="false">
+  <div class="profile-settings-content" style="padding-top: 0.5rem;">
+    
+    <h4 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-color);">General Information</h4>
+    <div style="margin-bottom: 1.25rem;">
+      <label for="fullName" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Full Name</label>
+      <input pInputText id="fullName" [(ngModel)]="profileForm.fullName" style="width: 100%;" />
+    </div>
+    <div style="margin-bottom: 1.25rem;">
+      <label for="email" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Email Address</label>
+      <input pInputText id="email" [(ngModel)]="profileForm.email" style="width: 100%;" />
+    </div>
+    <div style="margin-bottom: 1.5rem;">
+      <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Profile Photo</label>
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <p-avatar [image]="profileForm.avatarUrl || undefined" [label]="!profileForm.avatarUrl ? (profileForm.fullName.charAt(0) || 'U') : ''" shape="circle" [style]="{ width: '64px', height: '64px', 'font-size': '1.75rem', 'background': 'linear-gradient(135deg, var(--noesis-primary), var(--noesis-accent))', 'color': '#fff' }"></p-avatar>
+        <p-fileUpload mode="basic" chooseLabel="Upload Photo" chooseIcon="pi pi-upload" accept="image/*" [maxFileSize]="2000000" [auto]="true" customUpload="true" (uploadHandler)="onFileSelect($event)" />
+        @if (profileForm.avatarUrl) {
+          <p-button icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true" (onClick)="profileForm.avatarUrl = ''" pTooltip="Remove Photo" />
+        }
+      </div>
+    </div>
+    <p-button label="Save Changes" icon="pi pi-check" (onClick)="saveProfile()" [loading]="savingProfile" styleClass="w-full" [style]="{ width: '100%' }" />
+
+    <p-divider styleClass="my-4" [style]="{ margin: '2rem 0' }"></p-divider>
+
+    <h4 style="margin-top: 0; margin-bottom: 1rem; color: var(--text-color);">Change Password</h4>
+    <div style="margin-bottom: 1.25rem;">
+      <label for="currentPassword" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Current Password</label>
+      <p-password id="currentPassword" [(ngModel)]="passwordForm.currentPassword" [toggleMask]="true" [feedback]="false" styleClass="w-full" inputStyleClass="w-full" [style]="{ width: '100%' }" [inputStyle]="{ width: '100%' }"></p-password>
+    </div>
+    <div style="margin-bottom: 1.25rem;">
+      <label for="newPassword" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">New Password</label>
+      <p-password id="newPassword" [(ngModel)]="passwordForm.newPassword" [toggleMask]="true" styleClass="w-full" inputStyleClass="w-full" [style]="{ width: '100%' }" [inputStyle]="{ width: '100%' }"></p-password>
+    </div>
+    <div style="margin-bottom: 1.5rem;">
+      <label for="confirmPassword" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Confirm New Password</label>
+      <p-password id="confirmPassword" [(ngModel)]="passwordForm.confirmPassword" [toggleMask]="true" [feedback]="false" styleClass="w-full" inputStyleClass="w-full" [style]="{ width: '100%' }" [inputStyle]="{ width: '100%' }"></p-password>
+    </div>
+    <p-button label="Update Password" icon="pi pi-lock" severity="warn" (onClick)="updatePassword()" [loading]="savingPassword" styleClass="w-full" [style]="{ width: '100%' }" 
+              [disabled]="!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword" />
+
+  </div>
+</p-dialog>
+
+<!-- Toast Notification Component -->
+<p-toast position="bottom-right" />

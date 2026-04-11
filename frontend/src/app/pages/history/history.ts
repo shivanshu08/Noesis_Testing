@@ -23,10 +23,11 @@ export class History implements OnInit {
   loading = signal(true);
   totalRecords = signal(0);
   page = 1;
-  rows = 20;
+  rows = 10;
   statusFilter: string | null = null;
 
   statusOptions = [
+    { label: 'All Status', value: null },
     { label: 'Running', value: 'running' },
     { label: 'Passed', value: 'passed' },
     { label: 'Failed', value: 'failed' },

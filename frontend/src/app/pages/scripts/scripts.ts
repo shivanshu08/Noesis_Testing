@@ -13,6 +13,8 @@ import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { ScriptService } from '../../services/script.service';
 import { Script, ScriptCategory } from '../../models/interfaces';
+import { AuthService } from '../../services/auth.service';
+import { RouterModule, Router } from '@angular/router';
 
 @Component({
   selector: 'app-scripts',
@@ -21,6 +23,7 @@ import { Script, ScriptCategory } from '../../models/interfaces';
     CommonModule, FormsModule, TableModule, CardModule, ButtonModule,
     InputTextModule, SelectModule, TagModule, ToggleSwitchModule,
     TooltipModule, IconFieldModule, InputIconModule,
+    RouterModule
   ],
   templateUrl: './scripts.html',
   styleUrl: './scripts.scss',
@@ -35,7 +38,7 @@ export class Scripts implements OnInit {
   searchTerm = '';
   selectedCategory: number | null = null;
 
-  constructor(private scriptService: ScriptService) {}
+  constructor(private scriptService: ScriptService, public auth: AuthService, private router: Router) {}
 
   ngOnInit() {
     this.loadCategories();
@@ -84,6 +87,8 @@ export class Scripts implements OnInit {
   }
 
   toggleScript(script: Script) {
+    if (!this.auth.canEdit()) return;
+
     this.scriptService.updateScript(script.id, { isActive: !script.isActive }).subscribe({
       next: () => {
         const updated = this.scripts().map(s =>
@@ -96,6 +101,8 @@ export class Scripts implements OnInit {
   }
 
   syncScripts() {
+    if (!this.auth.isAdmin()) return;
+
     this.syncing.set(true);
     this.scriptService.syncScripts().subscribe({
       next: () => {

@@ -49,6 +49,7 @@
           <th>Class</th>
           <th pSortableColumn="isActive">Status <p-sortIcon field="isActive" /></th>
           <th style="width: 100px">Active</th>
+          <th style="width: 100px; text-align: center;">Execute</th>
         </tr>
       </ng-template>
       <ng-template #body let-script>
@@ -71,6 +72,9 @@
           </td>
           <td>
             <p-toggleSwitch [ngModel]="script.isActive" (onChange)="toggleScript(script)" />
+          </td>
+          <td style="text-align: center;">
+            <p-button icon="pi pi-play" [rounded]="true" [text]="true" severity="success" pTooltip="Run Script Now" routerLink="/runner" [queryParams]="{ select: script.id }" [disabled]="!script.isActive" />
           </td>
         </tr>
       </ng-template>

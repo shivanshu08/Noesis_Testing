@@ -17,6 +17,7 @@ import { ScriptService } from '../../services/script.service';
 import { ExecutionService } from '../../services/execution.service';
 import { TestSuite, Script } from '../../models/interfaces';
 import { Router } from '@angular/router';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-suites',
@@ -47,6 +48,7 @@ export class Suites implements OnInit {
     private executionService: ExecutionService,
     private confirmService: ConfirmationService,
     private router: Router,
+    public auth: AuthService
   ) {}
 
   ngOnInit() {
@@ -68,6 +70,7 @@ export class Suites implements OnInit {
   }
 
   openCreate() {
+    if (!this.auth.canEdit()) return;
     this.editing = false;
     this.editId = null;
     this.form = { name: '', description: '', scriptIds: [] };
@@ -75,6 +78,7 @@ export class Suites implements OnInit {
   }
 
   openEdit(suite: TestSuite) {
+    if (!this.auth.canEdit()) return;
     this.editing = true;
     this.editId = suite.id;
     this.form = {
@@ -87,6 +91,7 @@ export class Suites implements OnInit {
 
   saveSuite() {
     if (!this.form.name.trim()) return;
+    if (!this.auth.canEdit()) return;
 
     if (this.editing && this.editId) {
       this.suiteService.updateSuite(this.editId, this.form).subscribe({
@@ -106,6 +111,8 @@ export class Suites implements OnInit {
   }
 
   deleteSuite(suite: TestSuite) {
+    if (!this.auth.isAdmin()) return;
+
     this.confirmService.confirm({
       message: `Delete suite "${suite.name}"? This cannot be undone.`,
       header: 'Confirm Delete',
@@ -120,6 +127,7 @@ export class Suites implements OnInit {
   }
 
   runSuite(suite: TestSuite) {
+    if (!this.auth.canEdit()) return;
     const scriptIds = suite.scripts?.map(s => s.id) || [];
     if (scriptIds.length === 0) return;
 

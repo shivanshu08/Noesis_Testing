@@ -1,0 +1,375 @@
+<div class="logs-page">
+  <div class="page-header">
+    <div>
+      <h1>Execution Logs</h1>
+      <p class="subtitle">Centralized run logs with expandable diagnostics and professional reporting exports.</p>
+    </div>
+
+    <div class="header-actions">
+      <div class="auto-refresh">
+        <span>Auto refresh</span>
+        <p-toggleSwitch [ngModel]="autoRefresh()" (ngModelChange)="onAutoRefreshToggle($event)" />
+      </div>
+
+      <p-button
+        icon="pi pi-refresh"
+        severity="secondary"
+        [rounded]="true"
+        [text]="true"
+        styleClass="toolbar-icon-btn"
+        [loading]="loading()"
+        pTooltip="Refresh Logs"
+        tooltipPosition="bottom"
+        (onClick)="fetchLogs()"
+      />
+
+      <p-button
+        icon="pi pi-file-excel"
+        severity="secondary"
+        [rounded]="true"
+        [text]="true"
+        styleClass="toolbar-icon-btn"
+        pTooltip="Export CSV"
+        tooltipPosition="bottom"
+        [disabled]="filteredLogs().length === 0"
+        (onClick)="exportToCSV()"
+      />
+
+      <p-button
+        icon="pi pi-file-pdf"
+        severity="secondary"
+        [rounded]="true"
+        [text]="true"
+        styleClass="toolbar-icon-btn"
+        pTooltip="Export PDF"
+        tooltipPosition="bottom"
+        [disabled]="filteredLogs().length === 0"
+        (onClick)="exportToPDF()"
+      />
+
+      <p-button
+        icon="pi pi-file"
+        severity="secondary"
+        [rounded]="true"
+        [text]="true"
+        styleClass="toolbar-icon-btn"
+        pTooltip="Export JSON"
+        tooltipPosition="bottom"
+        [disabled]="filteredLogs().length === 0"
+        (onClick)="exportToJSON()"
+      />
+
+      <p-button
+        *ngIf="canEdit()"
+        label="Delete Logs"
+        icon="pi pi-trash"
+        severity="danger"
+        [disabled]="filteredLogs().length === 0"
+        (onClick)="clearFilteredLogs()"
+      />
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon total"><i class="pi pi-database"></i></div>
+      <div class="stat-info">
+        <p class="stat-value">{{ totalCount() }}</p>
+        <p class="stat-label">Loaded Records</p>
+      </div>
+    </div>
+
+    <div class="stat-card clickable" (click)="quickApplySeverity('error')">
+      <div class="stat-icon error"><i class="pi pi-times-circle"></i></div>
+      <div class="stat-info">
+        <p class="stat-value">{{ errorCount() }}</p>
+        <p class="stat-label">Errors</p>
+      </div>
+    </div>
+
+    <div class="stat-card clickable" (click)="quickApplySeverity('warn')">
+      <div class="stat-icon warning"><i class="pi pi-exclamation-triangle"></i></div>
+      <div class="stat-info">
+        <p class="stat-value">{{ warningCount() }}</p>
+        <p class="stat-label">Warnings</p>
+      </div>
+    </div>
+
+    <div class="stat-card clickable" (click)="quickApplySeverity(null)">
+      <div class="stat-icon runs"><i class="pi pi-play-circle"></i></div>
+      <div class="stat-info">
+        <p class="stat-value">{{ uniqueRunCount() }}</p>
+        <p class="stat-label">Unique Runs</p>
+      </div>
+    </div>
+  </div>
+
+  <p-card styleClass="filters-card">
+    <div class="filters-grid">
+      <p-iconfield>
+        <p-inputicon styleClass="pi pi-search" />
+        <input
+          pInputText
+          type="text"
+          placeholder="Search message, source, detailed description"
+          [(ngModel)]="draftSearchTerm"
+        />
+      </p-iconfield>
+
+      <p-select
+        [options]="severityOptions"
+        [(ngModel)]="draftSelectedSeverity"
+        optionLabel="label"
+        optionValue="value"
+        placeholder="Severity"
+        [showClear]="true"
+      />
+
+      <p-select
+        [options]="runOptions()"
+        [(ngModel)]="draftSelectedRunId"
+        optionLabel="label"
+        optionValue="value"
+        placeholder="Run"
+        [showClear]="true"
+      />
+
+      <div class="date-filter-group">
+        <input type="date" [(ngModel)]="draftStartDate" />
+        <input type="date" [(ngModel)]="draftEndDate" />
+      </div>
+
+      <div class="quick-range">
+        <p-button label="24h" [text]="true" severity="secondary" (onClick)="setDateRange(1)" />
+        <p-button label="7d" [text]="true" severity="secondary" (onClick)="setDateRange(7)" />
+        <p-button label="30d" [text]="true" severity="secondary" (onClick)="setDateRange(30)" />
+        <p-button label="Clear" [text]="true" severity="secondary" (onClick)="clearFilters()" />
+      </div>
+
+      <p-button
+        icon="pi pi-filter"
+        severity="primary"
+        [rounded]="true"
+        styleClass="apply-filter-btn"
+        [disabled]="!isFilterDirty()"
+        pTooltip="Apply Filters"
+        tooltipPosition="bottom"
+        (onClick)="applySelectedFilters()"
+      />
+    </div>
+
+    <div class="filter-meta">
+      <span>{{ filteredLogs().length }} shown</span>
+      <span>{{ totalRecords() }} total in query window</span>
+      <span>{{ formatLastSynced(lastSyncedAt()) }}</span>
+      <span *ngIf="selectedLogs().length > 0">{{ selectedLogs().length }} selected</span>
+      <p-button
+        *ngIf="canEdit() && selectedLogs().length > 0"
+        label="Delete Selected"
+        icon="pi pi-trash"
+        size="small"
+        severity="danger"
+        (onClick)="deleteSelectedLogs()"
+      />
+      <p-button
+        *ngIf="selectedLogs().length > 0"
+        label="Clear Selection"
+        size="small"
+        [text]="true"
+        severity="secondary"
+        (onClick)="clearSelection()"
+      />
+    </div>
+  </p-card>
+
+  <p-card styleClass="logs-table-card">
+    <p-table
+      [value]="filteredLogs()"
+      [loading]="loading()"
+      [paginator]="true"
+      [rows]="rowsPerPage"
+      [rowsPerPageOptions]="rowsPerPageOptions"
+      responsiveLayout="scroll"
+      styleClass="p-datatable-sm"
+      dataKey="id"
+      [selection]="selectedLogs()"
+      (selectionChange)="selectedLogs.set($event)"
+    >
+      <ng-template #header>
+        <tr>
+          <th style="width: 3rem"><p-tableHeaderCheckbox></p-tableHeaderCheckbox></th>
+          <th style="width: 2.8rem"></th>
+          <th style="width: 210px">Timestamp</th>
+          <th style="width: 120px">Severity</th>
+          <th style="width: 110px">Run</th>
+          <th style="width: 220px">Source</th>
+          <th>Message</th>
+          <th style="width: 190px; text-align: center">Actions</th>
+        </tr>
+      </ng-template>
+
+      <ng-template #body let-log>
+        <tr [pSelectableRow]="log" [class.error-row]="log.severity === 'error'">
+          <td><p-tableCheckbox [value]="log"></p-tableCheckbox></td>
+          <td>
+            <p-button
+              [icon]="isExpanded(log) ? 'pi pi-minus-circle' : 'pi pi-plus-circle'"
+              [rounded]="true"
+              [text]="true"
+              styleClass="row-expand-btn"
+              pTooltip="Expand details"
+              tooltipPosition="bottom"
+              (onClick)="toggleRowExpand(log)"
+            />
+          </td>
+          <td>
+            <div class="time-cell">
+              <span>{{ formatDateTime(log.timestamp) }}</span>
+              <small>{{ formatRelativeTime(log.timestamp) }}</small>
+            </div>
+          </td>
+          <td>
+            <p-tag [value]="getSeverityLabel(log.severity)" [severity]="getSeverityTag(log.severity)" />
+          </td>
+          <td>
+            <span class="run-pill" *ngIf="log.runId">#{{ log.runId }}</span>
+            <span class="text-muted" *ngIf="!log.runId">-</span>
+          </td>
+          <td>
+            <div class="source-cell" [pTooltip]="log.source">{{ log.source }}</div>
+          </td>
+          <td>
+            <div class="message-cell" [pTooltip]="log.message">{{ log.message }}</div>
+          </td>
+          <td class="actions-cell">
+            <p-button
+              icon="pi pi-eye"
+              [rounded]="true"
+              [text]="true"
+              severity="secondary"
+              size="small"
+              styleClass="row-action-btn"
+              pTooltip="View details"
+              (onClick)="openDetails(log)"
+            />
+            <p-button
+              *ngIf="log.runId"
+              icon="pi pi-external-link"
+              [rounded]="true"
+              [text]="true"
+              severity="secondary"
+              size="small"
+              styleClass="row-action-btn"
+              pTooltip="Open run"
+              (onClick)="openRun(log)"
+            />
+            <p-button
+              icon="pi pi-copy"
+              [rounded]="true"
+              [text]="true"
+              severity="secondary"
+              size="small"
+              styleClass="row-action-btn"
+              pTooltip="Copy JSON"
+              (onClick)="copyLogJson(log)"
+            />
+            <p-button
+              *ngIf="canEdit()"
+              icon="pi pi-trash"
+              [rounded]="true"
+              [text]="true"
+              severity="danger"
+              size="small"
+              styleClass="row-action-btn"
+              pTooltip="Delete"
+              (onClick)="deleteLog(log)"
+            />
+          </td>
+        </tr>
+
+        <tr *ngIf="isExpanded(log)" class="expanded-inline-row">
+          <td colspan="8" class="expanded-cell">
+            <div class="expanded-content">
+              <div class="expanded-header">
+                <span class="title">Detailed Description</span>
+                <p-tag [value]="log.sourceComponent || 'execution-engine'" severity="secondary" />
+              </div>
+
+              <p class="expanded-description">{{ log.detailedDescription || log.message }}</p>
+
+              <div class="expanded-meta-grid">
+                <div><strong>Timestamp:</strong> {{ formatDateTime(log.timestamp) }}</div>
+                <div><strong>Severity:</strong> {{ getSeverityLabel(log.severity) }}</div>
+                <div><strong>Run:</strong> {{ log.runId || '-' }}</div>
+                <div><strong>Source:</strong> {{ log.source }}</div>
+                <div><strong>Status:</strong> {{ log.runStatus || '-' }}</div>
+                <div><strong>Result ID:</strong> {{ log.resultId || '-' }}</div>
+              </div>
+
+              <div class="context-block" *ngIf="getContextEntries(log).length > 0">
+                <h4>Context</h4>
+                <div class="context-grid">
+                  <div class="context-item" *ngFor="let item of getContextEntries(log)">
+                    <span class="key">{{ item[0] }}</span>
+                    <span class="value">{{ item[1] }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+
+      <ng-template #emptymessage>
+        <tr>
+          <td colspan="8" class="empty-row">
+            <div class="empty-state">
+              <i class="pi pi-inbox"></i>
+              <h3>No logs found</h3>
+              <p>Adjust filters and click the filter icon to render results.</p>
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </p-card>
+</div>
+
+<p-dialog
+  header="Log Details"
+  [visible]="detailsVisible()"
+  (visibleChange)="detailsVisible.set($event)"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: '72vw', maxWidth: '980px' }"
+>
+  <ng-container *ngIf="selectedLog() as log">
+    <div class="details-grid">
+      <div><strong>Timestamp:</strong> {{ formatDateTime(log.timestamp) }}</div>
+      <div><strong>Severity:</strong> {{ getSeverityLabel(log.severity) }}</div>
+      <div><strong>Run ID:</strong> {{ log.runId || '-' }}</div>
+      <div><strong>Source:</strong> {{ log.source }}</div>
+      <div><strong>Component:</strong> {{ log.sourceComponent || '-' }}</div>
+      <div><strong>Run Status:</strong> {{ log.runStatus || '-' }}</div>
+    </div>
+
+    <div class="message-panel">
+      <h4>Message</h4>
+      <pre>{{ log.message }}</pre>
+    </div>
+
+    <div class="message-panel second">
+      <h4>Detailed Description</h4>
+      <pre>{{ log.detailedDescription || log.message }}</pre>
+    </div>
+
+    <div class="dialog-actions">
+      <p-button label="Copy JSON" icon="pi pi-copy" severity="secondary" [text]="true" (onClick)="copyLogJson(log)" />
+      <p-button *ngIf="log.runId" label="Open Run" icon="pi pi-external-link" severity="secondary" [text]="true" (onClick)="openRun(log)" />
+    </div>
+  </ng-container>
+</p-dialog>
+
+<p-confirmDialog [style]="{ width: '450px' }" />
+<p-toast position="bottom-right" />
