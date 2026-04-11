@@ -57,12 +57,6 @@ ng serve
 
 Frontend runs at `http://localhost:4200`
 
-## Default Credentials
-
-| Username | Password | Role  |
-|----------|----------|-------|
-| admin    | admin123 | admin |
-
 ## Features
 
 - **Dashboard** - Stats overview, category distribution, recent executions
