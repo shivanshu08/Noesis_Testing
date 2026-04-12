@@ -85,9 +85,31 @@ function sanitizeQueryKeys(query: AuthRequest['query']): string[] {
 }
 
 function shouldSkipAudit(req: AuthRequest): boolean {
-  if ((req.method || '').toUpperCase() === 'OPTIONS') return true;
-  const path = (req.path || req.originalUrl || '').toLowerCase();
-  return path === '/api/health';
+  const method = (req.method || '').toUpperCase();
+  if (method === 'OPTIONS') return true;
+
+  const rawPath = (req.path || req.originalUrl || '').toLowerCase();
+  const path = sanitizeHttpPath(rawPath);
+
+  if (path === '/api/health') return true;
+
+  // Avoid self-generated logging noise from logs screen reads.
+  if (method === 'GET') {
+    if (path.startsWith('/api/execution/global-logs')) return true;
+    if (path.startsWith('/api/logs/modules')) return true;
+    if (path.startsWith('/api/logs/actions')) return true;
+  }
+
+  // Script mutation endpoints are logged explicitly in scripts routes
+  // with richer metadata (script names/counts), so skip generic request logs here.
+  if (path.startsWith('/api/scripts/import')) return true;
+  if (path.startsWith('/api/scripts/sync')) return true;
+  if (path.startsWith('/api/scripts/delete-multiple')) return true;
+  if ((method === 'DELETE' || method === 'PUT' || method === 'PATCH') && /^\/api\/scripts\/\d+$/.test(path)) {
+    return true;
+  }
+
+  return false;
 }
 
 export function requestAuditMiddleware(req: AuthRequest, res: Response, next: NextFunction): void {

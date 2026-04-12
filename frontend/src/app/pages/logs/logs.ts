@@ -1,6 +1,7 @@
 import { Component, OnDestroy, OnInit, computed, signal, NO_ERRORS_SCHEMA } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { Router } from '@angular/router';
@@ -34,6 +35,10 @@ interface GlobalLog {
   context: Record<string, unknown>;
   category?: string;
   runStatus?: string | null;
+  action?: string;
+  status?: string | null;
+  module?: string;
+  scriptName?: string | null;
   timestamp: string;
   time?: string;
   detail?: string;
@@ -49,6 +54,81 @@ interface PdfColumn {
   width: number;
   value: (log: GlobalLog) => string;
 }
+
+interface LogsLocaleConfig {
+  dropdowns?: {
+    allSeverities?: string;
+    allRuns?: string;
+    allModules?: string;
+    allActions?: string;
+    severities?: Record<string, string>;
+    modules?: Record<string, string>;
+    actions?: Record<string, string>;
+  };
+}
+
+interface LogsLocaleResolved {
+  dropdowns: {
+    allSeverities: string;
+    allRuns: string;
+    allModules: string;
+    allActions: string;
+    severities: Record<string, string>;
+    modules: Record<string, string>;
+    actions: Record<string, string>;
+  };
+}
+
+const DEFAULT_LOGS_LOCALE: LogsLocaleResolved = {
+  dropdowns: {
+    allSeverities: 'All Severities',
+    allRuns: 'All Runs',
+    allModules: 'All Modules',
+    allActions: 'All Actions',
+    severities: {
+      error: 'Error',
+      warn: 'Warning',
+      info: 'Info',
+      debug: 'Debug',
+    },
+    modules: {
+      system: 'System',
+      auth: 'Authentication',
+      scripts: 'Scripts',
+      execution: 'Execution',
+      suites: 'Suites',
+      users: 'Users',
+      notifications: 'Notifications',
+      application: 'Application',
+      'application-api': 'Application API',
+      'execution-engine': 'Execution Engine',
+    },
+    actions: {
+      AUTH_LOGIN: 'User Login',
+      AUTH_FORGOT_PASSWORD: 'Forgot Password',
+      AUTH_CHANGE_PASSWORD: 'Change Password',
+      EXECUTION_START: 'Execution Started',
+      EXECUTION_STOP: 'Execution Stopped',
+      SCRIPT_IMPORT: 'Script Imported',
+      SCRIPT_IMPORT_DUPLICATE: 'Duplicate Script Import',
+      SCRIPT_IMPORT_REJECTED: 'Script Import Rejected',
+      SCRIPT_DELETE: 'Script Deleted',
+      SCRIPT_BULK_DELETE: 'Scripts Deleted',
+      WORKSPACE_SYNC: 'Workspace Synced',
+      SCRIPTS_READ: 'Scripts Viewed',
+      SCRIPTS_CREATE: 'Script Created',
+      SCRIPTS_UPDATE: 'Script Updated',
+      SCRIPTS_DELETE: 'Script Deleted',
+      SCRIPTS_BULK_DELETE: 'Scripts Deleted',
+      EXECUTION_READ: 'Execution Viewed',
+      USERS_READ: 'Users Viewed',
+      SUITES_READ: 'Suites Viewed',
+      LOGS_READ: 'Logs Viewed',
+      SYSTEM_START: 'System Started',
+      SYSTEM_DB_READY: 'Database Ready',
+    },
+  },
+};
 
 @Component({
   selector: 'app-logs',
@@ -77,6 +157,7 @@ interface PdfColumn {
 })
 export class LogsPage implements OnInit, OnDestroy {
   private readonly cacheKey = 'noesis_global_logs_cache_v2';
+  private locale: LogsLocaleResolved = DEFAULT_LOGS_LOCALE;
 
   allLogs = signal<GlobalLog[]>([]);
   filteredLogs = signal<GlobalLog[]>([]);
@@ -114,31 +195,25 @@ export class LogsPage implements OnInit, OnDestroy {
 
   totalRecords = signal(0);
 
-  severityOptions: FilterOption[] = [
-    { label: 'All Severities', value: null },
-    { label: 'Error', value: 'error' },
-    { label: 'Warning', value: 'warn' },
-    { label: 'Info', value: 'info' },
-    { label: 'Debug', value: 'debug' },
-  ];
+  severityOptions: FilterOption[] = [];
 
   expandedRows: { [key: string]: boolean } = {};
-  moduleOptions: FilterOption[] = [{ label: 'All Modules', value: null }];
-  actionOptions: FilterOption[] = [{ label: 'All Actions', value: null }];
+  moduleOptions: FilterOption[] = [];
+  actionOptions: FilterOption[] = [];
 
   readonly runOptions = computed<FilterOption[]>(() => {
-    const map = new Map<number, string>();
+    const ids = new Set<number>();
     for (const log of this.allLogs()) {
-      if (log.runId !== null && !map.has(log.runId)) {
-        map.set(log.runId, log.source || `Run #${log.runId}`);
+      if (log.runId !== null) {
+        ids.add(log.runId);
       }
     }
 
     return [
-      { label: 'All Runs', value: null },
-      ...Array.from(map.entries())
-        .sort((a, b) => b[0] - a[0])
-        .map(([id, name]) => ({ label: `${name} (#${id})`, value: id })),
+      { label: this.locale.dropdowns.allRuns || 'All Runs', value: null },
+      ...Array.from(ids.values())
+        .sort((a, b) => b - a)
+        .map((id) => ({ label: `Run #${id}`, value: id })),
     ];
   });
 
@@ -152,6 +227,7 @@ export class LogsPage implements OnInit, OnDestroy {
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
+    private readonly http: HttpClient,
     private readonly executionService: ExecutionService,
     private readonly authService: AuthService,
     private readonly router: Router,
@@ -160,6 +236,8 @@ export class LogsPage implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    this.applyLocale(DEFAULT_LOGS_LOCALE);
+    this.loadLocaleConfig();
     this.setDefaultDateRange();
     this.loadCachedLogs();
     this.loadFilterDropdowns();
@@ -173,6 +251,68 @@ export class LogsPage implements OnInit, OnDestroy {
     this.stopAutoRefresh();
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  private loadLocaleConfig(): void {
+    this.http
+      .get<{ logs?: LogsLocaleConfig }>('/i18n/en.json')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (payload) => {
+          this.applyLocale(payload?.logs || DEFAULT_LOGS_LOCALE);
+          this.loadFilterDropdowns();
+        },
+        error: () => {
+          this.applyLocale(DEFAULT_LOGS_LOCALE);
+        },
+      });
+  }
+
+  private applyLocale(locale: LogsLocaleConfig): void {
+    const dropdowns: LogsLocaleResolved['dropdowns'] = {
+      ...DEFAULT_LOGS_LOCALE.dropdowns,
+      ...(locale.dropdowns || {}),
+      severities: {
+        ...DEFAULT_LOGS_LOCALE.dropdowns.severities,
+        ...(locale.dropdowns?.severities || {}),
+      },
+      modules: {
+        ...DEFAULT_LOGS_LOCALE.dropdowns.modules,
+        ...(locale.dropdowns?.modules || {}),
+      },
+      actions: {
+        ...DEFAULT_LOGS_LOCALE.dropdowns.actions,
+        ...(locale.dropdowns?.actions || {}),
+      },
+    };
+
+    this.locale = { dropdowns };
+
+    this.severityOptions = [
+      { label: dropdowns.allSeverities, value: null },
+      { label: dropdowns.severities['error'] || 'Error', value: 'error' },
+      { label: dropdowns.severities['warn'] || 'Warning', value: 'warn' },
+      { label: dropdowns.severities['info'] || 'Info', value: 'info' },
+      { label: dropdowns.severities['debug'] || 'Debug', value: 'debug' },
+    ];
+
+    if (this.moduleOptions.length === 0) {
+      this.moduleOptions = [{ label: dropdowns.allModules, value: null }];
+    } else {
+      this.moduleOptions = [
+        { label: dropdowns.allModules, value: null },
+        ...this.moduleOptions.filter((option) => option.value !== null),
+      ];
+    }
+
+    if (this.actionOptions.length === 0) {
+      this.actionOptions = [{ label: dropdowns.allActions, value: null }];
+    } else {
+      this.actionOptions = [
+        { label: dropdowns.allActions, value: null },
+        ...this.actionOptions.filter((option) => option.value !== null),
+      ];
+    }
   }
 
   fetchLogs(showToast = true): void {
@@ -287,9 +427,18 @@ export class LogsPage implements OnInit, OnDestroy {
     }
     if (this.selectedAction) {
       const selectedAction = this.selectedAction.toLowerCase();
+      result = result.filter((log) => String(log.action || '').toLowerCase() === selectedAction);
+    }
+
+    const fromTime = this.getDateBoundaryMs(this.dateFrom, 'start');
+    const toTime = this.getDateBoundaryMs(this.dateTo, 'end');
+    if (fromTime !== null || toTime !== null) {
       result = result.filter((log) => {
-        const action = String((log.context || {})['action'] || '').toLowerCase();
-        return action === selectedAction;
+        const logTime = new Date(log.timestamp).getTime();
+        if (!Number.isFinite(logTime)) return false;
+        if (fromTime !== null && logTime < fromTime) return false;
+        if (toTime !== null && logTime > toTime) return false;
+        return true;
       });
     }
 
@@ -589,6 +738,15 @@ export class LogsPage implements OnInit, OnDestroy {
     return `${days}d ago`;
   }
 
+  getMessagePreview(message: string): string {
+    const normalized = String(message || '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return '-';
+    const maxLength = 72;
+    return normalized.length <= maxLength
+      ? normalized
+      : `${normalized.substring(0, maxLength - 3)}...`;
+  }
+
   getSeverityTag(severity: string): 'danger' | 'warn' | 'info' | 'secondary' | 'success' | 'contrast' {
     switch (severity) {
       case 'error':
@@ -603,16 +761,8 @@ export class LogsPage implements OnInit, OnDestroy {
   }
 
   getSeverityLabel(severity: string): string {
-    switch (severity) {
-      case 'error':
-        return 'Error';
-      case 'warn':
-        return 'Warning';
-      case 'debug':
-        return 'Debug';
-      default:
-        return 'Info';
-    }
+    const key = String(severity || 'info').toLowerCase();
+    return this.locale.dropdowns.severities[key] || this.toTitleWords(key);
   }
 
   getSeverityIcon(severity: string): string {
@@ -626,6 +776,24 @@ export class LogsPage implements OnInit, OnDestroy {
       default:
         return 'pi pi-align-left'; // Represents textual log data
     }
+  }
+
+  getScriptNameLabel(log: GlobalLog): string {
+    const name = String(log.scriptName || '').trim();
+    return name ? name : '-';
+  }
+
+  getStatusLabel(log: GlobalLog): string {
+    const raw = String(log.runStatus || log.status || '').trim();
+    if (!raw) return '-';
+    return this.toTitleWords(raw.replace(/[_-]+/g, ' '));
+  }
+
+  hasValue(value: unknown): boolean {
+    if (value === null || value === undefined) return false;
+    if (typeof value === 'number') return Number.isFinite(value);
+    const normalized = String(value).trim();
+    return normalized.length > 0 && normalized !== '-';
   }
 
   canEdit(): boolean {
@@ -704,7 +872,22 @@ export class LogsPage implements OnInit, OnDestroy {
           : 'info';
 
     const timestamp = raw?.time || raw?.timestamp || new Date().toISOString();
-    const detailDesc = String(raw?.detailedDescription || raw?.detailed_description || raw?.detail || raw?.message || '');
+    const rawDetailedDescription = String(raw?.detailedDescription || raw?.detailed_description || raw?.detail || raw?.message || '');
+    const context = this.parseContext(raw?.context || raw?.logContext);
+    const actionRaw = String(raw?.action || context['action'] || '').trim().toUpperCase();
+    const action = this.normalizeActionCode(actionRaw);
+    const statusRaw = String(raw?.status || context['status'] || raw?.runStatus || '').trim().toUpperCase();
+    const moduleRaw = String(raw?.sourceComponent || context['module'] || raw?.source || '').trim();
+    const rawMessage = String(raw?.message || raw?.detail || rawDetailedDescription || '');
+    const scriptName = this.extractScriptName(action, rawMessage, context);
+    const logicalMessage = this.toLogicalMessage({
+      action: action || undefined,
+      status: statusRaw || undefined,
+      rawMessage,
+      context,
+      scriptName: scriptName || undefined,
+    });
+    const detailDesc = this.sanitizeTechnicalMessage(rawDetailedDescription || rawMessage);
 
     const parsedId = Number(raw?.id);
 
@@ -713,14 +896,18 @@ export class LogsPage implements OnInit, OnDestroy {
       runId: raw?.runId ? Number(raw.runId) : null,
       resultId: raw?.resultId ? Number(raw.resultId) : null,
       severity,
-      message: String(raw?.message || raw?.detail || ''),
-      summary: String(raw?.summary || raw?.message || raw?.detail || ''),
+      message: logicalMessage,
+      summary: logicalMessage,
       source: String(raw?.source || 'Execution'),
       sourceComponent: raw?.sourceComponent ? String(raw.sourceComponent) : 'execution-engine',
       detailedDescription: detailDesc,
-      context: this.parseContext(raw?.context || raw?.logContext),
+      context,
       category: raw?.category ? String(raw.category) : undefined,
       runStatus: raw?.runStatus ? String(raw.runStatus) : null,
+      action: action || undefined,
+      status: statusRaw || null,
+      module: moduleRaw || undefined,
+      scriptName: scriptName || null,
       timestamp: timestamp,
       time: timestamp,
       detail: detailDesc,
@@ -755,18 +942,58 @@ export class LogsPage implements OnInit, OnDestroy {
     let toIso: string | undefined;
 
     if (this.dateFrom) {
-      const from = new Date(this.dateFrom);
+      const from = this.parseDateInput(this.dateFrom);
+      if (from) {
       from.setHours(0, 0, 0, 0);
       fromIso = from.toISOString();
+      }
     }
 
     if (this.dateTo) {
-      const to = new Date(this.dateTo);
+      const to = this.parseDateInput(this.dateTo);
+      if (to) {
       to.setHours(23, 59, 59, 999);
       toIso = to.toISOString();
+      }
     }
 
     return { fromIso, toIso };
+  }
+
+  private getDateBoundaryMs(value: string, boundary: 'start' | 'end'): number | null {
+    const date = this.parseDateInput(value);
+    if (!date) return null;
+    if (boundary === 'start') {
+      date.setHours(0, 0, 0, 0);
+    } else {
+      date.setHours(23, 59, 59, 999);
+    }
+    return date.getTime();
+  }
+
+  private parseDateInput(value: string): Date | null {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+
+    const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoMatch) {
+      const year = Number(isoMatch[1]);
+      const month = Number(isoMatch[2]) - 1;
+      const day = Number(isoMatch[3]);
+      return new Date(year, month, day);
+    }
+
+    const dmyMatch = raw.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+    if (dmyMatch) {
+      const day = Number(dmyMatch[1]);
+      const month = Number(dmyMatch[2]) - 1;
+      const year = Number(dmyMatch[3]);
+      return new Date(year, month, day);
+    }
+
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed;
   }
 
   private toDateInput(date: Date): string {
@@ -808,7 +1035,7 @@ export class LogsPage implements OnInit, OnDestroy {
   }
 
   private mapSortField(field: string): string {
-    const allowed = new Set(['timestamp', 'severity', 'source', 'action', 'status', 'runId']);
+    const allowed = new Set(['timestamp', 'severity', 'source', 'action', 'status', 'runId', 'resultId']);
     return allowed.has(field) ? field : 'timestamp';
   }
 
@@ -825,12 +1052,12 @@ export class LogsPage implements OnInit, OnDestroy {
       .subscribe({
         next: (items) => {
           this.moduleOptions = [
-            { label: 'All Modules', value: null },
-            ...items.map((item) => ({ label: item.label, value: item.value })),
+            { label: this.locale.dropdowns.allModules || 'All Modules', value: null },
+            ...items.map((item) => ({ label: this.getModuleLabel(item.value), value: item.value })),
           ];
         },
         error: () => {
-          this.moduleOptions = [{ label: 'All Modules', value: null }];
+          this.moduleOptions = [{ label: this.locale.dropdowns.allModules || 'All Modules', value: null }];
         },
       });
   }
@@ -842,15 +1069,218 @@ export class LogsPage implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (items) => {
+          const uniqueByCanonical = new Map<string, FilterOption>();
+          for (const item of items) {
+            const value = String(item.value || '').trim();
+            if (!value) continue;
+            const canonical = this.normalizeActionCode(value);
+            if (!uniqueByCanonical.has(canonical)) {
+              uniqueByCanonical.set(canonical, {
+                label: this.getActionLabel(canonical),
+                value: canonical,
+              });
+            }
+          }
+
           this.actionOptions = [
-            { label: 'All Actions', value: null },
-            ...items.map((item) => ({ label: item.label, value: item.value })),
+            { label: this.locale.dropdowns.allActions || 'All Actions', value: null },
+            ...Array.from(uniqueByCanonical.values()).sort((a, b) => a.label.localeCompare(b.label)),
           ];
         },
         error: () => {
-          this.actionOptions = [{ label: 'All Actions', value: null }];
+          this.actionOptions = [{ label: this.locale.dropdowns.allActions || 'All Actions', value: null }];
         },
       });
+  }
+
+  private getActionLabel(action: string | null | undefined): string {
+    const normalized = this.normalizeActionCode(action);
+    if (!normalized) return '-';
+
+    const configured = this.locale.dropdowns.actions[normalized];
+    if (configured) return configured;
+
+    return this.humanizeAction(normalized);
+  }
+
+  private humanizeAction(action: string): string {
+    const cleaned = action.replace(/\s+/g, '_').replace(/-+/g, '_').toUpperCase();
+
+    if (cleaned.endsWith('_BULK_DELETE')) {
+      return `${this.toTitleWords(cleaned.replace(/_BULK_DELETE$/, ''))} Bulk Deleted`;
+    }
+    if (cleaned.endsWith('_DELETE')) {
+      return `${this.toTitleWords(cleaned.replace(/_DELETE$/, ''))} Deleted`;
+    }
+    if (cleaned.endsWith('_UPDATE')) {
+      return `${this.toTitleWords(cleaned.replace(/_UPDATE$/, ''))} Updated`;
+    }
+    if (cleaned.endsWith('_CREATE')) {
+      return `${this.toTitleWords(cleaned.replace(/_CREATE$/, ''))} Created`;
+    }
+    if (cleaned.endsWith('_READ')) {
+      return `${this.toTitleWords(cleaned.replace(/_READ$/, ''))} Viewed`;
+    }
+    if (cleaned.endsWith('_IMPORT')) {
+      return `${this.toTitleWords(cleaned.replace(/_IMPORT$/, ''))} Imported`;
+    }
+    if (cleaned.endsWith('_SYNC')) {
+      return `${this.toTitleWords(cleaned.replace(/_SYNC$/, ''))} Synced`;
+    }
+
+    return this.toTitleWords(cleaned);
+  }
+
+  private normalizeActionCode(action: string | null | undefined): string {
+    const normalized = String(action || '').trim().toUpperCase();
+    if (!normalized) return '';
+
+    const aliases: Record<string, string> = {
+      SCRIPTS_DELETE: 'SCRIPT_DELETE',
+      SCRIPTS_UPDATE: 'SCRIPT_UPDATE',
+      SCRIPTS_CREATE: 'SCRIPT_CREATE',
+      SCRIPTS_BULK_DELETE: 'SCRIPT_DELETE',
+      SCRIPT_BULK_DELETE: 'SCRIPT_DELETE',
+    };
+
+    return aliases[normalized] || normalized;
+  }
+
+  private getModuleLabel(moduleValue: string | null | undefined): string {
+    const normalized = String(moduleValue || '').trim().toLowerCase();
+    if (!normalized) return '-';
+
+    const configured = this.locale.dropdowns.modules[normalized];
+    if (configured) return configured;
+
+    return this.toTitleWords(normalized.replace(/[^a-z0-9]+/gi, ' '));
+  }
+
+  private toTitleWords(input: string): string {
+    return String(input || '')
+      .split(/[\s_]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.substring(1).toLowerCase())
+      .join(' ');
+  }
+
+  private toLogicalMessage(params: {
+    action?: string;
+    status?: string;
+    rawMessage: string;
+    context: Record<string, unknown>;
+    scriptName?: string;
+  }): string {
+    const action = (params.action || '').toUpperCase();
+    const status = (params.status || '').toUpperCase();
+    const rawMessage = String(params.rawMessage || '').trim();
+
+    if (!action) {
+      return this.sanitizeTechnicalMessage(rawMessage);
+    }
+
+    const metadata = (params.context?.['metadata'] && typeof params.context['metadata'] === 'object')
+      ? (params.context['metadata'] as Record<string, unknown>)
+      : {};
+
+    const scriptName = String(params.scriptName || metadata['scriptName'] || metadata['fileName'] || '').trim();
+    const requestedIds = Array.isArray(metadata['requestedIds']) ? metadata['requestedIds'] : [];
+    const removedCount = Number(metadata['removedCount'] || 0);
+    const addedCount = Number(metadata['addedCount'] || 0);
+    const updatedCount = Number(metadata['updatedCount'] || 0);
+    const syncRemovedCount = Number(metadata['removedCount'] || 0);
+    const skippedCount = Number(metadata['skippedCount'] || 0);
+
+    if (action === 'SCRIPT_DELETE' || action === 'SCRIPTS_DELETE') {
+      if (status === 'NOOP') return 'Script delete requested, but the script was already removed.';
+      if (scriptName) return `Script "${scriptName}" deleted from database.`;
+      return 'Script deleted from database.';
+    }
+
+    if (action === 'SCRIPT_IMPORT') {
+      if (scriptName) return `Script "${scriptName}" imported successfully.`;
+      return 'Script imported successfully.';
+    }
+
+    if (action === 'SCRIPT_IMPORT_DUPLICATE') {
+      return 'Duplicate script import blocked.';
+    }
+
+    if (action === 'SCRIPT_IMPORT_REJECTED') {
+      return 'Script import rejected because the file is not a test script.';
+    }
+
+    if (action === 'WORKSPACE_SYNC') {
+      const addedScripts = Array.isArray(metadata['addedScripts']) ? metadata['addedScripts'] : [];
+      const updatedScripts = Array.isArray(metadata['updatedScripts']) ? metadata['updatedScripts'] : [];
+      const removedScripts = Array.isArray(metadata['removedScripts']) ? metadata['removedScripts'] : [];
+      const parts: string[] = [];
+
+      if (addedScripts.length > 0) parts.push(`added ${addedScripts.join(', ')}`);
+      if (updatedScripts.length > 0) parts.push(`updated ${updatedScripts.join(', ')}`);
+      if (removedScripts.length > 0) parts.push(`removed ${removedScripts.join(', ')}`);
+
+      if (parts.length > 0) {
+        const suffix = skippedCount > 0 ? ` (skipped ${skippedCount})` : '';
+        return `Workspace sync completed: ${parts.join('; ')}${suffix}.`;
+      }
+
+      return `Workspace sync: ${addedCount} added, ${updatedCount} updated, ${syncRemovedCount} removed, ${skippedCount} skipped.`;
+    }
+
+    if (/^(GET|POST|PUT|PATCH|DELETE)\s+.*->\s+\d{3}\s+\(\d+ms\)$/i.test(rawMessage)) {
+      return this.getActionLabel(action);
+    }
+
+    return this.sanitizeTechnicalMessage(rawMessage || this.getActionLabel(action));
+  }
+
+  private sanitizeTechnicalMessage(message: string): string {
+    const text = String(message || '').trim();
+    if (!text) return '-';
+
+    if (
+      /POM file .*?-f\/--file command-line argument does not exist/i.test(text) ||
+      /non-readable pom/i.test(text) ||
+      /requires a project to execute but there is no pom/i.test(text)
+    ) {
+      return 'Execution failed: Maven project configuration (pom.xml) was not found.';
+    }
+
+    return text;
+  }
+
+  private extractScriptName(action: string, rawMessage: string, context: Record<string, unknown>): string | null {
+    const metadata = (context?.['metadata'] && typeof context['metadata'] === 'object')
+      ? (context['metadata'] as Record<string, unknown>)
+      : {};
+
+    const candidates: Array<unknown> = [
+      metadata['scriptName'],
+      metadata['updatedName'],
+      metadata['fileName'],
+    ];
+
+    for (const candidate of candidates) {
+      const name = String(candidate || '').trim();
+      if (name) {
+        return name.replace(/\.java$/i, '');
+      }
+    }
+
+    const removedNames = Array.isArray(metadata['removedNames']) ? metadata['removedNames'] : [];
+    if (removedNames.length === 1) {
+      return String(removedNames[0] || '').replace(/\.java$/i, '').trim() || null;
+    }
+
+    if (action === 'SCRIPT_DELETE') {
+      const quoted = rawMessage.match(/script\s+"([^"]+)"/i);
+      if (quoted?.[1]) {
+        return quoted[1].replace(/\.java$/i, '').trim();
+      }
+    }
+
+    return null;
   }
 
   private escapeCsv(value: string): string {
@@ -865,7 +1295,6 @@ export class LogsPage implements OnInit, OnDestroy {
     if (cached.length === 0) return;
 
     this.allLogs.set(cached);
-    this.totalRecords.set(cached.length);
     this.applyFilters();
   }
 

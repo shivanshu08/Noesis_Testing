@@ -117,8 +117,10 @@
         [(ngModel)]="draftSelectedSeverity"
         optionLabel="label"
         optionValue="value"
+        appendTo="body"
         placeholder="Severity"
-        [showClear]="true"
+        [styleClass]="draftSelectedSeverity !== null ? 'filter-select severity-select has-value' : 'filter-select severity-select'"
+        [showClear]="draftSelectedSeverity !== null"
       />
 
       <p-select
@@ -126,8 +128,10 @@
         [(ngModel)]="draftSelectedRunId"
         optionLabel="label"
         optionValue="value"
+        appendTo="body"
         placeholder="Run"
-        [showClear]="true"
+        [styleClass]="draftSelectedRunId !== null ? 'filter-select run-select has-value' : 'filter-select run-select'"
+        [showClear]="draftSelectedRunId !== null"
       />
 
       <p-select
@@ -135,8 +139,10 @@
         [(ngModel)]="draftSelectedModule"
         optionLabel="label"
         optionValue="value"
+        appendTo="body"
         placeholder="Module"
-        [showClear]="true"
+        [styleClass]="draftSelectedModule !== null ? 'filter-select module-select has-value' : 'filter-select module-select'"
+        [showClear]="draftSelectedModule !== null"
         (onChange)="onModuleDraftChange()"
       />
 
@@ -145,8 +151,10 @@
         [(ngModel)]="draftSelectedAction"
         optionLabel="label"
         optionValue="value"
+        appendTo="body"
         placeholder="Action"
-        [showClear]="true"
+        [styleClass]="draftSelectedAction !== null ? 'filter-select action-select has-value' : 'filter-select action-select'"
+        [showClear]="draftSelectedAction !== null"
       />
 
       <div class="date-filter-group">
@@ -181,28 +189,6 @@
       </div>
     </div>
 
-    <div class="filter-meta">
-      <span>{{ filteredLogs().length }} shown</span>
-      <span>{{ totalRecords() }} total in query window</span>
-      <span>{{ formatLastSynced(lastSyncedAt()) }}</span>
-      <span *ngIf="selectedLogs().length > 0">{{ selectedLogs().length }} selected</span>
-      <p-button
-        *ngIf="canEdit() && selectedLogs().length > 0"
-        label="Delete Selected"
-        icon="pi pi-trash"
-        size="small"
-        severity="danger"
-        (onClick)="deleteSelectedLogs()"
-      />
-      <p-button
-        *ngIf="selectedLogs().length > 0"
-        label="Clear Selection"
-        size="small"
-        [text]="true"
-        severity="secondary"
-        (onClick)="clearSelection()"
-      />
-    </div>
   </p-card>
 
   <p-card styleClass="logs-table-card">
@@ -216,29 +202,29 @@
       [rowsPerPageOptions]="rowsPerPageOptions"
       [totalRecords]="totalRecords()"
       (onLazyLoad)="onLazyLoad($event)"
-      responsiveLayout="scroll"
-      styleClass="p-datatable-sm"
+      [tableStyle]="{ 'table-layout': 'fixed', width: '100%' }"
+      styleClass="p-datatable-sm logs-datatable"
       dataKey="id"
       [selection]="selectedLogs()"
       (selectionChange)="selectedLogs.set($event)"
     >
       <ng-template #header>
         <tr>
-          <th style="width: 3rem"><p-tableHeaderCheckbox></p-tableHeaderCheckbox></th>
-          <th style="width: 2.8rem"></th>
-          <th pSortableColumn="timestamp" style="width: 280px">Timestamp <p-sortIcon field="timestamp" /></th>
-          <th pSortableColumn="severity" style="width: 120px">Severity <p-sortIcon field="severity" /></th>
-          <th pSortableColumn="runId" style="width: 110px">Run <p-sortIcon field="runId" /></th>
-          <th pSortableColumn="source" style="width: 220px">Source <p-sortIcon field="source" /></th>
-          <th>Message</th>
-          <th style="width: 190px; text-align: center">Actions</th>
+          <th class="col-select"><p-tableHeaderCheckbox></p-tableHeaderCheckbox></th>
+          <th class="col-expand"></th>
+          <th pSortableColumn="timestamp" class="col-time">Timestamp</th>
+          <th pSortableColumn="severity" class="col-severity">Severity</th>
+          <th pSortableColumn="status" class="col-status">Status</th>
+          <th pSortableColumn="source" class="col-source">Source</th>
+          <th class="col-message">Message</th>
+          <th class="col-actions">Actions</th>
         </tr>
       </ng-template>
 
       <ng-template #body let-log>
         <tr [pSelectableRow]="log" [ngClass]="'log-row severity-' + log.severity">
-          <td><p-tableCheckbox [value]="log"></p-tableCheckbox></td>
-          <td>
+          <td class="col-select"><p-tableCheckbox [value]="log"></p-tableCheckbox></td>
+          <td class="col-expand">
             <p-button
               [icon]="isExpanded(log) ? 'pi pi-minus' : 'pi pi-plus'"
               [text]="true"
@@ -248,54 +234,55 @@
               (onClick)="toggleRowExpand(log)"
             />
           </td>
-          <td>
+          <td class="col-time">
             <div class="time-cell">
               <span>{{ formatDateTime(log.timestamp) }}</span>
-              <small>{{ formatRelativeTime(log.timestamp) }}</small>
             </div>
           </td>
-          <td>
+          <td class="col-severity">
             <p-tag [value]="getSeverityLabel(log.severity)" [severity]="getSeverityTag(log.severity)" />
           </td>
-          <td>
-            <span class="run-pill" *ngIf="log.runId">#{{ log.runId }}</span>
-            <span class="text-muted" *ngIf="!log.runId">-</span>
+          <td class="col-status">
+            <span class="run-pill" *ngIf="hasValue(getStatusLabel(log))">{{ getStatusLabel(log) }}</span>
+            <span class="text-muted" *ngIf="!hasValue(getStatusLabel(log))">-</span>
           </td>
-          <td>
+          <td class="col-source">
             <div class="source-cell" [pTooltip]="log.source">{{ log.source }}</div>
           </td>
-          <td>
-            <div class="message-cell" [pTooltip]="log.message">{{ log.message }}</div>
+          <td class="col-message">
+            <div class="message-cell">{{ getMessagePreview(log.message) }}</div>
           </td>
-          <td class="actions-cell">
-            <p-button
-              icon="pi pi-eye"
-              [text]="true"
-              severity="secondary"
-              size="small"
-              styleClass="row-action-btn"
-              pTooltip="View details"
-              (onClick)="openDetails(log)"
-            />
-            <p-button
-              icon="pi pi-copy"
-              [text]="true"
-              severity="secondary"
-              size="small"
-              styleClass="row-action-btn"
-              pTooltip="Copy JSON"
-              (onClick)="copyLogJson(log)"
-            />
-            <p-button
-              *ngIf="canEdit()"
-              icon="pi pi-trash"
-              [text]="true"
-              severity="danger"
-              size="small"
-              styleClass="row-action-btn"
-              pTooltip="Delete"
-              (onClick)="deleteLog(log)"
-            />
+          <td class="col-actions actions-cell">
+            <div class="actions-group">
+              <p-button
+                icon="pi pi-eye"
+                [text]="true"
+                severity="secondary"
+                size="small"
+                styleClass="row-action-btn"
+                pTooltip="View details"
+                (onClick)="openDetails(log)"
+              />
+              <p-button
+                icon="pi pi-copy"
+                [text]="true"
+                severity="secondary"
+                size="small"
+                styleClass="row-action-btn"
+                pTooltip="Copy JSON"
+                (onClick)="copyLogJson(log)"
+              />
+              <p-button
+                *ngIf="canEdit()"
+                icon="pi pi-trash"
+                [text]="true"
+                severity="danger"
+                size="small"
+                styleClass="row-action-btn"
+                pTooltip="Delete"
+                (onClick)="deleteLog(log)"
+              />
+            </div>
           </td>
         </tr>
 
@@ -317,20 +304,11 @@
               <div class="expanded-meta-grid">
                 <div class="meta-item"><span class="meta-label">Timestamp</span><span class="meta-val">{{ formatDateTime(log.timestamp) }}</span></div>
                 <div class="meta-item"><span class="meta-label">Severity</span><span class="meta-val">{{ getSeverityLabel(log.severity) }}</span></div>
-                <div class="meta-item"><span class="meta-label">Run ID</span><span class="meta-val">{{ log.runId || '-' }}</span></div>
+                <div class="meta-item" *ngIf="hasValue(log.runId)"><span class="meta-label">Run ID</span><span class="meta-val">{{ log.runId }}</span></div>
                 <div class="meta-item"><span class="meta-label">Source</span><span class="meta-val">{{ log.source }}</span></div>
-                <div class="meta-item"><span class="meta-label">Status</span><span class="meta-val">{{ log.runStatus || '-' }}</span></div>
-                <div class="meta-item"><span class="meta-label">Result ID</span><span class="meta-val">{{ log.resultId || '-' }}</span></div>
-              </div>
-
-              <div class="context-block" *ngIf="getContextEntries(log).length > 0">
-                <h4>Context Data</h4>
-                <div class="context-grid">
-                  <div class="context-item" *ngFor="let item of getContextEntries(log)">
-                    <span class="key">{{ item[0] }}</span>
-                    <span class="value">{{ item[1] }}</span>
-                  </div>
-                </div>
+                <div class="meta-item" *ngIf="hasValue(getScriptNameLabel(log))"><span class="meta-label">Script Name</span><span class="meta-val">{{ getScriptNameLabel(log) }}</span></div>
+                <div class="meta-item" *ngIf="hasValue(getStatusLabel(log))"><span class="meta-label">Status</span><span class="meta-val">{{ getStatusLabel(log) }}</span></div>
+                <div class="meta-item" *ngIf="hasValue(log.resultId)"><span class="meta-label">Result ID</span><span class="meta-val">{{ log.resultId }}</span></div>
               </div>
             </div>
           </td>
@@ -365,10 +343,11 @@
     <div class="details-grid">
       <div><strong>Timestamp:</strong> {{ formatDateTime(log.timestamp) }}</div>
       <div><strong>Severity:</strong> {{ getSeverityLabel(log.severity) }}</div>
-      <div><strong>Run ID:</strong> {{ log.runId || '-' }}</div>
+      <div *ngIf="hasValue(log.runId)"><strong>Run ID:</strong> {{ log.runId }}</div>
       <div><strong>Source:</strong> {{ log.source }}</div>
-      <div><strong>Component:</strong> {{ log.sourceComponent || '-' }}</div>
-      <div><strong>Run Status:</strong> {{ log.runStatus || '-' }}</div>
+      <div *ngIf="hasValue(getScriptNameLabel(log))"><strong>Script Name:</strong> {{ getScriptNameLabel(log) }}</div>
+      <div *ngIf="hasValue(getStatusLabel(log))"><strong>Status:</strong> {{ getStatusLabel(log) }}</div>
+      <div *ngIf="hasValue(log.resultId)"><strong>Result ID:</strong> {{ log.resultId }}</div>
     </div>
 
     <div class="message-panel">

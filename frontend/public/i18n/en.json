@@ -1,0 +1,67 @@
+{
+  "logs": {
+    "dropdowns": {
+      "allSeverities": "All Severities",
+      "allRuns": "All Runs",
+      "allModules": "All Modules",
+      "allActions": "All Actions",
+      "severities": {
+        "error": "Error",
+        "warn": "Warning",
+        "info": "Info",
+        "debug": "Debug"
+      },
+      "modules": {
+        "system": "System",
+        "auth": "Authentication",
+        "scripts": "Scripts",
+        "execution": "Execution",
+        "suites": "Suites",
+        "users": "Users",
+        "notifications": "Notifications",
+        "application": "Application",
+        "application-api": "Application API",
+        "execution-engine": "Execution Engine"
+      },
+      "actions": {
+        "AUTH_LOGIN": "User Login",
+        "AUTH_FORGOT_PASSWORD": "Forgot Password",
+        "AUTH_CHANGE_PASSWORD": "Change Password",
+        "EXECUTION_START": "Execution Started",
+        "EXECUTION_STOP": "Execution Stopped",
+        "SCRIPT_IMPORT": "Script Imported",
+        "SCRIPT_IMPORT_DUPLICATE": "Duplicate Script Import",
+        "SCRIPT_IMPORT_REJECTED": "Script Import Rejected",
+        "SCRIPT_DELETE": "Script Deleted",
+        "SCRIPT_BULK_DELETE": "Scripts Deleted",
+        "WORKSPACE_SYNC": "Workspace Synced",
+        "SCRIPTS_READ": "Scripts Viewed",
+        "SCRIPTS_CREATE": "Script Created",
+        "SCRIPTS_UPDATE": "Script Updated",
+        "SCRIPTS_DELETE": "Script Deleted",
+        "SCRIPTS_BULK_DELETE": "Scripts Deleted",
+        "EXECUTION_READ": "Execution Viewed",
+        "EXECUTION_CREATE": "Execution Created",
+        "EXECUTION_UPDATE": "Execution Updated",
+        "EXECUTION_DELETE": "Execution Deleted",
+        "USERS_READ": "Users Viewed",
+        "USERS_CREATE": "User Created",
+        "USERS_UPDATE": "User Updated",
+        "USERS_DELETE": "User Deleted",
+        "SUITES_READ": "Suites Viewed",
+        "SUITES_CREATE": "Suite Created",
+        "SUITES_UPDATE": "Suite Updated",
+        "SUITES_DELETE": "Suite Deleted",
+        "NOTIFICATIONS_READ": "Notifications Viewed",
+        "NOTIFICATIONS_UPDATE": "Notification Updated",
+        "LOGS_READ": "Logs Viewed",
+        "LOGS_DELETE": "Logs Deleted",
+        "SYSTEM_START": "System Started",
+        "SYSTEM_DB_READY": "Database Ready",
+        "UNHANDLED_REJECTION": "Unhandled Rejection",
+        "UNCAUGHT_EXCEPTION": "Uncaught Exception",
+        "SYSTEM_SIGTERM": "System Shutdown Signal"
+      }
+    }
+  }
+}

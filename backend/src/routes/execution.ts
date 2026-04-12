@@ -80,6 +80,52 @@ interface UnifiedLogRow {
   status: string | null;
 }
 
+function normalizeActionCode(action: string): string {
+  const normalized = String(action || '').trim().toUpperCase();
+  if (!normalized) return '';
+
+  const aliases: Record<string, string> = {
+    SCRIPTS_DELETE: 'SCRIPT_DELETE',
+    SCRIPT_BULK_DELETE: 'SCRIPT_DELETE',
+    SCRIPTS_BULK_DELETE: 'SCRIPT_DELETE',
+    SCRIPTS_UPDATE: 'SCRIPT_UPDATE',
+    SCRIPTS_CREATE: 'SCRIPT_CREATE',
+  };
+
+  return aliases[normalized] || normalized;
+}
+
+function expandActionFilterAliases(values: string[]): string[] {
+  const expanded = new Set<string>();
+  const canonical = values.map((value) => normalizeActionCode(value)).filter(Boolean);
+
+  for (const value of canonical) {
+    if (value === 'SCRIPT_DELETE') {
+      expanded.add('SCRIPT_DELETE');
+      expanded.add('SCRIPTS_DELETE');
+      expanded.add('SCRIPT_BULK_DELETE');
+      expanded.add('SCRIPTS_BULK_DELETE');
+      continue;
+    }
+
+    if (value === 'SCRIPT_UPDATE') {
+      expanded.add('SCRIPT_UPDATE');
+      expanded.add('SCRIPTS_UPDATE');
+      continue;
+    }
+
+    if (value === 'SCRIPT_CREATE') {
+      expanded.add('SCRIPT_CREATE');
+      expanded.add('SCRIPTS_CREATE');
+      continue;
+    }
+
+    expanded.add(value);
+  }
+
+  return Array.from(expanded);
+}
+
 // POST /api/execution/run - Execute scripts
 router.post('/run', authorize('admin', 'tester'), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -428,10 +474,38 @@ router.get('/global-logs', async (req: AuthRequest, res: Response): Promise<void
     const runId = Number.parseInt(req.query.runId as string, 10);
     const search = (req.query.q as string | undefined)?.trim();
     const moduleFilter = (req.query.module as string | undefined)?.trim();
-    const actionFilter = (req.query.action as string | undefined)?.trim();
+    const actionFilterRaw = (req.query.action as string | undefined)?.trim();
     const statusFilter = (req.query.status as string | undefined)?.trim();
-    const from = req.query.from as string | undefined;
-    const to = req.query.to as string | undefined;
+    const parseDateFilter = (value: string | undefined): string | null => {
+      const raw = String(value || '').trim();
+      if (!raw) return null;
+
+      const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (isoMatch) {
+        const year = Number(isoMatch[1]);
+        const month = Number(isoMatch[2]) - 1;
+        const day = Number(isoMatch[3]);
+        const parsedDate = new Date(year, month, day);
+        if (Number.isNaN(parsedDate.getTime())) return null;
+        return parsedDate.toISOString();
+      }
+
+      const dmyMatch = raw.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+      if (dmyMatch) {
+        const day = Number(dmyMatch[1]);
+        const month = Number(dmyMatch[2]) - 1;
+        const year = Number(dmyMatch[3]);
+        const parsedDate = new Date(year, month, day);
+        if (Number.isNaN(parsedDate.getTime())) return null;
+        return parsedDate.toISOString();
+      }
+
+      const parsed = new Date(raw);
+      if (Number.isNaN(parsed.getTime())) return null;
+      return parsed.toISOString();
+    };
+    const from = parseDateFilter(req.query.from as string | undefined);
+    const to = parseDateFilter(req.query.to as string | undefined);
     const sortByRaw = (req.query.sortBy as string | undefined)?.trim();
     const sortOrderRaw = (req.query.sortOrder as string | undefined)?.trim().toLowerCase();
     const limitRaw = Number.parseInt(req.query.limit as string, 10);
@@ -490,9 +564,18 @@ router.get('/global-logs', async (req: AuthRequest, res: Response): Promise<void
       params.push(`%${moduleFilter}%`);
     }
 
-    if (actionFilter) {
-      whereClauses.push(`COALESCE(l.action, '') ILIKE $${idx++}`);
-      params.push(`%${actionFilter}%`);
+    const actionFilters = actionFilterRaw
+      ? actionFilterRaw
+          .split(',')
+          .map((value) => value.trim())
+          .filter(Boolean)
+      : [];
+    const expandedActionFilters = expandActionFilterAliases(actionFilters);
+
+    if (expandedActionFilters.length > 0) {
+      const actionParamIdx = idx++;
+      whereClauses.push(`UPPER(COALESCE(l.action, '')) = ANY($${actionParamIdx}::text[])`);
+      params.push(expandedActionFilters);
     }
 
     if (statusFilter) {
@@ -501,12 +584,12 @@ router.get('/global-logs', async (req: AuthRequest, res: Response): Promise<void
     }
 
     if (from) {
-      whereClauses.push(`l.timestamp >= $${idx++}::timestamp`);
+      whereClauses.push(`l.timestamp >= $${idx++}::timestamptz`);
       params.push(from);
     }
 
     if (to) {
-      whereClauses.push(`l.timestamp <= $${idx++}::timestamp`);
+      whereClauses.push(`l.timestamp <= $${idx++}::timestamptz`);
       params.push(to);
     }
 

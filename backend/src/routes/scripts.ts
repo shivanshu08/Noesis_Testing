@@ -8,6 +8,7 @@ import { query, execute } from '../database/connection';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { logger } from '../utils/logger';
 import { config } from '../config';
+import { appLogService } from '../services/appLogService';
 
 const router = Router();
 router.use(authenticate);
@@ -86,6 +87,32 @@ interface CategoryLookup {
 
 // Memory storage for script imports
 const upload = multer({ storage: multer.memoryStorage() });
+
+function logScriptEvent(
+  req: AuthRequest,
+  event: {
+    action: string;
+    severity?: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG';
+    status?: string;
+    message: string;
+    metadata?: Record<string, unknown>;
+    httpStatus?: number;
+  }
+): void {
+  appLogService.enqueue({
+    action: event.action,
+    module: 'scripts',
+    severity: event.severity || 'INFO',
+    status: event.status || 'SUCCESS',
+    userId: Number.isInteger(req.userId) ? req.userId as number : null,
+    message: event.message,
+    requestId: req.requestId || null,
+    httpMethod: (req.method || '').toUpperCase() || null,
+    httpPath: (req.originalUrl || req.path || '').split('?')[0] || null,
+    httpStatus: Number.isInteger(event.httpStatus) ? event.httpStatus as number : null,
+    metadata: event.metadata || null,
+  });
+}
 
 function ensureWritableDirectory(dirPath: string): void {
   if (!dirPath) {
@@ -586,16 +613,58 @@ router.get('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
 router.put('/:id', authorize('admin', 'tester'), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { name, description, methodName, isActive, tags } = req.body;
+    const scriptId = Number(req.params.id);
+    if (!Number.isInteger(scriptId) || scriptId <= 0) {
+      res.status(400).json({ error: 'Invalid script ID.' });
+      return;
+    }
+
+    const existingScripts = await query<{ id: number; name: string }>(
+      'SELECT id, name FROM scripts WHERE id = $1',
+      [scriptId]
+    );
+    if (existingScripts.length === 0) {
+      logScriptEvent(req, {
+        action: 'SCRIPT_UPDATE',
+        severity: 'WARN',
+        status: 'NOOP',
+        httpStatus: 404,
+        message: `Update requested for script #${scriptId}, but it was not found.`,
+        metadata: { scriptId },
+      });
+      res.status(404).json({ error: 'Script not found.' });
+      return;
+    }
+
     const sanitizedName = typeof name === 'string'
       ? name.replace(/\.java$/i, '').trim()
       : name;
     await execute(
       'UPDATE scripts SET name = COALESCE($1, name), description = COALESCE($2, description), method_name = COALESCE($3, method_name), is_active = COALESCE($4, is_active), tags = COALESCE($5, tags) WHERE id = $6',
-      [sanitizedName, description, methodName, isActive, tags ? JSON.stringify(tags) : null, req.params.id]
+      [sanitizedName, description, methodName, isActive, tags ? JSON.stringify(tags) : null, scriptId]
     );
+    logScriptEvent(req, {
+      action: 'SCRIPT_UPDATE',
+      severity: 'INFO',
+      status: 'SUCCESS',
+      httpStatus: 200,
+      message: `Script "${sanitizedName || existingScripts[0].name}" updated successfully.`,
+      metadata: {
+        scriptId,
+        previousName: existingScripts[0].name,
+        updatedName: sanitizedName || existingScripts[0].name,
+      },
+    });
     res.json({ message: 'Script updated.' });
   } catch (error) {
     logger.error('Update script error:', error);
+    logScriptEvent(req, {
+      action: 'SCRIPT_UPDATE',
+      severity: 'ERROR',
+      status: 'FAILED',
+      httpStatus: 500,
+      message: `Script update failed: ${(error as Error).message}`,
+    });
     res.status(500).json({ error: 'Failed to update script.' });
   }
 });
@@ -626,6 +695,19 @@ router.post('/delete-multiple', authorize('admin', 'tester'), async (req: AuthRe
     );
 
     if (scriptsToDelete.length === 0) {
+      logScriptEvent(req, {
+        action: 'SCRIPT_DELETE',
+        severity: 'WARN',
+        status: 'NOOP',
+        httpStatus: 200,
+        message: 'Delete requested, but selected scripts were already removed.',
+        metadata: {
+          requestedIds: ids,
+          removedCount: 0,
+          bulk: true,
+        },
+      });
+
       const [totalScripts] = await query<{ count: string }>(
         'SELECT COUNT(*)::text as count FROM scripts WHERE is_active = TRUE'
       );
@@ -641,6 +723,21 @@ router.post('/delete-multiple', authorize('admin', 'tester'), async (req: AuthRe
     }
 
     await execute(`DELETE FROM scripts WHERE id IN (${placeholders})`, ids);
+    for (const script of scriptsToDelete) {
+      logScriptEvent(req, {
+        action: 'SCRIPT_DELETE',
+        severity: 'INFO',
+        status: 'SUCCESS',
+        httpStatus: 200,
+        message: `Script "${script.name}" removed from database.`,
+        metadata: {
+          scriptId: script.id,
+          scriptName: script.name,
+          bulk: true,
+          requestedIds: ids,
+        },
+      });
+    }
 
     // Keep physical files in workspace. Deletion here is DB-only by design.
 
@@ -676,6 +773,18 @@ router.delete('/:id', authorize('admin', 'tester'), async (req: AuthRequest, res
     );
 
     if (scripts.length === 0) {
+      logScriptEvent(req, {
+        action: 'SCRIPT_DELETE',
+        severity: 'WARN',
+        status: 'NOOP',
+        httpStatus: 200,
+        message: `Delete requested for script #${scriptId}, but it was already removed.`,
+        metadata: {
+          scriptId,
+          removedCount: 0,
+        },
+      });
+
       const [totalScripts] = await query<{ count: string }>(
         'SELECT COUNT(*)::text as count FROM scripts WHERE is_active = TRUE'
       );
@@ -691,6 +800,17 @@ router.delete('/:id', authorize('admin', 'tester'), async (req: AuthRequest, res
     }
 
     await execute('DELETE FROM scripts WHERE id = $1', [scriptId]);
+    logScriptEvent(req, {
+      action: 'SCRIPT_DELETE',
+      severity: 'INFO',
+      status: 'SUCCESS',
+      httpStatus: 200,
+      message: `Script "${scripts[0].name}" removed from database.`,
+      metadata: {
+        scriptId,
+        scriptName: scripts[0].name,
+      },
+    });
     // Keep physical file in workspace. Deletion here is DB-only by design.
 
     const [totalScripts] = await query<{ count: string }>(
@@ -711,7 +831,7 @@ router.delete('/:id', authorize('admin', 'tester'), async (req: AuthRequest, res
 });
 
 // POST /api/scripts/sync - Scan project and sync scripts
-router.post('/sync', authorize('admin'), async (_req: AuthRequest, res: Response): Promise<void> => {
+router.post('/sync', authorize('admin'), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const sourceRoots = await resolveSyncSourceRoots();
 
@@ -969,6 +1089,26 @@ router.post('/sync', authorize('admin'), async (_req: AuthRequest, res: Response
     }
 
     const hasWarnings = skippedScripts.length > 0;
+    logScriptEvent(req, {
+      action: 'WORKSPACE_SYNC',
+      severity: hasWarnings ? 'WARN' : 'INFO',
+      status: hasWarnings ? 'PARTIAL_SUCCESS' : 'SUCCESS',
+      httpStatus: 200,
+      message: hasWarnings
+        ? 'Workspace sync completed with warnings.'
+        : 'Workspace sync completed successfully.',
+      metadata: {
+        addedCount: addedScripts.length,
+        updatedCount: updatedScripts.length,
+        removedCount: removedScripts.length,
+        skippedCount: skippedScripts.length,
+        addedScripts: addedScripts.slice(0, 30),
+        updatedScripts: updatedScripts.slice(0, 30),
+        removedScripts: removedScripts.slice(0, 30),
+        skippedScripts: skippedScripts.slice(0, 30),
+      },
+    });
+
     res.json({
       message: hasWarnings ? 'Sync completed with warnings' : 'Sync completed successfully',
       stats: {
@@ -986,6 +1126,13 @@ router.post('/sync', authorize('admin'), async (_req: AuthRequest, res: Response
     });
   } catch (error) {
     logger.error('Sync scripts error:', error);
+    logScriptEvent(req, {
+      action: 'WORKSPACE_SYNC',
+      severity: 'ERROR',
+      status: 'FAILED',
+      httpStatus: 500,
+      message: `Workspace sync failed: ${(error as Error).message}`,
+    });
     res.status(500).json({ error: 'Failed to sync scripts.' });
   }
 });
@@ -1022,6 +1169,17 @@ router.post('/import', authorize('admin', 'tester'), upload.single('file'), asyn
       packageName: metadata.packageName,
       source: javaSource,
     })) {
+      logScriptEvent(req, {
+        action: 'SCRIPT_IMPORT_REJECTED',
+        severity: 'WARN',
+        status: 'CLIENT_ERROR',
+        httpStatus: 422,
+        message: `Import rejected for "${sanitizedFileName}" because it is a configuration artifact.`,
+        metadata: {
+          fileName: sanitizedFileName,
+          className: metadata.className,
+        },
+      });
       res.status(422).json({ error: 'Configuration files cannot be imported as scripts.' });
       return;
     }
@@ -1057,6 +1215,18 @@ router.post('/import', authorize('admin', 'tester'), upload.single('file'), asyn
     const inactiveConflict = matchingConflicts.find(conflict => !conflict.is_active);
 
     if (activeConflict) {
+      logScriptEvent(req, {
+        action: 'SCRIPT_IMPORT_DUPLICATE',
+        severity: 'WARN',
+        status: 'CLIENT_ERROR',
+        httpStatus: 409,
+        message: `Duplicate script import blocked for "${sanitizedFileName}".`,
+        metadata: {
+          fileName: sanitizedFileName,
+          className: metadata.className,
+          existingScriptId: activeConflict.id,
+        },
+      });
       res.status(409).json({
         error: 'Duplicate script import is not allowed. The script is already registered.',
       });
@@ -1072,6 +1242,20 @@ router.post('/import', authorize('admin', 'tester'), upload.single('file'), asyn
         'UPDATE scripts SET name = $1, class_name = $2, category_id = $3, file_path = $4, is_active = TRUE WHERE id = $5',
         [standardName, metadata.className, categoryId, relPath, inactiveConflict.id]
       );
+      logScriptEvent(req, {
+        action: 'SCRIPT_IMPORT',
+        severity: 'INFO',
+        status: 'SUCCESS',
+        httpStatus: 200,
+        message: `Script "${standardName}" restored from previous inactive record.`,
+        metadata: {
+          scriptId: inactiveConflict.id,
+          fileName: sanitizedFileName,
+          className: metadata.className,
+          categoryId,
+          filePath: relPath,
+        },
+      });
 
       const [totalScripts] = await query<{ count: string }>(
         'SELECT COUNT(*)::text as count FROM scripts WHERE is_active = TRUE'
@@ -1099,6 +1283,19 @@ router.post('/import', authorize('admin', 'tester'), upload.single('file'), asyn
       'INSERT INTO scripts (name, class_name, category_id, file_path, is_active) VALUES ($1, $2, $3, $4, TRUE)',
       [standardName, metadata.className, categoryId, relPath]
     );
+    logScriptEvent(req, {
+      action: 'SCRIPT_IMPORT',
+      severity: 'INFO',
+      status: 'SUCCESS',
+      httpStatus: 201,
+      message: `Script "${standardName}" imported successfully.`,
+      metadata: {
+        fileName: sanitizedFileName,
+        className: metadata.className,
+        categoryId,
+        filePath: relPath,
+      },
+    });
 
     const [totalScripts] = await query<{ count: string }>(
       'SELECT COUNT(*)::text as count FROM scripts WHERE is_active = TRUE'
@@ -1121,6 +1318,13 @@ router.post('/import', authorize('admin', 'tester'), upload.single('file'), asyn
   } catch (error) {
     logger.error('Import script error:', error);
     const err = error as { code?: string; message?: string };
+    logScriptEvent(req, {
+      action: 'SCRIPT_IMPORT',
+      severity: 'ERROR',
+      status: err?.code === '23505' ? 'CLIENT_ERROR' : 'FAILED',
+      httpStatus: err?.code === '23505' ? 409 : 500,
+      message: `Script import failed: ${err?.message || 'Unknown error'}`,
+    });
     if (err?.code === '23505') {
       res.status(409).json({ error: 'Script already exists.' });
       return;

@@ -26,7 +26,7 @@ import { Subscription } from 'rxjs';
   imports: [
     CommonModule, FormsModule, CardModule, ButtonModule, TableModule,
     DialogModule, InputTextModule, TextareaModule, MultiSelectModule,
-    TagModule, TooltipModule, ConfirmDialogModule,
+    TagModule, TooltipModule, ConfirmDialogModule
   ],
   providers: [ConfirmationService],
   templateUrl: './suites.html',
@@ -136,6 +136,7 @@ export class Suites implements OnInit, OnDestroy {
 
   runSuite(suite: TestSuite) {
     if (!this.auth.canEdit()) return;
+    
     const scriptIds = suite.scripts?.map(s => s.id) || [];
     if (scriptIds.length === 0) return;
 
