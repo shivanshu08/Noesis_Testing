@@ -128,3 +128,19 @@ export interface DashboardStats {
   recentHistory: { date: string; status: string; count: number }[];
   categoryStats: { name: string; color: string; count: number }[];
 }
+
+export interface ScheduledRun {
+  id: number;
+  name: string;
+  suiteId?: number;
+  scriptIds?: number[];
+  cronExpression: string;
+  description?: string;
+  isActive: boolean;
+  environment: string;
+  isOneTime?: boolean;
+  lastRunAt?: string;
+  nextRunAt?: string;
+  createdBy?: string;
+  createdAt: string;
+}

@@ -19,6 +19,7 @@ import fs from 'fs';
 import notificationRoutes from './routes/notifications';
 import logsRoutes from './routes/logs';
 import { appLogService } from './services/appLogService';
+import { initScheduler, shutdownScheduler } from './services/schedulerService';
 
 const app = express();
 const httpServer = createServer(app);
@@ -122,6 +123,13 @@ async function start() {
         status: 'SUCCESS',
         message: 'Database connection validated and app logging initialized.',
       });
+
+      // Initialize the cron scheduler
+      try {
+        await initScheduler();
+      } catch (schedError) {
+        logger.error('Failed to initialize scheduler:', schedError);
+      }
     } catch (error) {
       logger.error('Failed to initialize centralized application logging:', error);
     }
@@ -181,6 +189,7 @@ process.on('uncaughtException', (error) => {
 });
 
 process.on('SIGTERM', () => {
+  shutdownScheduler();
   appLogService.logSystemEvent({
     action: 'SYSTEM_SIGTERM',
     module: 'system',

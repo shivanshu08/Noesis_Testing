@@ -7,6 +7,8 @@ import { spawn, ChildProcess } from 'child_process';
 import path from 'path';
 import { Server as SocketIOServer } from 'socket.io';
 import { appLogService } from '../services/appLogService';
+import { computeNextRun, refreshSchedule, unregisterTask } from '../services/schedulerService';
+import cron from 'node-cron';
 
 const router = Router();
 router.use(authenticate);
@@ -1031,5 +1033,205 @@ function parseTestResults(output: string): { passed: number; failed: number; err
 
   return { passed, failed, errors, skipped };
 }
+
+// Expose executeScripts for the scheduler service to call
+export function triggerScheduledExecution(runId: number, testngXml: string, scripts: any[], userId: number, runName: string) {
+  executeScripts(runId, testngXml, scripts, userId, runName);
+}
+
+// ---- Schedule CRUD Routes ----
+
+// POST /api/execution/schedule - Create a new scheduled run
+router.post('/schedule', authorize('admin', 'tester'), async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { name, scriptIds, suiteId, cronExpression, environment = 'local', description, isOneTime = false } = req.body;
+
+    if (!name || !name.trim()) {
+      res.status(400).json({ error: 'Schedule name is required.' });
+      return;
+    }
+
+    if (!cronExpression || !cron.validate(cronExpression)) {
+      res.status(400).json({ error: 'Invalid cron expression.' });
+      return;
+    }
+
+    if ((!scriptIds || !Array.isArray(scriptIds) || scriptIds.length === 0) && !suiteId) {
+      res.status(400).json({ error: 'Either script IDs or a suite ID is required.' });
+      return;
+    }
+
+    const nextRunAt = computeNextRun(cronExpression);
+
+    const result = await execute(
+      `INSERT INTO scheduled_runs (name, suite_id, script_ids, cron_expression, environment, description, is_one_time, next_run_at, created_by)\n       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [
+        name.trim(),
+        suiteId || null,
+        scriptIds ? JSON.stringify(scriptIds) : null,
+        cronExpression,
+        environment,
+        description || null,
+        isOneTime,
+        nextRunAt,
+        req.userId,
+      ]
+    );
+
+    const created = result.rows[0];
+
+    // Register the cron task immediately
+    await refreshSchedule(created.id);
+
+    appLogService.logSystemEvent({
+      action: 'SCHEDULE_CREATE',
+      module: 'scheduler',
+      severity: 'INFO',
+      status: 'SUCCESS',
+      message: `Schedule "${name}" created with cron: ${cronExpression}`,
+      userId: req.userId,
+      username: req.username || '',
+      metadata: { scheduleId: created.id, cronExpression },
+    });
+
+    res.status(201).json({
+      id: created.id,
+      name: created.name,
+      suiteId: created.suite_id,
+      scriptIds: created.script_ids,
+      cronExpression: created.cron_expression,
+      description: created.description,
+      isOneTime: created.is_one_time,
+      isActive: created.is_active,
+      environment: created.environment,
+      nextRunAt: created.next_run_at,
+      createdAt: created.created_at,
+    });
+  } catch (error) {
+    logger.error('Create schedule error:', error);
+    res.status(500).json({ error: 'Failed to create schedule.' });
+  }
+});
+
+// GET /api/execution/schedules - List all scheduled runs
+router.get('/schedules', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const rows = await query<any>(
+      `SELECT sr.*, u.full_name as created_by_name
+       FROM scheduled_runs sr
+       LEFT JOIN users u ON sr.created_by = u.id
+       ORDER BY sr.created_at DESC`
+    );
+
+    res.json(rows.map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      suiteId: r.suite_id,
+      scriptIds: r.script_ids,
+      cronExpression: r.cron_expression,
+      description: r.description,
+      isOneTime: r.is_one_time,
+      isActive: r.is_active,
+      environment: r.environment,
+      lastRunAt: r.last_run_at,
+      nextRunAt: r.next_run_at,
+      createdBy: r.created_by_name,
+      createdAt: r.created_at,
+    })));
+  } catch (error) {
+    logger.error('List schedules error:', error);
+    res.status(500).json({ error: 'Failed to fetch schedules.' });
+  }
+});
+
+// PUT /api/execution/schedules/:id - Update a schedule
+router.put('/schedules/:id', authorize('admin', 'tester'), async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { name, cronExpression, isActive, environment, description, isOneTime } = req.body;
+
+    const sets: string[] = [];
+    const params: any[] = [];
+    let idx = 1;
+
+    if (name !== undefined) {
+      sets.push(`name = $${idx++}`);
+      params.push(name);
+    }
+    if (cronExpression !== undefined) {
+      if (!cron.validate(cronExpression)) {
+        res.status(400).json({ error: 'Invalid cron expression.' });
+        return;
+      }
+      sets.push(`cron_expression = $${idx++}`);
+      params.push(cronExpression);
+      const nextRun = computeNextRun(cronExpression);
+      sets.push(`next_run_at = $${idx++}`);
+      params.push(nextRun);
+    }
+    if (isActive !== undefined) {
+      sets.push(`is_active = $${idx++}`);
+      params.push(isActive);
+    }
+    if (environment !== undefined) {
+      sets.push(`environment = $${idx++}`);
+      params.push(environment);
+    }
+    if (description !== undefined) {
+      sets.push(`description = ${idx++}`);
+      params.push(description);
+    }
+    if (isOneTime !== undefined) {
+      sets.push(`is_one_time = ${idx++}`);
+      params.push(isOneTime);
+    }
+
+    if (sets.length === 0) {
+      res.status(400).json({ error: 'No fields to update.' });
+      return;
+    }
+
+    params.push(parseInt(id as string));
+    await execute(
+      `UPDATE scheduled_runs SET ${sets.join(', ')} WHERE id = $${idx}`,
+      params
+    );
+
+    // Refresh the cron task
+    await refreshSchedule(parseInt(id as string));
+
+    res.json({ message: 'Schedule updated.' });
+  } catch (error) {
+    logger.error('Update schedule error:', error);
+    res.status(500).json({ error: 'Failed to update schedule.' });
+  }
+});
+
+// DELETE /api/execution/schedules/:id - Delete a schedule
+router.delete('/schedules/:id', authorize('admin', 'tester'), async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseInt(req.params.id as string);
+
+    // Stop the cron task
+    unregisterTask(id);
+
+    await execute('DELETE FROM scheduled_runs WHERE id = $1', [id]);
+
+    appLogService.logSystemEvent({
+      action: 'SCHEDULE_DELETE',
+      module: 'scheduler',
+      severity: 'INFO',
+      status: 'SUCCESS',
+      message: `Schedule ID ${id} deleted.`,
+      userId: req.userId,
+      username: req.username || '',
+    });
+
+    res.json({ message: 'Schedule deleted.' });
+  } catch (error) {
+    logger.error('Delete schedule error:', error);
+    res.status(500).json({ error: 'Failed to delete schedule.' });
+  }
+});
 
 export default router;

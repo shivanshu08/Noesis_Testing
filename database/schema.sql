@@ -233,15 +233,33 @@ CREATE INDEX IF NOT EXISTS idx_app_logs_http_status_timestamp ON app_logs(http_s
 CREATE TABLE IF NOT EXISTS scheduled_runs (
     id SERIAL PRIMARY KEY,
     name VARCHAR(200) NOT NULL,
-    suite_id INT NOT NULL REFERENCES test_suites(id) ON DELETE CASCADE,
+    suite_id INT DEFAULT NULL REFERENCES test_suites(id) ON DELETE CASCADE,
+    script_ids JSONB DEFAULT NULL,
+    description TEXT DEFAULT NULL,
     cron_expression VARCHAR(100) NOT NULL,
+    is_one_time BOOLEAN NOT NULL DEFAULT FALSE,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     environment VARCHAR(50) DEFAULT 'local',
     last_run_at TIMESTAMP DEFAULT NULL,
     next_run_at TIMESTAMP DEFAULT NULL,
     created_by INT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT check_suite_or_scripts CHECK (suite_id IS NOT NULL OR script_ids IS NOT NULL)
 );
+
+-- Migration for existing tables (safe to re-run)
+DO $$ BEGIN
+    ALTER TABLE scheduled_runs ALTER COLUMN suite_id DROP NOT NULL;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+DO $$ BEGIN
+    ALTER TABLE scheduled_runs ADD COLUMN script_ids JSONB DEFAULT NULL;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+DO $$ BEGIN
+    ALTER TABLE scheduled_runs ADD COLUMN description TEXT DEFAULT NULL;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
 -- ============================================================
 -- Seed Data

@@ -1,18 +1,68 @@
 <div class="runner-page">
+  <!-- Page Header -->
   <div class="page-header">
     <div>
       <h1>Run Scripts</h1>
       <p class="subtitle">Select and execute your ST automation scripts</p>
     </div>
-    <div class="header-actions" style="display: flex; gap: 12px;">
+    <div class="header-actions">
       @if (!running()) {
-        <p-button label="Schedule Run" icon="pi pi-calendar" severity="secondary" [disabled]="selectedCount === 0" />
-        <p-button label="Run Selected ({{ selectedCount }})" icon="pi pi-play" [disabled]="selectedCount === 0" (onClick)="runSelected()" />
+        <p-button
+          label="Scheduled Runs"
+          icon="pi pi-calendar-clock"
+          severity="info"
+          [outlined]="true"
+          (onClick)="toggleSchedulesPanel()"
+          pTooltip="Manage Scheduled Runs"
+          tooltipPosition="bottom"
+          id="btn-view-schedules"
+        />
+        <p-button
+          label="Schedule Run"
+          icon="pi pi-calendar"
+          severity="secondary"
+          [disabled]="selectedCount === 0"
+          (onClick)="openScheduleDialog()"
+          pTooltip="Ctrl+Shift+S"
+          tooltipPosition="bottom"
+          id="btn-schedule-run"
+        />
+        <p-button
+          label="Run Selected ({{ selectedCount }})"
+          icon="pi pi-play"
+          [disabled]="selectedCount === 0"
+          (onClick)="runSelected()"
+          pTooltip="Ctrl+Enter"
+          tooltipPosition="bottom"
+          id="btn-run-selected"
+        />
       } @else {
-        <p-button label="Stop Execution" icon="pi pi-stop" severity="danger" (onClick)="stopExecution()" />
+        <div class="running-indicator">
+          <span class="elapsed-badge">
+            <i class="pi pi-stopwatch"></i>
+            {{ formatElapsed(elapsedSeconds) }}
+          </span>
+        </div>
+        <p-button label="Stop Execution" icon="pi pi-stop" severity="danger" (onClick)="stopExecution()" id="btn-stop-execution" />
       }
     </div>
   </div>
+
+  <!-- Keyboard Shortcuts Hint -->
+  @if (selectedCount > 0 && !running()) {
+    <div class="shortcuts-bar">
+      <span class="shortcut-hint">
+        <kbd>Ctrl</kbd>+<kbd>Enter</kbd> Run
+      </span>
+      <span class="shortcut-hint">
+        <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> Schedule
+      </span>
+      <span class="selected-summary">
+        <i class="pi pi-check-square"></i>
+        {{ selectedCount }} script{{ selectedCount !== 1 ? 's' : '' }} selected
+      </span>
+    </div>
+  }
 
   <div class="runner-layout">
     <!-- Script Selection Panel -->
@@ -22,7 +72,7 @@
           <div class="selection-header">
             <div class="selection-title">
               <h3>Select Scripts</h3>
-              <span class="selection-badge">{{ selectedCount }} selected</span>
+              <span class="selection-badge" [class.active]="selectedCount > 0">{{ selectedCount }} selected</span>
             </div>
             <div class="selection-actions">
               <p-button label="Select All" size="small" [text]="true" (onClick)="selectAll()" />
@@ -33,7 +83,7 @@
 
         <!-- Filters -->
         <div class="selection-filters">
-          <input type="text" pInputText placeholder="Search scripts..." [(ngModel)]="searchTerm" class="w-full" />
+          <input type="text" pInputText placeholder="Search scripts..." [(ngModel)]="searchTerm" class="w-full" id="input-search-scripts" />
           <p-select
             [options]="categories()"
             [(ngModel)]="selectedCategory"
@@ -42,6 +92,7 @@
             placeholder="All Categories"
             [showClear]="true"
             [style]="{ width: '100%' }"
+            id="select-category-filter"
           />
         </div>
 
@@ -67,12 +118,26 @@
           } @else {
             @for (script of filteredScripts; track script.id) {
               <div class="script-item" [class.selected]="script.selected" (click)="toggleScript(script.id)">
-                <p-checkbox [ngModel]="script.selected" [binary]="true" (onChange)="toggleScript(script.id)" />
+                <div style="pointer-events: none;">
+                  <p-checkbox [ngModel]="script.selected" [binary]="true" tabindex="-1" />
+                </div>
                 <div class="script-info">
                   <span class="script-name">{{ script.name }}</span>
                   <span class="script-class">{{ script.className.split('.').pop() }}</span>
                 </div>
-                <p-tag [value]="getCategoryName(script.categoryId)" size="small" severity="secondary" />
+                <div class="script-actions" style="display: flex; gap: 8px; align-items: center;">
+                  <p-tag [value]="getCategoryName(script.categoryId)" size="small" severity="secondary" />
+                  <p-button
+                    icon="pi pi-play"
+                    [text]="true"
+                    severity="success"
+                    size="small"
+                    pTooltip="Run Now"
+                    (onClick)="runIndividualScript($event, script.id)"
+                    [disabled]="running()"
+                    styleClass="btn-run-individual"
+                  />
+                </div>
               </div>
             }
             @if (filteredScripts.length === 0) {
@@ -95,14 +160,34 @@
               <h3>Execution Output</h3>
               @if (running()) {
                 <p-tag value="RUNNING" severity="warn" />
+                <span class="elapsed-timer">
+                  <i class="pi pi-stopwatch"></i>
+                  {{ formatElapsed(elapsedSeconds) }}
+                </span>
               } @else if (runStatus() === 'stopped') {
                 <p-tag value="STOPPED" severity="secondary" />
+                @if (elapsedSeconds > 0) {
+                  <span class="elapsed-final">{{ formatElapsed(elapsedSeconds) }}</span>
+                }
               } @else if (runStatus() === 'error') {
                 <p-tag value="ERROR" severity="danger" />
+              } @else if (runStatus() === 'passed' || runStatus() === 'completed') {
+                <p-tag value="PASSED" severity="success" />
+                @if (elapsedSeconds > 0) {
+                  <span class="elapsed-final">{{ formatElapsed(elapsedSeconds) }}</span>
+                }
+              } @else if (runStatus() === 'failed') {
+                <p-tag value="FAILED" severity="danger" />
+                @if (elapsedSeconds > 0) {
+                  <span class="elapsed-final">{{ formatElapsed(elapsedSeconds) }}</span>
+                }
               }
             </div>
             <div class="log-actions">
-              <p-button icon="pi pi-trash" [text]="true" size="small" severity="secondary" pTooltip="Clear Logs" (onClick)="clearLogs()" [disabled]="running()" />
+              @if (logs().length > 0 && !running()) {
+                <p-button icon="pi pi-download" [text]="true" size="small" severity="secondary" pTooltip="Download Logs" (onClick)="downloadLogs()" id="btn-download-logs" />
+              }
+              <p-button icon="pi pi-trash" [text]="true" size="small" severity="secondary" pTooltip="Clear Logs" (onClick)="clearLogs()" [disabled]="running()" id="btn-clear-logs" />
             </div>
           </div>
         </ng-template>
@@ -125,6 +210,243 @@
           }
         </div>
       </p-card>
+
+
     </div>
   </div>
 </div>
+
+<!-- Run Confirmation Dialog -->
+<p-dialog
+  header="Confirm Execution"
+  [(visible)]="showRunConfirm"
+  [modal]="true"
+  [closable]="true"
+  [style]="{ width: '480px' }"
+  [dismissableMask]="true"
+  styleClass="run-confirm-dialog"
+  id="dialog-run-confirm"
+>
+  <div class="confirm-body">
+    <div class="confirm-icon-wrap">
+      <i class="pi pi-play-circle"></i>
+    </div>
+    <p class="confirm-title">Ready to execute?</p>
+
+    <div class="confirm-details">
+      <div class="confirm-stat">
+        <span class="stat-label">Scripts</span>
+        <span class="stat-value">{{ selectedCount }}</span>
+      </div>
+      <div class="confirm-stat">
+        <span class="stat-label">Categories</span>
+        <span class="stat-value">{{ (selectedScripts | slice:0:3).length > 0 ? (selectedScripts | slice:0:3).length : 0 }}</span>
+      </div>
+    </div>
+
+    <div class="confirm-scripts-list">
+      @for (script of selectedScripts | slice:0:5; track script.id) {
+        <div class="confirm-script-item">
+          <i class="pi pi-file"></i>
+          <span>{{ script.name }}</span>
+        </div>
+      }
+      @if (selectedCount > 5) {
+        <div class="confirm-more">+ {{ selectedCount - 5 }} more...</div>
+      }
+    </div>
+
+    <div class="confirm-name-input">
+      <label for="run-name-input">Run Name (optional)</label>
+      <input type="text" pInputText [(ngModel)]="runName" id="run-name-input" placeholder="Auto-generated if blank" class="w-full" />
+    </div>
+  </div>
+
+  <ng-template #footer>
+    <div class="confirm-footer">
+      <p-button label="Cancel" [text]="true" severity="secondary" (onClick)="cancelRunConfirm()" />
+      <p-button label="Run Now" icon="pi pi-play" (onClick)="confirmAndRun()" id="btn-confirm-run" />
+    </div>
+  </ng-template>
+</p-dialog>
+
+<!-- Schedule Run Dialog -->
+<p-dialog
+  header="Schedule Run"
+  [(visible)]="showScheduleDialog"
+  [modal]="true"
+  [closable]="true"
+  [style]="{ width: '560px' }"
+  [dismissableMask]="true"
+  styleClass="schedule-dialog"
+  id="dialog-schedule-run"
+>
+  <div class="schedule-body">
+    <div class="schedule-field">
+      <label for="schedule-name-input">Schedule Name</label>
+      <input type="text" pInputText [(ngModel)]="scheduleName" id="schedule-name-input" placeholder="e.g. Nightly Regression" class="w-full" />
+    </div>
+
+    <div class="schedule-field">
+      <label style="margin-bottom: 12px;">Schedule Type</label>
+      <div class="schedule-type-toggle">
+        <button class="segment-btn" [class.active]="scheduleType === 'recurring'" (click)="scheduleType = 'recurring'">
+          <i class="pi pi-sync"></i>
+          <span>Recurring Schedule</span>
+        </button>
+        <button class="segment-btn" [class.active]="scheduleType === 'once'" (click)="scheduleType = 'once'">
+          <i class="pi pi-calendar-clock"></i>
+          <span>Specific Date & Time</span>
+        </button>
+      </div>
+    </div>
+
+    @if (scheduleType === 'recurring') {
+      <div class="schedule-field">
+        <label>Select Recurring Schedule</label>
+        <div class="cron-presets">
+          @for (preset of cronPresets; track preset.cron) {
+            <button
+              class="cron-preset-btn"
+              [class.active]="selectedPreset?.cron === preset.cron"
+              (click)="selectCronPreset(preset)"
+            >
+              <i [class]="preset.icon"></i>
+              <span>{{ preset.label }}</span>
+            </button>
+          }
+        </div>
+      </div>
+
+      <div class="schedule-field">
+        <label for="schedule-cron-input">Cron Expression</label>
+        <input type="text" pInputText [(ngModel)]="scheduleCron" id="schedule-cron-input" placeholder="e.g. 0 9 * * *" class="w-full" />
+        @if (getCronDescription()) {
+          <div class="cron-preview">
+            <i class="pi pi-info-circle"></i>
+            {{ getCronDescription() }}
+          </div>
+        }
+      </div>
+    } @else {
+      <div class="schedule-field">
+        <label>Execute Once At</label>
+        <p-datepicker
+          [(ngModel)]="scheduleDate"
+          [showTime]="true"
+          hourFormat="12"
+          [minDate]="minScheduleDate"
+          appendTo="body"
+          styleClass="w-full"
+          [ngStyle]="{ width: '100%' }"
+        ></p-datepicker>
+      </div>
+    }
+
+    <div class="schedule-field">
+      <label for="schedule-env-select">Environment</label>
+      <p-select
+        [options]="environments"
+        [(ngModel)]="scheduleEnvironment"
+        optionLabel="label"
+        optionValue="value"
+        [style]="{ width: '100%' }"
+        id="schedule-env-select"
+      />
+    </div>
+
+    <div class="schedule-field">
+      <label for="schedule-desc-input">Description (optional)</label>
+      <textarea pTextarea [(ngModel)]="scheduleDescription" id="schedule-desc-input" placeholder="What does this schedule do?" rows="2" class="w-full"></textarea>
+    </div>
+
+    <div class="schedule-summary">
+      <i class="pi pi-info-circle"></i>
+      <span>{{ selectedCount }} script{{ selectedCount !== 1 ? 's' : '' }} will be executed on this schedule</span>
+    </div>
+  </div>
+
+  <ng-template #footer>
+    <div class="schedule-footer">
+      <p-button label="Cancel" [text]="true" severity="secondary" (onClick)="showScheduleDialog = false" />
+      <p-button label="Create Schedule" icon="pi pi-calendar-plus" (onClick)="saveSchedule()" [loading]="savingSchedule" id="btn-save-schedule" />
+    </div>
+  </ng-template>
+</p-dialog>
+
+<!-- Scheduled Runs Dialog / Sidebar contents -->
+<p-dialog
+  [(visible)]="showSchedulesPanel"
+  [modal]="true"
+  header="Active Scheduled Runs"
+  [style]="{ width: '45rem', maxWidth: '95vw' }"
+  [draggable]="false"
+  [resizable]="false"
+  styleClass="schedules-dialog"
+>
+  <div class="schedules-panel">
+    @if (loadingSchedules) {
+      <div class="schedules-loading" style="text-align: center; padding: 2rem;">
+        <i class="pi pi-spinner pi-spin" style="font-size: 2rem; color: var(--noesis-text-muted);"></i>
+        <p style="margin-top: 1rem; color: var(--noesis-text-secondary);">Loading schedules...</p>
+      </div>
+    } @else if (schedules().length === 0) {
+      <div class="schedules-empty" style="text-align: center; padding: 3rem 1rem;">
+        <i class="pi pi-calendar-times" style="font-size: 3rem; color: var(--noesis-border);"></i>
+        <p style="margin-top: 1rem; color: var(--noesis-text-primary);">No scheduled runs yet</p>
+        <p class="hint" style="color: var(--noesis-text-secondary); font-size: 0.9rem;">Select scripts and click "Schedule Run" to create one</p>
+      </div>
+    } @else {
+      <div style="display: flex; flex-direction: column; gap: 1rem; padding: 0.5rem 0;">
+        @for (schedule of schedules(); track schedule.id) {
+          <div class="schedule-card" [class.inactive]="!schedule.isActive" style="border: 1px solid var(--noesis-border); border-radius: 8px; padding: 1rem; background: var(--noesis-bg-body);">
+            <div class="schedule-card-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+              <div class="schedule-info">
+                <div class="schedule-name" style="font-weight: 500; font-size: 1.1rem; margin-bottom: 0.25rem;">{{ schedule.name }}</div>
+                <div class="schedule-cron" style="font-size: 0.85rem; color: var(--noesis-primary); font-family: 'JetBrains Mono', monospace;">
+                  @if (schedule.isOneTime) {
+                    <i class="pi pi-calendar-clock" style="font-size: 0.7rem; margin-right: 4px;"></i>One-Time Execute
+                  } @else {
+                    <i class="pi pi-sync" style="font-size: 0.7rem; margin-right: 4px;"></i>{{ schedule.cronExpression }}
+                  }
+                </div>
+              </div>
+              <div class="schedule-actions" style="display: flex; gap: 0.5rem;">
+                <p-button
+                  [icon]="schedule.isActive ? 'pi pi-pause' : 'pi pi-play'"
+                  [text]="true"
+                  size="small"
+                  [severity]="schedule.isActive ? 'warn' : 'success'"
+                  [pTooltip]="schedule.isActive ? 'Pause' : 'Activate'"
+                  (onClick)="toggleScheduleActive(schedule)"
+                />
+                <p-button icon="pi pi-trash" [text]="true" size="small" severity="danger" pTooltip="Delete" (onClick)="deleteSchedule(schedule)" />
+              </div>
+            </div>
+            <div class="schedule-meta" style="display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.85rem; color: var(--noesis-text-secondary); align-items: center;">
+              @if (schedule.nextRunAt) {
+                <span class="meta-item" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                  <i class="pi pi-clock"></i> Next: {{ formatDate(schedule.nextRunAt) }}
+                </span>
+              }
+              @if (schedule.lastRunAt) {
+                <span class="meta-item" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                  <i class="pi pi-history"></i> Last: {{ formatDate(schedule.lastRunAt) }}
+                </span>
+              }
+              <span class="meta-item" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                <i class="pi pi-user"></i> {{ schedule.createdBy || 'System' }}
+              </span>
+              <p-tag [value]="schedule.isActive ? 'Active' : 'Paused'" [severity]="schedule.isActive ? 'success' : 'secondary'" size="small" />
+            </div>
+            @if (schedule.description) {
+              <p class="schedule-desc" style="margin: 0.75rem 0 0 0; padding-top: 0.75rem; border-top: 1px solid var(--noesis-border); font-size: 0.9rem; color: var(--noesis-text-secondary);">
+                {{ schedule.description }}
+              </p>
+            }
+          </div>
+        }
+      </div>
+    }
+  </div>
+</p-dialog>

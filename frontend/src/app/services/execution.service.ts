@@ -3,7 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, Subject, retry } from 'rxjs';
 import { io, Socket } from 'socket.io-client';
 import { environment } from '../../environments/environment';
-import { ExecutionRun, ExecutionLog, DashboardStats } from '../models/interfaces';
+import { ExecutionRun, ExecutionLog, DashboardStats, ScheduledRun } from '../models/interfaces';
 
 @Injectable({ providedIn: 'root' })
 export class ExecutionService {
@@ -133,6 +133,32 @@ export class ExecutionService {
 
   deleteGlobalLogs(ids: Array<number | string>): Observable<{ success: boolean }> {
     return this.http.post<{ success: boolean }>(`${this.apiUrl}/global-logs/delete-multiple`, { ids });
+  }
+
+  // ---- Schedule Methods ----
+
+  createSchedule(data: {
+    name: string;
+    scriptIds?: number[];
+    suiteId?: number;
+    cronExpression: string;
+    environment?: string;
+    description?: string;
+    isOneTime?: boolean;
+  }): Observable<ScheduledRun> {
+    return this.http.post<ScheduledRun>(`${this.apiUrl}/schedule`, data);
+  }
+
+  getSchedules(): Observable<ScheduledRun[]> {
+    return this.http.get<ScheduledRun[]>(`${this.apiUrl}/schedules`).pipe(retry(1));
+  }
+
+  updateSchedule(id: number, data: Partial<{ name: string; cronExpression: string; isActive: boolean; environment: string; description: string }>): Observable<any> {
+    return this.http.put(`${this.apiUrl}/schedules/${id}`, data);
+  }
+
+  deleteSchedule(id: number): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/schedules/${id}`);
   }
 
   // WebSocket for live log streaming
