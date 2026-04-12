@@ -1,5 +1,7 @@
 .scripts-page {
-  max-width: 1400px;
+  max-width: 100%;
+  min-width: 1220px; /* Locks container width to prevent squishing when sidebar opens */
+  width: 100%;
 }
 
 .filters-bar {

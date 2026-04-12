@@ -142,7 +142,6 @@ export class LogsPage implements OnInit, OnDestroy {
     ];
   });
 
-  readonly totalCount = computed(() => this.allLogs().length);
   readonly errorCount = computed(() => this.allLogs().filter((l) => l.severity === 'error').length);
   readonly warningCount = computed(() => this.allLogs().filter((l) => l.severity === 'warn').length);
   readonly infoCount = computed(() => this.allLogs().filter((l) => l.severity === 'info').length);
