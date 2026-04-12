@@ -8,6 +8,7 @@ import { config } from './config';
 import { testConnection } from './database/connection';
 import { logger } from './utils/logger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { requestAuditMiddleware } from './middleware/requestAudit';
 import authRoutes from './routes/auth';
 import scriptRoutes from './routes/scripts';
 import executionRoutes, { setSocketIO } from './routes/execution';
@@ -16,6 +17,8 @@ import userRoutes from './routes/users';
 import path from 'path';
 import fs from 'fs';
 import notificationRoutes from './routes/notifications';
+import logsRoutes from './routes/logs';
+import { appLogService } from './services/appLogService';
 
 const app = express();
 const httpServer = createServer(app);
@@ -59,6 +62,7 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: config.cors.origin, credentials: true }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(requestAuditMiddleware);
 
 // Catch Payload Too Large errors and force a JSON response
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -92,6 +96,7 @@ app.use('/api/execution', executionRoutes);
 app.use('/api/suites', suiteRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/logs', logsRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -107,15 +112,83 @@ async function start() {
   const dbOk = await testConnection();
   if (!dbOk) {
     logger.warn('Database connection failed. Server will start but some features may not work.');
+  } else {
+    try {
+      await appLogService.initialize();
+      appLogService.logSystemEvent({
+        action: 'SYSTEM_DB_READY',
+        module: 'system',
+        severity: 'INFO',
+        status: 'SUCCESS',
+        message: 'Database connection validated and app logging initialized.',
+      });
+    } catch (error) {
+      logger.error('Failed to initialize centralized application logging:', error);
+    }
   }
 
   httpServer.listen(config.port, () => {
     logger.info(`Noesis Testing Platform API running on port ${config.port}`);
     logger.info(`Environment: ${config.nodeEnv}`);
-    logger.info(`ST Automation path: ${config.stAutomation.path}`);
+    logger.info(`ST automation source: ${config.stAutomation.source}`);
+    if (config.stAutomation.source === 'git') {
+      logger.info(`ST automation git repo: ${config.stAutomation.gitRepoUrl}`);
+      logger.info(`ST automation cache path: ${config.stAutomation.gitCachePath}`);
+    } else {
+      logger.info(`ST Automation path: ${config.stAutomation.path}`);
+    }
     logger.info(`CORS origin: ${config.cors.origin}`);
+    appLogService.logSystemEvent({
+      action: 'SYSTEM_START',
+      module: 'system',
+      severity: 'INFO',
+      status: 'SUCCESS',
+      message: `API server started on port ${config.port} in ${config.nodeEnv} mode.`,
+      metadata: {
+        automationSource: config.stAutomation.source,
+      },
+    });
   });
 }
+
+process.on('unhandledRejection', (reason) => {
+  const message = reason instanceof Error ? reason.message : String(reason);
+  logger.error('Unhandled promise rejection:', reason);
+  appLogService.logSystemEvent({
+    action: 'UNHANDLED_REJECTION',
+    module: 'system',
+    severity: 'ERROR',
+    status: 'FAILED',
+    message: `Unhandled rejection: ${message}`,
+    metadata: {
+      reason: message.substring(0, 2000),
+    },
+  });
+});
+
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught exception:', error);
+  appLogService.logSystemEvent({
+    action: 'UNCAUGHT_EXCEPTION',
+    module: 'system',
+    severity: 'ERROR',
+    status: 'FAILED',
+    message: `Uncaught exception: ${error.message}`,
+    metadata: {
+      stack: error.stack ? error.stack.substring(0, 2000) : undefined,
+    },
+  });
+});
+
+process.on('SIGTERM', () => {
+  appLogService.logSystemEvent({
+    action: 'SYSTEM_SIGTERM',
+    module: 'system',
+    severity: 'WARN',
+    status: 'SHUTDOWN',
+    message: 'Process received SIGTERM signal.',
+  });
+});
 
 start().catch((error) => {
   logger.error('Failed to start server:', error);

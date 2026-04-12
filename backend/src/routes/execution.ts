@@ -6,6 +6,7 @@ import { config } from '../config';
 import { spawn, ChildProcess } from 'child_process';
 import path from 'path';
 import { Server as SocketIOServer } from 'socket.io';
+import { appLogService } from '../services/appLogService';
 
 const router = Router();
 router.use(authenticate);
@@ -60,6 +61,23 @@ interface LogContext {
   lineLength?: number;
   keyword?: string;
   scriptCount?: number;
+}
+
+interface UnifiedLogRow {
+  id: number;
+  runId: number | null;
+  resultId: number | null;
+  severity: string;
+  detail: string;
+  detailedDescription: string | null;
+  sourceComponent: string | null;
+  context: any;
+  time: Date;
+  source: string;
+  runStatus: string | null;
+  category: string;
+  action: string | null;
+  status: string | null;
 }
 
 // POST /api/execution/run - Execute scripts
@@ -333,8 +351,20 @@ router.get('/stats', async (_req: AuthRequest, res: Response): Promise<void> => 
 // DELETE /api/execution/global-logs/:id - Delete a specific log
 router.delete('/global-logs/:id', authorize('admin', 'tester'), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    await execute('DELETE FROM execution_logs WHERE id = $1', [req.params.id]);
-    res.json({ success: true });
+    const parsedId = Number(req.params.id);
+    if (!Number.isFinite(parsedId) || parsedId === 0) {
+      res.status(400).json({ error: 'Invalid log ID.' });
+      return;
+    }
+
+    const normalizedId = Math.trunc(parsedId);
+    if (normalizedId < 0) {
+      await execute('DELETE FROM app_logs WHERE id = $1', [Math.abs(normalizedId)]);
+    } else {
+      await execute('DELETE FROM execution_logs WHERE id = $1', [normalizedId]);
+    }
+
+    res.json({ success: true, deletedId: normalizedId });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete log.' });
   }
@@ -344,10 +374,42 @@ router.delete('/global-logs/:id', authorize('admin', 'tester'), async (req: Auth
 router.post('/global-logs/delete-multiple', authorize('admin', 'tester'), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { ids } = req.body;
-    if (!Array.isArray(ids) || ids.length === 0) { res.status(400).json({ error: 'Invalid IDs' }); return; }
-    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
-    await execute(`DELETE FROM execution_logs WHERE id IN (${placeholders})`, ids);
-    res.json({ success: true });
+    if (!Array.isArray(ids) || ids.length === 0) {
+      res.status(400).json({ error: 'Invalid IDs' });
+      return;
+    }
+
+    const normalizedIds = Array.from(
+      new Set(
+        ids
+          .map((id: unknown) => Number(id))
+          .filter((id) => Number.isFinite(id) && id !== 0)
+          .map((id) => Math.trunc(id))
+      )
+    );
+
+    if (normalizedIds.length === 0) {
+      res.status(400).json({ error: 'Invalid IDs' });
+      return;
+    }
+
+    const appLogIds = normalizedIds.filter((id) => id < 0).map((id) => Math.abs(id));
+    const executionLogIds = normalizedIds.filter((id) => id > 0);
+
+    if (appLogIds.length > 0) {
+      const appPlaceholders = appLogIds.map((_, i) => `$${i + 1}`).join(',');
+      await execute(`DELETE FROM app_logs WHERE id IN (${appPlaceholders})`, appLogIds);
+    }
+
+    if (executionLogIds.length > 0) {
+      const execPlaceholders = executionLogIds.map((_, i) => `$${i + 1}`).join(',');
+      await execute(`DELETE FROM execution_logs WHERE id IN (${execPlaceholders})`, executionLogIds);
+    }
+
+    res.json({
+      success: true,
+      deletedCount: normalizedIds.length,
+    });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete logs.' });
   }
@@ -356,59 +418,161 @@ router.post('/global-logs/delete-multiple', authorize('admin', 'tester'), async 
 // GET /api/execution/global-logs - Get all execution logs across all runs (up to 1 year)
 router.get('/global-logs', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    await appLogService.initialize().catch((error) => {
+      logger.warn(`Unable to initialize app logs storage before global logs query: ${(error as Error).message}`);
+    });
+
     const daysRaw = Number.parseInt(req.query.days as string, 10);
     const days = Number.isFinite(daysRaw) && daysRaw > 0 ? daysRaw : null;
     const severity = (req.query.severity as string | undefined)?.toUpperCase();
     const runId = Number.parseInt(req.query.runId as string, 10);
     const search = (req.query.q as string | undefined)?.trim();
+    const moduleFilter = (req.query.module as string | undefined)?.trim();
+    const actionFilter = (req.query.action as string | undefined)?.trim();
+    const statusFilter = (req.query.status as string | undefined)?.trim();
     const from = req.query.from as string | undefined;
     const to = req.query.to as string | undefined;
+    const sortByRaw = (req.query.sortBy as string | undefined)?.trim();
+    const sortOrderRaw = (req.query.sortOrder as string | undefined)?.trim().toLowerCase();
     const limitRaw = Number.parseInt(req.query.limit as string, 10);
     const offsetRaw = Number.parseInt(req.query.offset as string, 10);
     const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 2000) : 500;
     const offset = Number.isFinite(offsetRaw) ? Math.max(offsetRaw, 0) : 0;
+
+    const sortColumns: Record<string, string> = {
+      timestamp: 'l.timestamp',
+      severity: 'l.log_level',
+      source: 'l.source',
+      action: 'COALESCE(l.action, \'\')',
+      status: 'COALESCE(l.status, l.run_status, \'\')',
+      runId: 'COALESCE(l.run_id, 0)',
+    };
+    const sortBy = sortByRaw && sortColumns[sortByRaw] ? sortColumns[sortByRaw] : 'l.timestamp';
+    const sortOrder = sortOrderRaw === 'asc' ? 'ASC' : 'DESC';
 
     const whereClauses: string[] = [];
     const params: any[] = [];
     let idx = 1;
 
     if (days !== null) {
-      whereClauses.push(`el.timestamp >= NOW() - INTERVAL '1 day' * $${idx++}`);
+      whereClauses.push(`l.timestamp >= NOW() - INTERVAL '1 day' * $${idx++}`);
       params.push(days);
     }
 
     if (severity && ['INFO', 'WARN', 'ERROR', 'DEBUG'].includes(severity)) {
-      whereClauses.push(`el.log_level = $${idx++}`);
+      whereClauses.push(`l.log_level = $${idx++}`);
       params.push(severity);
     }
 
     if (Number.isFinite(runId)) {
-      whereClauses.push(`el.run_id = $${idx++}`);
+      whereClauses.push(`l.run_id = $${idx++}`);
       params.push(runId);
     }
 
     if (search) {
       const searchParamIdx = idx++;
-      whereClauses.push(`(el.message ILIKE $${searchParamIdx} OR COALESCE(el.detailed_description, '') ILIKE $${searchParamIdx})`);
+      whereClauses.push(`
+        (
+          l.message ILIKE $${searchParamIdx}
+          OR COALESCE(l.detailed_description, '') ILIKE $${searchParamIdx}
+          OR COALESCE(l.source_component, '') ILIKE $${searchParamIdx}
+          OR COALESCE(l.source, '') ILIKE $${searchParamIdx}
+          OR COALESCE(l.action, '') ILIKE $${searchParamIdx}
+          OR COALESCE(l.status, l.run_status, '') ILIKE $${searchParamIdx}
+        )
+      `);
       params.push(`%${search}%`);
     }
 
+    if (moduleFilter) {
+      const moduleParamIdx = idx++;
+      whereClauses.push(`(COALESCE(l.source_component, '') ILIKE $${moduleParamIdx} OR COALESCE(l.source, '') ILIKE $${moduleParamIdx})`);
+      params.push(`%${moduleFilter}%`);
+    }
+
+    if (actionFilter) {
+      whereClauses.push(`COALESCE(l.action, '') ILIKE $${idx++}`);
+      params.push(`%${actionFilter}%`);
+    }
+
+    if (statusFilter) {
+      whereClauses.push(`COALESCE(l.status, l.run_status, '') ILIKE $${idx++}`);
+      params.push(`%${statusFilter}%`);
+    }
+
     if (from) {
-      whereClauses.push(`el.timestamp >= $${idx++}::timestamp`);
+      whereClauses.push(`l.timestamp >= $${idx++}::timestamp`);
       params.push(from);
     }
 
     if (to) {
-      whereClauses.push(`el.timestamp <= $${idx++}::timestamp`);
+      whereClauses.push(`l.timestamp <= $${idx++}::timestamp`);
       params.push(to);
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+    const unionSql = `
+      WITH unified_logs AS (
+        SELECT
+          (-al.id)::bigint AS id,
+          NULL::int AS run_id,
+          NULL::int AS result_id,
+          al.severity::text AS log_level,
+          al.message AS message,
+          al.message AS detailed_description,
+          al.module::text AS source_component,
+          jsonb_strip_nulls(
+            jsonb_build_object(
+              'action', al.action,
+              'status', al.status,
+              'requestId', al.request_id,
+              'userId', al.user_id,
+              'username', al.username,
+              'httpMethod', al.http_method,
+              'httpPath', al.http_path,
+              'httpStatus', al.http_status,
+              'durationMs', al.duration_ms,
+              'metadata', al.metadata
+            )
+          ) AS log_context,
+          al.timestamp AS timestamp,
+          CASE
+            WHEN al.module IS NULL OR al.module = '' THEN 'Application'
+            ELSE INITCAP(al.module)
+          END::text AS source,
+          NULL::text AS run_status,
+          'Application'::text AS category,
+          al.action::text AS action,
+          al.status::text AS status
+        FROM app_logs al
+
+        UNION ALL
+
+        SELECT
+          el.id::bigint AS id,
+          el.run_id AS run_id,
+          el.result_id AS result_id,
+          el.log_level::text AS log_level,
+          el.message AS message,
+          COALESCE(el.detailed_description, el.message) AS detailed_description,
+          COALESCE(el.source_component, 'execution-engine')::text AS source_component,
+          COALESCE(el.log_context, '{}'::jsonb) AS log_context,
+          el.timestamp AS timestamp,
+          COALESCE(er.run_name, 'System Execution')::text AS source,
+          er.status::text AS run_status,
+          'Execution'::text AS category,
+          NULL::text AS action,
+          NULL::text AS status
+        FROM execution_logs el
+        LEFT JOIN execution_runs er ON el.run_id = er.id
+      )
+    `;
 
     const totalRows = await query<{ count: string }>(
       `
+      ${unionSql}
       SELECT COUNT(*)::text as count
-      FROM execution_logs el
+      FROM unified_logs l
       ${whereSql}
       `,
       params
@@ -416,25 +580,27 @@ router.get('/global-logs', async (req: AuthRequest, res: Response): Promise<void
     const total = Number(totalRows[0]?.count || 0);
 
     const dataParams = [...params, limit, offset];
-    const logs = await query<any>(
+    const logs = await query<UnifiedLogRow>(
       `
+      ${unionSql}
       SELECT
-        el.id,
-        el.run_id as "runId",
-        el.result_id as "resultId",
-        el.log_level as severity,
-        el.message as detail,
-        el.detailed_description as "detailedDescription",
-        el.source_component as "sourceComponent",
-        el.log_context as context,
-        el.timestamp as time,
-        COALESCE(er.run_name, 'System Execution') as source,
-        er.status as "runStatus",
-        'Execution' as category
-      FROM execution_logs el
-      LEFT JOIN execution_runs er ON el.run_id = er.id
+        l.id,
+        l.run_id as "runId",
+        l.result_id as "resultId",
+        l.log_level as severity,
+        l.message as detail,
+        l.detailed_description as "detailedDescription",
+        l.source_component as "sourceComponent",
+        l.log_context as context,
+        l.timestamp as time,
+        l.source as source,
+        l.run_status as "runStatus",
+        l.category as category,
+        l.action as action,
+        l.status as status
+      FROM unified_logs l
       ${whereSql}
-      ORDER BY el.timestamp DESC
+      ORDER BY ${sortBy} ${sortOrder}
       LIMIT $${idx++} OFFSET $${idx}
       `,
       dataParams
@@ -449,8 +615,10 @@ router.get('/global-logs', async (req: AuthRequest, res: Response): Promise<void
           : log.detail || '',
       message: log.detail,
       detailedDescription: log.detailedDescription || log.detail || '',
-      sourceComponent: log.sourceComponent || 'execution-engine',
+      sourceComponent: log.sourceComponent || (log.category === 'Application' ? 'application-api' : 'execution-engine'),
       context: log.context || {},
+      action: log.action || undefined,
+      status: log.status || log.runStatus || undefined,
     }));
 
     res.json({

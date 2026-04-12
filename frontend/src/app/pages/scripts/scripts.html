@@ -5,7 +5,9 @@
       <p class="subtitle">Manage your ST automation test scripts</p>
     </div>
     <div class="header-actions">
-      <p-button label="Sync from Project" icon="pi pi-play" severity="secondary" [loading]="syncing()" (onClick)="syncScripts()" />
+      <input type="file" #fileInput accept=".java" style="display: none;" (change)="onFileImport($event)" />
+      <p-button label="Import Script" icon="pi pi-upload" severity="secondary" (onClick)="fileInput.click()" />
+      <p-button label="Sync Workspace" icon="pi pi-refresh" severity="primary" (onClick)="syncScripts()" />
     </div>
   </div>
 
@@ -27,7 +29,31 @@
       [style]="{ minWidth: '200px' }"
     />
 
+    <p-select
+      [options]="availabilityFilterOptions"
+      [(ngModel)]="selectedAvailability"
+      optionLabel="label"
+      optionValue="value"
+      placeholder="All Status"
+      [showClear]="true"
+      (onChange)="onAvailabilityChange()"
+      [style]="{ minWidth: '210px' }"
+    />
+
     <span class="result-count">{{ filteredScripts().length }} scripts</span>
+  </div>
+
+  <!-- Bulk Actions Bar (Appears when scripts are selected) -->
+  <div class="bulk-actions-bar" *ngIf="selectedScripts().length > 0">
+    <div class="selection-info">
+      <i class="pi pi-check-circle"></i>
+      <span><strong>{{ selectedScripts().length }}</strong> scripts selected</span>
+    </div>
+    <div class="action-buttons">
+      <p-button label="Clear Selection" [text]="true" severity="secondary" size="small" (onClick)="selectedScripts.set([])" />
+      <p-button label="Run Selected" icon="pi pi-play" severity="success" size="small" (onClick)="runSelectedScripts()" />
+      <p-button *ngIf="auth.canEdit()" label="Remove Selected" icon="pi pi-trash" severity="danger" size="small" (onClick)="promptDeleteSelected()" />
+    </div>
   </div>
 
   <!-- Scripts Table -->
@@ -35,46 +61,103 @@
     <p-table
       [value]="filteredScripts()"
       [paginator]="true"
-      [rows]="15"
-      [rowsPerPageOptions]="[10, 15, 25, 50]"
+      [rows]="10"
+      [rowsPerPageOptions]="[10, 20, 30, 40, 50]"
       [loading]="loading()"
+      [rowHover]="true"
+      dataKey="id"
+      [selection]="selectedScripts()"
+      (selectionChange)="selectedScripts.set($event)"
       responsiveLayout="scroll"
       styleClass="p-datatable-sm"
       [globalFilterFields]="['name', 'className']"
     >
       <ng-template #header>
         <tr>
-          <th pSortableColumn="name">Name <p-sortIcon field="name" /></th>
+          <th style="width: 3rem"><p-tableHeaderCheckbox></p-tableHeaderCheckbox></th>
+          <th pSortableColumn="name" style="min-width: 250px">Script Details <p-sortIcon field="name" /></th>
           <th>Category</th>
-          <th>Class</th>
-          <th pSortableColumn="isActive">Status <p-sortIcon field="isActive" /></th>
-          <th style="width: 100px">Active</th>
-          <th style="width: 100px; text-align: center;">Execute</th>
+          <th pSortableColumn="isActive" style="width: 220px">Availability <p-sortIcon field="isActive" /></th>
+          <th style="width: 160px; text-align: center;">Actions</th>
         </tr>
       </ng-template>
       <ng-template #body let-script>
         <tr>
+          <td><p-tableCheckbox [value]="script"></p-tableCheckbox></td>
           <td>
-            <div class="script-name">
-              <i class="pi pi-file-edit"></i>
-              <span>{{ script.name }}</span>
+            <div class="script-detail-cell">
+              <div class="script-icon">
+                <i class="pi pi-file-edit"></i>
+              </div>
+              <div class="script-title-row">
+                <span class="script-name">{{ getDisplayScriptName(script) }}</span>
+                <button
+                  *ngIf="auth.canEdit()"
+                  type="button"
+                  class="rename-script-btn"
+                  (click)="openRenameDialog(script, $event)"
+                  pTooltip="Rename script"
+                  tooltipStyleClass="single-line-tooltip"
+                >
+                  <i class="pi pi-pencil"></i>
+                </button>
+              </div>
             </div>
           </td>
           <td>
             <p-tag [value]="getCategoryName(script.categoryId)" [severity]="getCategorySeverity(getCategoryName(script.categoryId))" />
           </td>
           <td>
-            <code class="class-name" [pTooltip]="script.className">{{ script.className.split('.').pop() }}</code>
-          </td>
-          <td>
-            <span class="status-dot" [class.active]="script.isActive"></span>
-            {{ script.isActive ? 'Enabled' : 'Disabled' }}
-          </td>
-          <td>
-            <p-toggleSwitch [ngModel]="script.isActive" (onChange)="toggleScript(script)" />
+            <p-select 
+              [options]="statusOptions" 
+              [(ngModel)]="script.isActive" 
+              optionLabel="label" 
+              optionValue="value" 
+              (onChange)="toggleScript(script)"
+              styleClass="inline-status-dropdown"
+              appendTo="body"
+            >
+              <ng-template pTemplate="selectedItem" let-selectedOption>
+                <div class="availability-pill" [ngClass]="selectedOption?.value ? 'ready' : 'maintenance'">
+                  <i [class]="selectedOption?.icon || (selectedOption?.value ? 'pi pi-check-circle' : 'pi pi-pause-circle')"></i>
+                  <span>{{ selectedOption?.label || (script.isActive ? 'Ready to Run' : 'Under Maintenance') }}</span>
+                </div>
+              </ng-template>
+              <ng-template pTemplate="item" let-option>
+                <div class="availability-pill option-item" [ngClass]="option.value ? 'ready' : 'maintenance'">
+                  <i [class]="option.icon"></i>
+                  <span>{{ option.label }}</span>
+                </div>
+              </ng-template>
+            </p-select>
           </td>
           <td style="text-align: center;">
-            <p-button icon="pi pi-play" [rounded]="true" [text]="true" severity="success" pTooltip="Run Script Now" routerLink="/runner" [queryParams]="{ select: script.id }" [disabled]="!script.isActive" />
+            <p-button 
+              icon="pi pi-play" 
+              [label]="'Run'"
+              [rounded]="true" 
+              [outlined]="true"
+              severity="success" 
+              size="small"
+              styleClass="run-action-btn"
+              pTooltip="Execute Script"
+              tooltipStyleClass="single-line-tooltip"
+              routerLink="/runner" 
+              [queryParams]="{ select: script.id }" 
+              [disabled]="!script.isActive" 
+            />
+            <p-button 
+              icon="pi pi-history" 
+              [rounded]="true" 
+              [text]="true"
+              severity="secondary" 
+              size="small"
+              styleClass="history-action-btn"
+              pTooltip="Execution History"
+              tooltipStyleClass="single-line-tooltip"
+              routerLink="/history" 
+              [queryParams]="{ search: script.name }" 
+            />
           </td>
         </tr>
       </ng-template>
@@ -92,3 +175,160 @@
     </p-table>
   </p-card>
 </div>
+
+<!-- Workspace Sync Dialog -->
+<p-dialog 
+  header="Workspace Synchronization" 
+  [visible]="syncDialogVisible()" 
+  (visibleChange)="syncDialogVisible.set($event)" 
+  [modal]="true" 
+  [closable]="syncStats() !== null"
+  [style]="{ width: '450px' }"
+>
+  <div class="sync-dialog-content">
+    <div class="sync-header">
+      <i class="pi pi-sync" [class.spin]="syncStats() === null"></i>
+      <h3>{{ syncPhase() }}</h3>
+    </div>
+    
+    <p-progressBar [value]="syncProgress()" [showValue]="false" styleClass="sync-progress" />
+
+    <div class="sync-stats-grid" *ngIf="syncStats() as stats">
+      <div class="stat-box success">
+        <span class="val">{{ stats.added }}</span>
+        <span class="lbl">Added</span>
+      </div>
+      <div class="stat-box info">
+        <span class="val">{{ stats.updated }}</span>
+        <span class="lbl">Updated</span>
+      </div>
+      <div class="stat-box danger">
+        <span class="val">{{ stats.removed }}</span>
+        <span class="lbl">Removed</span>
+      </div>
+      <div class="stat-box warn" *ngIf="stats.skipped > 0">
+        <span class="val">{{ stats.skipped }}</span>
+        <span class="lbl">Skipped</span>
+      </div>
+    </div>
+
+    <div class="sync-details" *ngIf="syncStats() as stats">
+      <div class="detail-group" *ngIf="stats.added > 0">
+        <div class="detail-row"><i class="pi pi-plus-circle" style="color: #10b981"></i> Successfully registered {{ stats.added }} new scripts to database.</div>
+        <div class="script-name-list" *ngIf="syncDetails()?.added?.length">
+          <span class="script-chip success" *ngFor="let name of syncDetails()?.added">{{ name }}</span>
+        </div>
+      </div>
+      <div class="detail-group" *ngIf="stats.updated > 0">
+        <div class="detail-row"><i class="pi pi-file-edit" style="color: var(--noesis-primary)"></i> Updated metadata for {{ stats.updated }} existing scripts.</div>
+        <div class="script-name-list" *ngIf="syncDetails()?.updated?.length">
+          <span class="script-chip info" *ngFor="let name of syncDetails()?.updated">{{ name }}</span>
+        </div>
+      </div>
+      <div class="detail-group" *ngIf="stats.removed > 0">
+        <div class="detail-row"><i class="pi pi-trash" style="color: #ef4444"></i> Cleaned up {{ stats.removed }} orphaned scripts.</div>
+        <div class="script-name-list" *ngIf="syncDetails()?.removed?.length">
+          <span class="script-chip danger" *ngFor="let name of syncDetails()?.removed">{{ name }}</span>
+        </div>
+      </div>
+      <div class="detail-group" *ngIf="stats.skipped > 0">
+        <div class="detail-row"><i class="pi pi-exclamation-triangle" style="color: #f59e0b"></i> Skipped {{ stats.skipped }} scripts due to conflicts or parsing issues.</div>
+        <div class="script-name-list" *ngIf="syncDetails()?.skipped?.length">
+          <span class="script-chip warn" *ngFor="let name of syncDetails()?.skipped">{{ name }}</span>
+        </div>
+      </div>
+      <div class="detail-row" *ngIf="stats.added === 0 && stats.updated === 0 && stats.removed === 0 && stats.skipped === 0">
+        <i class="pi pi-check-circle" style="color: var(--text-color-secondary)"></i> Workspace is already completely up to date.
+      </div>
+    </div>
+  </div>
+</p-dialog>
+
+<!-- File Import Upload Progress Dialog -->
+<p-dialog header="Importing Script" [visible]="importDialogVisible()" [closable]="false" [modal]="true" [style]="{width: '400px'}">
+  <div class="import-dialog-content">
+    <i class="pi pi-cloud-upload"></i>
+    <p>Uploading and analyzing <strong>{{ selectedFileName() }}</strong>...</p>
+    <p-progressBar [value]="importProgress()" [showValue]="false"></p-progressBar>
+  </div>
+</p-dialog>
+
+<p-dialog
+  header="Remove Scripts"
+  [visible]="deleteDialogVisible()"
+  (visibleChange)="deleteDialogVisible.set($event)"
+  [modal]="true"
+  [closable]="true"
+  position="top"
+  styleClass="safe-alert-dialog"
+  [style]="{ width: '430px' }"
+>
+  <div class="alert-dialog-content warn">
+    <i class="pi pi-exclamation-triangle"></i>
+    <p>{{ getDeleteDialogMessage() }}</p>
+  </div>
+  <ng-template #footer>
+    <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="closeDeleteDialog()" />
+    <p-button label="Remove" icon="pi pi-trash" severity="danger" [loading]="deletingScripts()" (onClick)="confirmDeleteSelected()" />
+  </ng-template>
+</p-dialog>
+
+<p-dialog
+  header="Rename Script"
+  [visible]="renameDialogVisible()"
+  (visibleChange)="renameDialogVisible.set($event)"
+  [modal]="true"
+  [closable]="true"
+  position="top"
+  styleClass="safe-alert-dialog"
+  [style]="{ width: '420px' }"
+>
+  <div class="rename-script-dialog">
+    <label for="script-rename-input">Script name</label>
+    <input
+      id="script-rename-input"
+      type="text"
+      pInputText
+      [ngModel]="renameScriptName()"
+      (ngModelChange)="renameScriptName.set($event)"
+      maxlength="200"
+      autocomplete="off"
+      placeholder="Enter script name"
+    />
+  </div>
+  <ng-template #footer>
+    <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="closeRenameDialog()" />
+    <p-button label="Save" icon="pi pi-check" [loading]="renamingScript()" (onClick)="saveScriptName()" />
+  </ng-template>
+</p-dialog>
+
+<p-dialog
+  [header]="alertDialogTitle()"
+  [visible]="alertDialogVisible()"
+  (visibleChange)="alertDialogVisible.set($event)"
+  [modal]="true"
+  [closable]="true"
+  position="top"
+  styleClass="safe-alert-dialog"
+  [style]="{ width: '420px' }"
+>
+  <div class="alert-dialog-content" [ngClass]="alertDialogSeverity()">
+    <i
+      [class]="
+        alertDialogSeverity() === 'success'
+          ? 'pi pi-check-circle'
+          : alertDialogSeverity() === 'warn'
+          ? 'pi pi-exclamation-triangle'
+          : alertDialogSeverity() === 'error'
+          ? 'pi pi-times-circle'
+          : 'pi pi-info-circle'
+      "
+    ></i>
+    <p>{{ alertDialogMessage() }}</p>
+  </div>
+  <ng-template #footer>
+    <p-button label="OK" icon="pi pi-check" (onClick)="closeAlertDialog()" />
+  </ng-template>
+</p-dialog>
+
+<p-toast position="bottom-right" />

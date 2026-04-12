@@ -92,6 +92,8 @@ export class LogsPage implements OnInit, OnDestroy {
   searchTerm = '';
   selectedSeverity: string | null = null;
   selectedRunId: number | null = null;
+  selectedModule: string | null = null;
+  selectedAction: string | null = null;
   dateFrom = '';
   dateTo = '';
 
@@ -99,11 +101,16 @@ export class LogsPage implements OnInit, OnDestroy {
   draftSearchTerm = '';
   draftSelectedSeverity: string | null = null;
   draftSelectedRunId: number | null = null;
+  draftSelectedModule: string | null = null;
+  draftSelectedAction: string | null = null;
   draftDateFrom = '';
   draftDateTo = '';
 
+  firstRow = signal(0);
   rowsPerPage = 10;
   readonly rowsPerPageOptions = [10, 20, 30, 40, 50];
+  private sortBy: string = 'timestamp';
+  private sortOrder: 'asc' | 'desc' = 'desc';
 
   totalRecords = signal(0);
 
@@ -116,6 +123,8 @@ export class LogsPage implements OnInit, OnDestroy {
   ];
 
   expandedRows: { [key: string]: boolean } = {};
+  moduleOptions: FilterOption[] = [{ label: 'All Modules', value: null }];
+  actionOptions: FilterOption[] = [{ label: 'All Actions', value: null }];
 
   readonly runOptions = computed<FilterOption[]>(() => {
     const map = new Map<number, string>();
@@ -152,7 +161,9 @@ export class LogsPage implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    this.setDefaultDateRange();
     this.loadCachedLogs();
+    this.loadFilterDropdowns();
     this.fetchLogs(false);
     if (this.autoRefresh()) {
       this.startAutoRefresh();
@@ -170,15 +181,29 @@ export class LogsPage implements OnInit, OnDestroy {
 
     const { fromIso, toIso } = this.getDateRangeIso();
     const requestFilters: {
+      q?: string;
+      severity?: string;
+      runId?: number;
+      module?: string;
+      action?: string;
       from?: string;
       to?: string;
+      sortBy: string;
+      sortOrder: 'asc' | 'desc';
       limit: number;
       offset: number;
     } = {
-      limit: 3000,
-      offset: 0,
+      sortBy: this.sortBy,
+      sortOrder: this.sortOrder,
+      limit: this.rowsPerPage,
+      offset: this.firstRow(),
     };
 
+    if (this.searchTerm.trim()) requestFilters.q = this.searchTerm.trim();
+    if (this.selectedSeverity) requestFilters.severity = this.selectedSeverity;
+    if (this.selectedRunId !== null) requestFilters.runId = this.selectedRunId;
+    if (this.selectedModule) requestFilters.module = this.selectedModule;
+    if (this.selectedAction) requestFilters.action = this.selectedAction;
     if (fromIso) requestFilters.from = fromIso;
     if (toIso) requestFilters.to = toIso;
 
@@ -207,23 +232,26 @@ export class LogsPage implements OnInit, OnDestroy {
 
           this.loading.set(false);
         },
-        error: () => {
+        error: (err) => {
           this.loading.set(false);
+          const status = Number(err?.status || 0);
           const cached = this.readCachedLogs();
-          if (cached.length > 0) {
+          if (cached.length > 0 && status === 0) {
             this.allLogs.set(cached);
             this.applyFilters();
             this.messageService.add({
               severity: 'warn',
               summary: 'Showing Cached Logs',
-              detail: 'Could not reach server. Displaying last loaded logs.',
+              detail: 'Server is unreachable. Displaying last loaded logs.',
             });
             return;
           }
           this.messageService.add({
             severity: 'error',
             summary: 'Unable to Load Logs',
-            detail: 'Could not fetch logs from the server.',
+            detail: status === 0
+              ? 'Could not reach server.'
+              : 'Failed to fetch logs from server.',
           });
         },
       });
@@ -250,28 +278,37 @@ export class LogsPage implements OnInit, OnDestroy {
     if (this.selectedRunId !== null) {
       result = result.filter((log) => log.runId === this.selectedRunId);
     }
+    if (this.selectedModule) {
+      const moduleTerm = this.selectedModule.toLowerCase();
+      result = result.filter(
+        (log) =>
+          (log.sourceComponent || '').toLowerCase().includes(moduleTerm) ||
+          (log.source || '').toLowerCase().includes(moduleTerm)
+      );
+    }
+    if (this.selectedAction) {
+      const selectedAction = this.selectedAction.toLowerCase();
+      result = result.filter((log) => {
+        const action = String((log.context || {})['action'] || '').toLowerCase();
+        return action === selectedAction;
+      });
+    }
 
     result.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     this.filteredLogs.set(result);
   }
 
   applySelectedFilters(): void {
-    const prevStart = this.dateFrom;
-    const prevEnd = this.dateTo;
-
     this.searchTerm = this.draftSearchTerm;
     this.selectedSeverity = this.draftSelectedSeverity;
     this.selectedRunId = this.draftSelectedRunId;
+    this.selectedModule = this.draftSelectedModule;
+    this.selectedAction = this.draftSelectedAction;
     this.dateFrom = this.draftDateFrom;
     this.dateTo = this.draftDateTo;
-
-    const dateChanged = prevStart !== this.dateFrom || prevEnd !== this.dateTo;
-    if (dateChanged) {
-      this.fetchLogs(false);
-      return;
-    }
-
-    this.applyFilters();
+    this.firstRow.set(0);
+    this.loadFilterDropdowns();
+    this.fetchLogs(false);
   }
 
   isFilterDirty(): boolean {
@@ -279,6 +316,8 @@ export class LogsPage implements OnInit, OnDestroy {
       this.draftSearchTerm !== this.searchTerm ||
       this.draftSelectedSeverity !== this.selectedSeverity ||
       this.draftSelectedRunId !== this.selectedRunId ||
+      this.draftSelectedModule !== this.selectedModule ||
+      this.draftSelectedAction !== this.selectedAction ||
       this.draftDateFrom !== this.dateFrom ||
       this.draftDateTo !== this.dateTo
     );
@@ -414,16 +453,23 @@ export class LogsPage implements OnInit, OnDestroy {
     this.searchTerm = '';
     this.selectedSeverity = null;
     this.selectedRunId = null;
-    this.dateFrom = '';
-    this.dateTo = '';
+    this.selectedModule = null;
+    this.selectedAction = null;
+    this.setDefaultDateRange();
+    this.firstRow.set(0);
+    this.sortBy = 'timestamp';
+    this.sortOrder = 'desc';
 
     this.draftSearchTerm = '';
     this.draftSelectedSeverity = null;
     this.draftSelectedRunId = null;
-    this.draftDateFrom = '';
-    this.draftDateTo = '';
+    this.draftSelectedModule = null;
+    this.draftSelectedAction = null;
+    this.draftDateFrom = this.dateFrom;
+    this.draftDateTo = this.dateTo;
 
     this.applyFilters();
+    this.loadFilterDropdowns();
     this.fetchLogs(false);
   }
 
@@ -729,6 +775,83 @@ export class LogsPage implements OnInit, OnDestroy {
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
+  }
+
+  private setDefaultDateRange(): void {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+
+    const from = this.toDateInput(yesterday);
+    const to = this.toDateInput(today);
+
+    this.dateFrom = from;
+    this.dateTo = to;
+    this.draftDateFrom = from;
+    this.draftDateTo = to;
+  }
+
+  onLazyLoad(event: any): void {
+    const nextFirst = Number(event?.first ?? 0);
+    const nextRows = Number(event?.rows ?? this.rowsPerPage);
+
+    this.firstRow.set(Number.isFinite(nextFirst) ? Math.max(nextFirst, 0) : 0);
+    this.rowsPerPage = Number.isFinite(nextRows) && nextRows > 0 ? nextRows : this.rowsPerPage;
+    this.sortBy = this.mapSortField(String(event?.sortField || 'timestamp'));
+    this.sortOrder = event?.sortOrder === 1 ? 'asc' : 'desc';
+
+    this.fetchLogs(false);
+  }
+
+  onModuleDraftChange(): void {
+    this.draftSelectedAction = null;
+    this.loadActionOptions(this.draftSelectedModule || undefined);
+  }
+
+  private mapSortField(field: string): string {
+    const allowed = new Set(['timestamp', 'severity', 'source', 'action', 'status', 'runId']);
+    return allowed.has(field) ? field : 'timestamp';
+  }
+
+  private loadFilterDropdowns(): void {
+    this.loadModuleOptions();
+    this.loadActionOptions(this.draftSelectedModule || this.selectedModule || undefined);
+  }
+
+  private loadModuleOptions(): void {
+    const { fromIso, toIso } = this.getDateRangeIso();
+    this.executionService
+      .getLogModules({ from: fromIso, to: toIso })
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (items) => {
+          this.moduleOptions = [
+            { label: 'All Modules', value: null },
+            ...items.map((item) => ({ label: item.label, value: item.value })),
+          ];
+        },
+        error: () => {
+          this.moduleOptions = [{ label: 'All Modules', value: null }];
+        },
+      });
+  }
+
+  private loadActionOptions(module?: string): void {
+    const { fromIso, toIso } = this.getDateRangeIso();
+    this.executionService
+      .getLogActions({ from: fromIso, to: toIso, module })
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (items) => {
+          this.actionOptions = [
+            { label: 'All Actions', value: null },
+            ...items.map((item) => ({ label: item.label, value: item.value })),
+          ];
+        },
+        error: () => {
+          this.actionOptions = [{ label: 'All Actions', value: null }];
+        },
+      });
   }
 
   private escapeCsv(value: string): string {

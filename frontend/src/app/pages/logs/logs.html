@@ -102,7 +102,7 @@
 
   <p-card styleClass="filters-card">
     <div class="filters-grid">
-      <p-iconfield>
+      <p-iconfield class="search-field">
         <p-inputicon styleClass="pi pi-search" />
         <input
           pInputText
@@ -130,9 +130,34 @@
         [showClear]="true"
       />
 
+      <p-select
+        [options]="moduleOptions"
+        [(ngModel)]="draftSelectedModule"
+        optionLabel="label"
+        optionValue="value"
+        placeholder="Module"
+        [showClear]="true"
+        (onChange)="onModuleDraftChange()"
+      />
+
+      <p-select
+        [options]="actionOptions"
+        [(ngModel)]="draftSelectedAction"
+        optionLabel="label"
+        optionValue="value"
+        placeholder="Action"
+        [showClear]="true"
+      />
+
       <div class="date-filter-group">
-        <input type="date" [(ngModel)]="draftDateFrom" />
-        <input type="date" [(ngModel)]="draftDateTo" />
+        <label class="date-input">
+          <span>From Date</span>
+          <input type="date" [(ngModel)]="draftDateFrom" />
+        </label>
+        <label class="date-input">
+          <span>To Date</span>
+          <input type="date" [(ngModel)]="draftDateTo" />
+        </label>
       </div>
 
       <div class="quick-range">
@@ -142,15 +167,17 @@
         <p-button label="Clear" [text]="true" severity="secondary" styleClass="quick-btn" (onClick)="clearFilters()" />
       </div>
 
-      <p-button
-        icon="pi pi-filter"
-        severity="primary"
-        styleClass="apply-filter-btn"
-        [disabled]="!isFilterDirty()"
-        pTooltip="Apply Filters"
-        tooltipPosition="bottom"
-        (onClick)="applySelectedFilters()"
-      />
+      <div class="apply-filter-wrap">
+        <p-button
+          icon="pi pi-filter"
+          severity="primary"
+          styleClass="apply-filter-btn"
+          [disabled]="!isFilterDirty()"
+          pTooltip="Apply Filters"
+          tooltipPosition="bottom"
+          (onClick)="applySelectedFilters()"
+        />
+      </div>
     </div>
 
     <div class="filter-meta">
@@ -182,8 +209,12 @@
       [value]="filteredLogs()"
       [loading]="loading()"
       [paginator]="true"
+      [lazy]="true"
+      [first]="firstRow()"
       [rows]="rowsPerPage"
       [rowsPerPageOptions]="rowsPerPageOptions"
+      [totalRecords]="totalRecords()"
+      (onLazyLoad)="onLazyLoad($event)"
       responsiveLayout="scroll"
       styleClass="p-datatable-sm"
       dataKey="id"
@@ -194,10 +225,10 @@
         <tr>
           <th style="width: 3rem"><p-tableHeaderCheckbox></p-tableHeaderCheckbox></th>
           <th style="width: 2.8rem"></th>
-          <th style="width: 280px">Timestamp</th>
-          <th style="width: 120px">Severity</th>
-          <th style="width: 110px">Run</th>
-          <th style="width: 220px">Source</th>
+          <th pSortableColumn="timestamp" style="width: 280px">Timestamp <p-sortIcon field="timestamp" /></th>
+          <th pSortableColumn="severity" style="width: 120px">Severity <p-sortIcon field="severity" /></th>
+          <th pSortableColumn="runId" style="width: 110px">Run <p-sortIcon field="runId" /></th>
+          <th pSortableColumn="source" style="width: 220px">Source <p-sortIcon field="source" /></th>
           <th>Message</th>
           <th style="width: 190px; text-align: center">Actions</th>
         </tr>

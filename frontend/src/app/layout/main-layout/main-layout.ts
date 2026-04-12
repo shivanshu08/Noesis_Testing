@@ -39,7 +39,7 @@ export class MainLayout implements OnInit, OnDestroy {
 
   navItems = computed(() => {
     const items = [
-      { label: 'Dashboard', icon: 'pi pi-objects-column', route: '/dashboard' },
+      { label: 'Dashboard', icon: 'pi pi-home', route: '/dashboard' },
       { label: 'Scripts', icon: 'pi pi-file-edit', route: '/scripts' },
         { label: 'Test Suites', icon: 'pi pi-sitemap', route: '/suites' },
     ];

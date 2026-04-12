@@ -39,6 +39,43 @@ a {
   text-decoration: none;
 }
 
+.p-tooltip .p-tooltip-text {
+  white-space: nowrap;
+  max-width: none;
+}
+
+.alert-dialog-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.alert-dialog-content i {
+  font-size: 1.25rem;
+  margin-top: 2px;
+}
+
+.alert-dialog-content p {
+  margin: 0;
+  line-height: 1.5;
+  color: var(--text-color);
+}
+
+.alert-dialog-content.success i { color: #10b981; }
+.alert-dialog-content.info i { color: var(--noesis-primary); }
+.alert-dialog-content.warn i { color: #f59e0b; }
+.alert-dialog-content.error i { color: #ef4444; }
+
+.safe-alert-dialog.p-dialog {
+  margin-top: 0.75rem;
+}
+
+.safe-alert-dialog .p-dialog-content {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
 // Scrollbar styling
 ::-webkit-scrollbar {
   width: 6px;

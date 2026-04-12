@@ -17,6 +17,7 @@ import { ExecutionService } from '../../services/execution.service';
 import { Script, ScriptCategory } from '../../models/interfaces';
 import { AuthService } from '../../services/auth.service';
 import { MessageService } from 'primeng/api';
+import { Subscription } from 'rxjs';
 
 interface SelectableScript extends Script {
   selected: boolean;
@@ -47,6 +48,7 @@ export class Runner implements OnInit, OnDestroy {
   selectedCategory: number | null = null;
   searchTerm = '';
   autoScroll = true;
+  private scriptRegistrySubscription?: Subscription;
 
   constructor(
     private scriptService: ScriptService,
@@ -56,16 +58,9 @@ export class Runner implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit() {
-    this.scriptService.getCategories().subscribe({
-      next: (data) => this.categories.set(data),
-    });
-
-    this.scriptService.getScripts().subscribe({
-      next: (data) => {
-        this.scripts.set(data.filter(s => s.isActive).map(s => ({ ...s, selected: false })));
-        this.loading.set(false);
-      },
-      error: () => this.loading.set(false),
+    this.loadRegistryData();
+    this.scriptRegistrySubscription = this.scriptService.scriptRegistryUpdated$.subscribe(() => {
+      this.loadRegistryData();
     });
   }
 
@@ -73,6 +68,7 @@ export class Runner implements OnInit, OnDestroy {
     if (this.currentRunId()) {
       this.executionService.disconnectFromRun();
     }
+    this.scriptRegistrySubscription?.unsubscribe();
   }
 
   get filteredScripts(): SelectableScript[] {
@@ -224,5 +220,21 @@ export class Runner implements OnInit, OnDestroy {
 
   getCategoryName(catId: number): string {
     return this.categories().find(c => c.id === catId)?.name || 'Unknown';
+  }
+
+  private loadRegistryData() {
+    this.loading.set(true);
+
+    this.scriptService.getCategories().subscribe({
+      next: (data) => this.categories.set(data),
+    });
+
+    this.scriptService.getScripts().subscribe({
+      next: (data) => {
+        this.scripts.set(data.filter(s => s.isActive).map(s => ({ ...s, selected: false })));
+        this.loading.set(false);
+      },
+      error: () => this.loading.set(false),
+    });
   }
 }

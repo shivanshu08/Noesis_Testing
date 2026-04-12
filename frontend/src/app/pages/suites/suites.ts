@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { CardModule } from 'primeng/card';
@@ -18,6 +18,7 @@ import { ExecutionService } from '../../services/execution.service';
 import { TestSuite, Script } from '../../models/interfaces';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-suites',
@@ -31,7 +32,7 @@ import { AuthService } from '../../services/auth.service';
   templateUrl: './suites.html',
   styleUrl: './suites.scss',
 })
-export class Suites implements OnInit {
+export class Suites implements OnInit, OnDestroy {
   suites = signal<TestSuite[]>([]);
   allScripts = signal<Script[]>([]);
   loading = signal(true);
@@ -41,6 +42,7 @@ export class Suites implements OnInit {
   editId: number | null = null;
 
   form = { name: '', description: '', scriptIds: [] as number[] };
+  private scriptRegistrySubscription?: Subscription;
 
   constructor(
     private suiteService: SuiteService,
@@ -53,9 +55,15 @@ export class Suites implements OnInit {
 
   ngOnInit() {
     this.loadSuites();
-    this.scriptService.getScripts().subscribe({
-      next: (data) => this.allScripts.set(data),
+    this.loadAllScripts();
+    this.scriptRegistrySubscription = this.scriptService.scriptRegistryUpdated$.subscribe(() => {
+      this.loadSuites();
+      this.loadAllScripts();
     });
+  }
+
+  ngOnDestroy() {
+    this.scriptRegistrySubscription?.unsubscribe();
   }
 
   loadSuites() {
@@ -135,6 +143,12 @@ export class Suites implements OnInit {
       next: (res) => {
         this.router.navigate(['/run', res.runId]);
       },
+    });
+  }
+
+  private loadAllScripts() {
+    this.scriptService.getScripts().subscribe({
+      next: (data) => this.allScripts.set(data),
     });
   }
 }

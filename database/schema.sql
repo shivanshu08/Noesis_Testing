@@ -199,6 +199,34 @@ CREATE TABLE IF NOT EXISTS execution_logs (
 CREATE INDEX IF NOT EXISTS idx_logs_run_timestamp ON execution_logs(run_id, timestamp);
 
 -- ============================================================
+-- Centralized Application Logs (API + System + Audit)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS app_logs (
+    id BIGSERIAL PRIMARY KEY,
+    timestamp TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    action VARCHAR(120) NOT NULL,
+    module VARCHAR(120) NOT NULL,
+    severity VARCHAR(10) NOT NULL DEFAULT 'INFO',
+    status VARCHAR(40) NOT NULL DEFAULT 'SUCCESS',
+    user_id INT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
+    username VARCHAR(120) DEFAULT NULL,
+    message TEXT NOT NULL,
+    request_id VARCHAR(120) DEFAULT NULL,
+    http_method VARCHAR(10) DEFAULT NULL,
+    http_path VARCHAR(600) DEFAULT NULL,
+    http_status INT DEFAULT NULL,
+    duration_ms INT DEFAULT NULL,
+    metadata JSONB DEFAULT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_logs_timestamp ON app_logs(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_app_logs_severity_timestamp ON app_logs(severity, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_app_logs_module_timestamp ON app_logs(module, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_app_logs_action_timestamp ON app_logs(action, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_app_logs_user_timestamp ON app_logs(user_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_app_logs_http_status_timestamp ON app_logs(http_status, timestamp DESC);
+
+-- ============================================================
 -- Scheduled Runs
 -- ============================================================
 CREATE TABLE IF NOT EXISTS scheduled_runs (

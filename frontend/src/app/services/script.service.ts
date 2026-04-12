@@ -1,12 +1,14 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, Subject } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { Script, ScriptCategory } from '../models/interfaces';
 
 @Injectable({ providedIn: 'root' })
 export class ScriptService {
   private readonly apiUrl = `${environment.apiUrl}/scripts`;
+  private readonly scriptRegistryUpdatedSubject = new Subject<void>();
+  readonly scriptRegistryUpdated$ = this.scriptRegistryUpdatedSubject.asObservable();
 
   constructor(private http: HttpClient) {}
 
@@ -32,5 +34,23 @@ export class ScriptService {
 
   syncScripts(): Observable<any> {
     return this.http.post(`${this.apiUrl}/sync`, {});
+  }
+
+  importScript(file: File): Observable<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post(`${this.apiUrl}/import`, formData);
+  }
+
+  deleteScript(id: number): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/${id}`);
+  }
+
+  deleteScripts(ids: number[]): Observable<any> {
+    return this.http.post(`${this.apiUrl}/delete-multiple`, { ids });
+  }
+
+  notifyScriptRegistryUpdated(): void {
+    this.scriptRegistryUpdatedSubject.next();
   }
 }

@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import { query, execute } from '../database/connection';
 import { authenticate, AuthRequest } from '../middleware/auth';
@@ -7,14 +7,22 @@ import { logger } from '../utils/logger';
 const router = Router();
 
 // Admin-only middleware
-const adminOnly = (req: AuthRequest, res: Response, next: Function) => {
+const adminOnly = (req: AuthRequest, res: Response, next: NextFunction) => {
   if (req.userRole !== 'admin') {
-    return res.status(403).json({ error: 'Forbidden: Admin access required.' });
+    res.status(403).json({ error: 'Forbidden: Admin access required.' });
+    return;
   }
   next();
 };
 
 router.use(authenticate, adminOnly);
+
+function parseRouteId(idParam: string | string[] | undefined): number | null {
+  const raw = Array.isArray(idParam) ? idParam[0] : idParam;
+  if (!raw) return null;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 router.get('/', async (_req: AuthRequest, res: Response) => {
   try {
@@ -48,14 +56,25 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 
 router.put('/:id', async (req: AuthRequest, res: Response) => {
     try {
+        const userId = parseRouteId(req.params.id);
+        if (!userId) {
+          res.status(400).json({ error: 'Invalid user ID.' });
+          return;
+        }
+
         const { fullName, email, role, isActive, avatarUrl } = req.body;
-        await execute('UPDATE users SET full_name = $1, email = $2, role = $3, is_active = $4, avatar_url = $5 WHERE id = $6', [fullName, email || null, role, isActive, avatarUrl || null, parseInt(req.params.id)]);
+        await execute('UPDATE users SET full_name = $1, email = $2, role = $3, is_active = $4, avatar_url = $5 WHERE id = $6', [fullName, email || null, role, isActive, avatarUrl || null, userId]);
         res.json({ message: 'User updated successfully.' });
     } catch (error) { res.status(500).json({ error: 'Failed to update user.' }); }
 });
 
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
-    const userId = parseInt(req.params.id);
+    const userId = parseRouteId(req.params.id);
+    if (!userId) {
+      res.status(400).json({ error: 'Invalid user ID.' });
+      return;
+    }
+
     if (userId === req.userId) return res.status(400).json({ error: 'You cannot delete your own account.' });
     try {
         await execute('DELETE FROM users WHERE id = $1', [userId]);

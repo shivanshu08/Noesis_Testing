@@ -6,6 +6,7 @@ import { logger } from '../utils/logger';
 export interface AuthRequest extends Request {
   userId?: number;
   userRole?: string;
+  requestId?: string;
 }
 
 export function authenticate(req: AuthRequest, res: Response, next: NextFunction): void {

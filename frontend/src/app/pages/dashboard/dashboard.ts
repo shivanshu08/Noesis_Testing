@@ -12,6 +12,7 @@ import { ScriptService } from '../../services/script.service';
 import { AuthService } from '../../services/auth.service';
 import { ThemeService } from '../../services/theme.service';
 import { DashboardStats, ExecutionRun, ScriptCategory } from '../../models/interfaces';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-dashboard',
@@ -33,6 +34,7 @@ export class Dashboard implements OnInit, OnDestroy {
   doughnutChartOptions: any;
   
   private statInterval: any;
+  private scriptRegistrySubscription?: Subscription;
 
   constructor(
     private executionService: ExecutionService,
@@ -51,6 +53,9 @@ export class Dashboard implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.loadData();
+    this.scriptRegistrySubscription = this.scriptService.scriptRegistryUpdated$.subscribe(() => {
+      this.loadData();
+    });
     
     // Bulletproof Auto-Refresh: Update entire dashboard every 30 seconds silently
     this.statInterval = setInterval(() => this.loadData(), 30000);
@@ -58,6 +63,7 @@ export class Dashboard implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     if (this.statInterval) clearInterval(this.statInterval);
+    this.scriptRegistrySubscription?.unsubscribe();
   }
 
   loadData() {

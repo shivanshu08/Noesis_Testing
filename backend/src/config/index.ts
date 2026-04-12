@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import path from 'path';
 dotenv.config();
 
 export const config = {
@@ -20,7 +21,12 @@ export const config = {
   },
 
   stAutomation: {
+    source: (process.env.ST_AUTOMATION_SOURCE || 'git').toLowerCase() === 'git' ? 'git' : 'local',
     path: process.env.ST_AUTOMATION_PATH || 'D:\\ST Automation',
+    importPath: process.env.ST_AUTOMATION_IMPORT_PATH || path.join(process.cwd(), 'scripts'),
+    gitRepoUrl: process.env.ST_AUTOMATION_GIT_REPO_URL || 'https://github.com/prashantguleria/AutomationTesting.git',
+    gitCachePath: process.env.ST_AUTOMATION_GIT_CACHE_PATH || path.join(process.cwd(), '.cache', 'automation-testing-repo'),
+    gitBranch: process.env.ST_AUTOMATION_GIT_BRANCH || '',
     mavenHome: process.env.MAVEN_HOME || '',
   },
 

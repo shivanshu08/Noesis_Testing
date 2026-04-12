@@ -121,9 +121,21 @@
 
 .filters-grid {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1.2fr 1.15fr auto auto;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 12px;
-  align-items: center;
+  align-items: end;
+
+  > * {
+    min-width: 0;
+  }
+
+  .search-field {
+    grid-column: span 2;
+  }
+
+  .date-filter-group {
+    grid-column: span 2;
+  }
 }
 
 .date-filter-group {
@@ -131,13 +143,22 @@
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 
-  input {
-    height: 40px;
-    border-radius: 8px;
-    border: 1px solid var(--surface-border);
-    background: var(--surface-ground);
-    color: var(--text-color);
-    padding: 0 10px;
+  .date-input {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.74rem;
+    color: var(--noesis-text-secondary);
+    font-weight: 600;
+
+    input {
+      height: 40px;
+      border-radius: 8px;
+      border: 1px solid var(--surface-border);
+      background: var(--surface-ground);
+      color: var(--text-color);
+      padding: 0 10px;
+    }
   }
 }
 
@@ -145,6 +166,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-wrap: wrap;
 
   ::ng-deep .quick-btn.p-button {
     padding: 4px 10px;
@@ -154,6 +176,12 @@
     border-radius: 6px;
     background: transparent;
   }
+}
+
+.apply-filter-wrap {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
 }
 
 .filter-meta {
@@ -511,11 +539,21 @@
 @media (max-width: 1260px) {
   .filters-grid {
     grid-template-columns: 1fr 1fr;
+
+    .search-field,
+    .date-filter-group {
+      grid-column: 1 / -1;
+      min-width: 0;
+    }
   }
 
   .quick-range {
     justify-content: flex-start;
     grid-column: 1 / -1;
+  }
+
+  .apply-filter-wrap {
+    justify-content: flex-start;
   }
 
   .stats-grid {
