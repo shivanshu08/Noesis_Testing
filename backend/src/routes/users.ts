@@ -26,7 +26,7 @@ function parseRouteId(idParam: string | string[] | undefined): number | null {
 
 router.get('/', async (_req: AuthRequest, res: Response) => {
   try {
-    const users = await query('SELECT id, username, email, full_name, role, is_active, avatar_url, last_login, created_at FROM users ORDER BY created_at DESC');
+    const users = await query('SELECT id, username, email, full_name, role, is_active, avatar_url, last_login, run_count, suites_created, scripts_registered, created_at FROM users ORDER BY created_at DESC');
     res.json(users);
   } catch (error) {
     logger.error('List users error:', error);

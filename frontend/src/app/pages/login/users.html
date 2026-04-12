@@ -1,107 +1,239 @@
-<div style="background: var(--surface-card); padding: 2rem; border-radius: 12px; border: 1px solid var(--surface-border); box-shadow: 0 4px 20px rgba(0,0,0,0.05);">
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-    <h2 style="margin: 0; color: var(--text-color);">User Management</h2>
-    <p-button label="New User" icon="pi pi-plus" (onClick)="openNew()"></p-button>
+<div class="user-management-page">
+  <!-- Page Header -->
+  <div class="page-header mb-4">
+    <div class="header-content">
+      <div class="title-section">
+        <h1 class="page-title">User Management</h1>
+        <p class="page-subtitle">Manage system access, roles, and track individual user performance.</p>
+      </div>
+    </div>
   </div>
 
-  <p-table [value]="users()" [loading]="loading()" responsiveLayout="scroll" [rows]="10" [paginator]="true" styleClass="p-datatable-sm">
-    <ng-template pTemplate="header">
-      <tr>
-        <th>User</th>
-        <th>Full Name</th>
-        <th>Email</th>
-        <th>Role</th>
-        <th>Status</th>
-        <th style="width: 8rem; text-align: center;">Actions</th>
-      </tr>
-    </ng-template>
-    <ng-template pTemplate="body" let-user>
-      <tr>
-        <td>
-          <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <p-avatar [image]="user.avatar_url || undefined" [label]="!user.avatar_url ? (user.full_name?.charAt(0) || 'U') : ''" shape="circle" [style]="{ 'background': 'linear-gradient(135deg, var(--p-primary-500), var(--p-primary-400))', 'color': '#fff' }"></p-avatar>
-            <span style="font-weight: 600; color: var(--text-color);">{{user.username}}</span>
-          </div>
-        </td>
-        <td>{{user.full_name}}</td>
-        <td>{{user.email}}</td>
-        <td>
-          <p-tag [value]="user.role | titlecase" [severity]="user.role === 'admin' ? 'danger' : (user.role === 'tester' ? 'info' : 'success')"></p-tag>
-        </td>
-        <td>
-          <p-tag [value]="user.is_active ? 'Active' : 'Inactive'" [severity]="user.is_active ? 'success' : 'danger'"></p-tag>
-        </td>
-        <td style="display: flex; gap: 0.5rem; justify-content: center;">
-          <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" severity="secondary" (onClick)="editUser(user)"></p-button>
-          <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger" (onClick)="deleteUser(user)"></p-button>
-        </td>
-      </tr>
-    </ng-template>
-  </p-table>
+  <!-- Statistics Grid -->
+  <div class="stats-grid mb-4">
+    <div class="stat-card">
+      <div class="stat-icon total-users">
+        <i class="pi pi-users"></i>
+      </div>
+      <div class="stat-info">
+        <div class="stat-value">{{users().length}}</div>
+        <div class="stat-label">Total Users</div>
+      </div>
+    </div>
+    
+    <div class="stat-card">
+      <div class="stat-icon active-users">
+        <i class="pi pi-check-circle"></i>
+      </div>
+      <div class="stat-info">
+        <div class="stat-value text-success">{{activeCount()}}</div>
+        <div class="stat-label">Active Users</div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon run-stats">
+        <i class="pi pi-play"></i>
+      </div>
+      <div class="stat-info">
+        <div class="stat-value">{{totalRuns()}}</div>
+        <div class="stat-label">Total Runs Triggered</div>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon asset-stats">
+        <i class="pi pi-objects-column"></i>
+      </div>
+      <div class="stat-info">
+        <div class="stat-value">{{totalSuites() + totalScripts()}}</div>
+        <div class="stat-label">Assets Created</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters & Actions Card -->
+  <p-card class="filters-card mb-4" [style]="{'border-radius': '12px', 'overflow': 'visible'}">
+    <div class="filters-grid">
+      <div class="search-field">
+        <p-inputgroup>
+          <p-inputgroup-addon><i class="pi pi-search"></i></p-inputgroup-addon>
+          <input type="text" pInputText placeholder="Search by name, email, or username..." (input)="dt.filterGlobal($any($event.target).value, 'contains')" />
+        </p-inputgroup>
+      </div>
+      <div class="quick-filters">
+        <p-button [text]="true" severity="secondary" label="Refresh" icon="pi pi-refresh" (onClick)="loadUsers()" size="small"></p-button>
+        <p-button label="Add New User" icon="pi pi-user-plus" severity="primary" size="small" (onClick)="openNew()" class="action-btn shadow-dynamic ml-2"></p-button>
+      </div>
+    </div>
+  </p-card>
+
+  <!-- Users Table Card -->
+  <div class="table-container shadow-sm">
+    <p-table #dt [value]="users()" [loading]="loading()" responsiveLayout="scroll" [rows]="10" [paginator]="true" 
+             [rowsPerPageOptions]="[10,25,50]" styleClass="p-datatable-modern"
+             [globalFilterFields]="['username', 'full_name', 'email']">
+      <ng-template pTemplate="header">
+        <tr>
+          <th style="width: 25%">User Information</th>
+          <th style="width: 20%">Role & Access</th>
+          <th style="width: 15%">Activity Details</th>
+          <th style="width: 20%">Statistics</th>
+          <th style="width: 10%">Status</th>
+          <th style="width: 10%; text-align: center;">Actions</th>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-user>
+        <tr>
+          <td>
+            <div class="user-info-cell">
+              <p-avatar [image]="user.avatar_url || undefined" 
+                        [label]="!user.avatar_url ? (user.full_name?.charAt(0) || 'U') : ''" 
+                        shape="circle" class="user-avatar shadow-sm"></p-avatar>
+              <div class="user-details">
+                <span class="user-name">{{user.full_name}}</span>
+                <span class="user-handle">{{user.username}} • {{user.email}}</span>
+              </div>
+            </div>
+          </td>
+          <td>
+            <div class="role-badge" [ngClass]="user.role">
+              <i [class]="'pi ' + (user.role === 'admin' ? 'pi-shield' : (user.role === 'tester' ? 'pi-cog' : 'pi-eye'))"></i>
+              <span>{{user.role | titlecase}}</span>
+            </div>
+          </td>
+          <td>
+            <div class="activity-cell">
+                <span class="activity-label">Last Login</span>
+                <span class="activity-value">{{user.last_login ? (user.last_login | date:'MMM d, h:mm a') : 'Never'}}</span>
+            </div>
+          </td>
+          <td>
+            <div class="stats-mini-grid">
+                <div class="mini-stat" pTooltip="Total Runs Triggered" tooltipPosition="top">
+                    <i class="pi pi-play-circle text-info"></i>
+                    <span>{{user.run_count || 0}}</span>
+                </div>
+                <div class="mini-stat" pTooltip="Suites Created" tooltipPosition="top">
+                    <i class="pi pi-folder text-warning"></i>
+                    <span>{{user.suites_created || 0}}</span>
+                </div>
+                <div class="mini-stat" pTooltip="Scripts Registered" tooltipPosition="top">
+                    <i class="pi pi-file-code text-primary"></i>
+                    <span>{{user.scripts_registered || 0}}</span>
+                </div>
+            </div>
+          </td>
+          <td>
+            <div class="status-indicator">
+                <span class="status-dot" [ngClass]="{'active': user.is_active}"></span>
+                <span class="status-text">{{user.is_active ? 'Active' : 'Disabled'}}</span>
+            </div>
+          </td>
+          <td class="text-center actions-cell">
+            <div class="action-group">
+                <p-button icon="pi pi-user-edit" [rounded]="true" [text]="true" severity="info" (onClick)="editUser(user)" pTooltip="Edit User"></p-button>
+                <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger" (onClick)="deleteUser(user)" pTooltip="Delete User"></p-button>
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="emptymessage">
+        <tr>
+          <td colspan="6" class="text-center py-5">
+            <div class="empty-state">
+              <i class="pi pi-search-minus mb-3"></i>
+              <p>No users found matching your criteria.</p>
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </div>
 </div>
 
-<p-dialog [(visible)]="userDialog" [style]="{width: '550px'}" [header]="isEdit ? 'Edit User Details' : 'Create New User'" [modal]="true" styleClass="p-fluid" [draggable]="false">
-  <div style="display: flex; flex-direction: column; gap: 1.5rem; padding-top: 1rem;">
+<!-- User Dialog (Redesigned) -->
+<p-dialog [(visible)]="userDialog" [style]="{width: '600px'}" [header]="isEdit ? 'Update User Information' : 'Register New User'" 
+          [modal]="true" styleClass="p-fluid noesis-dialog" [draggable]="false" [resizable]="false">
+  <div class="dialog-content">
     
-    <!-- Profile Photo Section -->
-    <div style="display: flex; align-items: center; gap: 1.25rem;">
-      <p-avatar [image]="userForm.avatarUrl || undefined" [label]="!userForm.avatarUrl ? (userForm.fullName?.charAt(0) || 'U') : ''" shape="circle" [style]="{ width: '64px', height: '64px', 'font-size': '1.75rem', 'background': 'linear-gradient(135deg, var(--p-primary-500), var(--p-primary-400))', 'color': '#fff' }"></p-avatar>
-      <div style="display: flex; gap: 0.5rem;">
-        <input type="file" #fileInput accept="image/*" style="display: none;" (change)="onFileSelect($event)" />
-        <p-button label="Upload Photo" icon="pi pi-upload" severity="secondary" (onClick)="fileInput.click()"></p-button>
-        @if (userForm.avatarUrl) {
-          <p-button icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true" (onClick)="userForm.avatarUrl = ''" pTooltip="Remove Photo" />
-        }
+    <!-- Profile Header -->
+    <div class="profile-setup mb-4">
+      <div class="avatar-container">
+        <p-avatar [image]="userForm.avatarUrl || undefined" 
+                  [label]="!userForm.avatarUrl ? (userForm.fullName?.charAt(0) || 'U') : ''" 
+                  shape="circle" class="large-avatar shadow-lg"></p-avatar>
+        <button class="avatar-edit-btn" (click)="fileInput.click()">
+          <i class="pi pi-camera"></i>
+        </button>
       </div>
+      <div class="profile-meta">
+        <h3>{{userForm.fullName || 'New User Profile'}}</h3>
+        <p>{{userForm.email || 'Assign account details below'}}</p>
+      </div>
+      <input type="file" #fileInput accept="image/*" style="display: none;" (change)="onFileSelect($event)" />
     </div>
 
-    <div style="display: flex; gap: 1rem;">
-      <div style="flex: 1;">
-        <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">Full Name</label>
+    <div class="form-grid">
+      <div class="form-field full">
+        <label>Full Legal Name</label>
         <p-inputgroup>
           <p-inputgroup-addon><i class="pi pi-id-card"></i></p-inputgroup-addon>
-          <input type="text" pInputText [(ngModel)]="userForm.fullName" placeholder="e.g. John Doe" required />
+          <input type="text" pInputText [(ngModel)]="userForm.fullName" placeholder="Enter full name..." required />
         </p-inputgroup>
       </div>
-      <div style="flex: 1;">
-        <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">Username</label>
-        <p-inputgroup>
-          <p-inputgroup-addon><i class="pi pi-user"></i></p-inputgroup-addon>
-          <input type="text" pInputText [(ngModel)]="userForm.username" placeholder="e.g. jdoe" required [disabled]="isEdit" />
-        </p-inputgroup>
-      </div>
-    </div>
 
-    <div style="display: flex; gap: 1rem;">
-      <div style="flex: 1;">
-        <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">Email Address</label>
+      <div class="form-field">
+        <label>System Username</label>
+        <p-inputgroup>
+          <p-inputgroup-addon><i class="pi pi-at"></i></p-inputgroup-addon>
+          <input type="text" pInputText [(ngModel)]="userForm.username" placeholder="Unique username" required [disabled]="isEdit" />
+        </p-inputgroup>
+      </div>
+
+      <div class="form-field">
+        <label>Work Email</label>
         <p-inputgroup>
           <p-inputgroup-addon><i class="pi pi-envelope"></i></p-inputgroup-addon>
-          <input type="email" pInputText [(ngModel)]="userForm.email" placeholder="john@company.com" required />
+          <input type="email" pInputText [(ngModel)]="userForm.email" placeholder="email@company.com" required />
         </p-inputgroup>
       </div>
-      <div style="flex: 1;">
-        <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">Role</label>
-        <p-select [options]="roles" [(ngModel)]="userForm.role" optionLabel="label" optionValue="value" appendTo="body"></p-select>
-      </div>
-    </div>
 
-    @if (!isEdit) {
-      <div>
-        <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-color);">Temporary Password</label>
-        <p-password [(ngModel)]="userForm.password" [toggleMask]="true" placeholder="Assign a secure password" styleClass="w-full" inputStyleClass="w-full" [style]="{ width: '100%' }" [inputStyle]="{ width: '100%' }"></p-password>
+      <div class="form-field">
+        <label>Access Role</label>
+        <p-select [options]="roles" [(ngModel)]="userForm.role" optionLabel="label" optionValue="value" 
+                  appendTo="body" class="role-selector"></p-select>
+        <small class="text-muted mt-1 block">Determines platform permissions.</small>
       </div>
-    }
 
-    <div style="display: flex; align-items: center; gap: 0.75rem; margin-top: 0.5rem; padding-top: 1rem; border-top: 1px solid var(--surface-border);">
-      <p-checkbox [(ngModel)]="userForm.isActive" [binary]="true" inputId="isActive"></p-checkbox>
-      <label for="isActive" style="color: var(--text-color); cursor: pointer; font-weight: 500;">Active Account (Can Login)</label>
+      @if (!isEdit) {
+        <div class="form-field">
+          <label>Initial Password</label>
+          <p-password [(ngModel)]="userForm.password" [toggleMask]="true" placeholder="Enter secure password" 
+                      styleClass="w-full" inputStyleClass="w-full"></p-password>
+        </div>
+      }
+
+      <div class="form-field full mt-3">
+        <div class="status-toggle-card">
+            <div class="flex align-items-center gap-3">
+                <p-checkbox [(ngModel)]="userForm.isActive" [binary]="true" inputId="isActive"></p-checkbox>
+                <div class="toggle-info">
+                    <label for="isActive" class="font-bold">Account Active</label>
+                    <p class="text-xs text-muted">When disabled, the user cannot sign in to the platform.</p>
+                </div>
+            </div>
+        </div>
+      </div>
     </div>
   </div>
+  
   <ng-template pTemplate="footer">
-    <p-button label="Cancel" icon="pi pi-times" [text]="true" severity="secondary" (onClick)="userDialog = false"></p-button>
-    <p-button label="Save" icon="pi pi-check" (onClick)="saveUser()"></p-button>
+    <div class="dialog-footer p-3">
+        <p-button label="Cancel" icon="pi pi-times" [text]="true" severity="secondary" (onClick)="userDialog = false"></p-button>
+        <p-button label="Confirm & Save" icon="pi pi-check" severity="primary" (onClick)="saveUser()" class="save-btn"></p-button>
+    </div>
   </ng-template>
 </p-dialog>
 
-<p-confirmDialog [style]="{width: '400px'}"></p-confirmDialog>
+<p-confirmDialog position="bottom" styleClass="noesis-confirm-dialog"></p-confirmDialog>

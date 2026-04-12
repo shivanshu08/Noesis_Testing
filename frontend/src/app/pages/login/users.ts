@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { TableModule } from 'primeng/table';
+import { CardModule } from 'primeng/card';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { InputTextModule } from 'primeng/inputtext';
@@ -22,9 +23,10 @@ import { AuthService } from '../../services/auth.service';
 @Component({
   selector: 'app-users',
   standalone: true,
-  imports: [CommonModule, FormsModule, TableModule, ButtonModule, DialogModule, InputTextModule, PasswordModule, SelectModule, TagModule, CheckboxModule, ConfirmDialogModule, AvatarModule, InputGroupModule, InputGroupAddonModule, FileUploadModule, TooltipModule],
+  imports: [CommonModule, FormsModule, TableModule, CardModule, ButtonModule, DialogModule, InputTextModule, PasswordModule, SelectModule, TagModule, CheckboxModule, ConfirmDialogModule, AvatarModule, InputGroupModule, InputGroupAddonModule, FileUploadModule, TooltipModule],
   providers: [ConfirmationService],
-  templateUrl: './users.html'
+  templateUrl: './users.html',
+  styleUrls: ['./users.scss']
 })
 export class Users implements OnInit {
   users = signal<any[]>([]);
@@ -32,6 +34,12 @@ export class Users implements OnInit {
   userDialog = false;
   userForm: any = {};
   isEdit = false;
+
+  // New Statistics Signals
+  totalRuns = signal(0);
+  totalSuites = signal(0);
+  totalScripts = signal(0);
+  activeCount = signal(0);
 
   roles = [
     { label: 'Admin', value: 'admin' },
@@ -59,6 +67,13 @@ export class Users implements OnInit {
     this.http.get<any[]>('http://localhost:3000/api/users', { headers: this.getHeaders() }).subscribe({
       next: (data) => {
         this.users.set(data);
+        
+        // Calculate Statistics
+        this.totalRuns.set(data.reduce((acc, user) => acc + (user.run_count || 0), 0));
+        this.totalSuites.set(data.reduce((acc, user) => acc + (user.suites_created || 0), 0));
+        this.totalScripts.set(data.reduce((acc, user) => acc + (user.scripts_registered || 0), 0));
+        this.activeCount.set(data.filter(user => user.is_active).length);
+        
         this.loading.set(false);
       },
       error: (err) => {

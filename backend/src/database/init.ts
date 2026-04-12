@@ -48,6 +48,15 @@ async function initDatabase() {
       await pool.query('ALTER TABLE users ALTER COLUMN email DROP NOT NULL');
     } catch (e) {}
 
+    // Ensure user statistics columns exist
+    try {
+      await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS run_count INT NOT NULL DEFAULT 0');
+      await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS suites_created INT NOT NULL DEFAULT 0');
+      await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS scripts_registered INT NOT NULL DEFAULT 0');
+    } catch (e) {
+      // Ignore migration failures
+    }
+
     // Ensure execution_logs supports rich diagnostics payload
     try {
       await pool.query('ALTER TABLE execution_logs ADD COLUMN IF NOT EXISTS detailed_description TEXT');

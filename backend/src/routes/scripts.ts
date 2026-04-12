@@ -1024,7 +1024,7 @@ router.post('/sync', authorize('admin'), async (req: AuthRequest, res: Response)
           'INSERT INTO scripts (name, class_name, category_id, file_path, is_active) VALUES ($1, $2, $3, $4, TRUE) RETURNING id',
           [standardName, className, inferredCategoryId, relPath]
         );
-        addedScripts.push(standardName);
+        addedScripts.push(standardName);`r`n`r`n        // Increment user scripts_registered statistic`r`n        await execute('UPDATE users SET scripts_registered = scripts_registered + 1 WHERE id = $1', [req.userId]);
 
         const insertedId = Number(inserted.rows?.[0]?.id || 0);
         const insertedRow: ScriptSyncRow = {
@@ -1283,6 +1283,9 @@ router.post('/import', authorize('admin', 'tester'), upload.single('file'), asyn
       'INSERT INTO scripts (name, class_name, category_id, file_path, is_active) VALUES ($1, $2, $3, $4, TRUE)',
       [standardName, metadata.className, categoryId, relPath]
     );
+
+    // Increment user scripts_registered statistic
+    await execute('UPDATE users SET scripts_registered = scripts_registered + 1 WHERE id = $1', [req.userId]);
     logScriptEvent(req, {
       action: 'SCRIPT_IMPORT',
       severity: 'INFO',

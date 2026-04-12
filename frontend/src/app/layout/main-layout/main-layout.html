@@ -143,5 +143,53 @@
   </div>
 </p-dialog>
 
+<!-- Command Palette Dialog -->
+<p-dialog [(visible)]="showCommandPalette" [modal]="true" [showHeader]="false" [closable]="true" 
+          [style]="{ width: '600px', 'max-height': '500px' }" styleClass="command-palette-dialog" 
+          [draggable]="false" [resizable]="false" appendTo="body">
+  <div class="command-palette-container">
+    <div class="search-header">
+      <i class="pi pi-search search-icon"></i>
+      <input type="text" pInputText placeholder="Search commands, pages, or tools... (Ctrl+K to close)" 
+             [(ngModel)]="searchQuery" #paletteSearch autofocus class="palette-input" />
+    </div>
+    
+    <div class="commands-list">
+      <div class="command-section">
+        <div class="section-label">Navigation</div>
+        @for (item of navItems(); track item.route) {
+          @if (!searchQuery || item.label.toLowerCase().includes(searchQuery.toLowerCase())) {
+            <div class="command-item" (click)="onPaletteCommandSelect(item)">
+              <i [class]="item.icon"></i>
+              <span class="command-label">{{ item.label }}</span>
+              <span class="command-shortcut">G + {{ item.label[0].toLowerCase() }}</span>
+            </div>
+          }
+        }
+      </div>
+      
+      <div class="command-section">
+        <div class="section-label">System Actions</div>
+        <div class="command-item" (click)="toggleDarkMode(); showCommandPalette = false">
+          <i [class]="themeService.isDarkMode() ? 'pi pi-sun' : 'pi pi-moon'"></i>
+          <span class="command-label">Toggle {{ themeService.isDarkMode() ? 'Light' : 'Dark' }} Mode</span>
+          <span class="command-shortcut">T + D</span>
+        </div>
+        <div class="command-item" (click)="notificationService.load(); showCommandPalette = false">
+          <i class="pi pi-bell"></i>
+          <span class="command-label">Sync Notifications</span>
+          <span class="command-shortcut">S + N</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="palette-footer">
+      <div class="hint"><span>&crarr;</span> to select</div>
+      <div class="hint"><span>&uparrow;&downarrow;</span> to navigate</div>
+      <div class="hint"><span>esc</span> to close</div>
+    </div>
+  </div>
+</p-dialog>
+
 <!-- Toast Notification Component -->
 <p-toast position="bottom-right" />

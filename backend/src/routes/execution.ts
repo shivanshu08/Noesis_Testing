@@ -165,7 +165,7 @@ router.post('/run', authorize('admin', 'tester'), async (req: AuthRequest, res: 
         'INSERT INTO execution_runs (run_name, run_type, status, total_scripts, environment, config_xml, triggered_by, started_at) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING id',
         [runName, runType, 'running', scripts.length, environment, testngXml, req.userId]
       );
-      const runId = runResult.rows[0].id;
+      const runId = runResult.rows[0].id;`r`n`r`n      // Increment user run_count statistic`r`n      await client.query('UPDATE users SET run_count = run_count + 1 WHERE id = $1', [req.userId]);
 
       // Create result records for each script
       for (const script of scripts) {

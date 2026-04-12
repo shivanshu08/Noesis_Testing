@@ -1,6 +1,6 @@
-import { Component, OnInit, OnDestroy, signal, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, computed, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule, RouterOutlet } from '@angular/router';
+import { RouterModule, RouterOutlet, Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
@@ -35,6 +35,8 @@ export class MainLayout implements OnInit, OnDestroy {
   showThemeMenu = false;
   currentYear = new Date().getFullYear();
   showNotifications = false;
+  showCommandPalette = false;
+  searchQuery = '';
   private pollingInterval: any;
 
   navItems = computed(() => {
@@ -79,7 +81,8 @@ export class MainLayout implements OnInit, OnDestroy {
     private http: HttpClient,
     private messageService: MessageService,
     private executionService: ExecutionService,
-    public notificationService: NotificationService
+    public notificationService: NotificationService,
+    private router: Router
   ) {}
 
   ngOnInit() {
@@ -239,5 +242,18 @@ export class MainLayout implements OnInit, OnDestroy {
         this.messageService.add({ severity: 'error', summary: 'Error', detail: err.error?.error || 'Password change failed.' });
       }
     });
+  }
+
+  @HostListener('window:keydown.control.k', ['$event'])
+  onCommandPalette(event: any) {
+    if (this.auth.canEdit()) {
+      event.preventDefault();
+      this.showCommandPalette = !this.showCommandPalette;
+    }
+  }
+
+  onPaletteCommandSelect(item: any) {
+    this.showCommandPalette = false;
+    this.router.navigate([item.route]);
   }
 }

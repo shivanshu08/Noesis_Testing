@@ -123,11 +123,13 @@ router.post('/', authorize('admin', 'tester'), async (req: AuthRequest, res: Res
     try {
       await client.query('BEGIN');
 
-      const result = await client.query(
         'INSERT INTO test_suites (name, description, is_parallel, thread_count, tags, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
         [name, description, isParallel, threadCount, tags ? JSON.stringify(tags) : null, req.userId]
       );
       const suiteId = result.rows[0].id;
+
+      // Increment user suites_created statistic
+      await client.query('UPDATE users SET suites_created = suites_created + 1 WHERE id = $1', [req.userId]);
 
       for (let i = 0; i < scriptIds.length; i++) {
         await client.query(
@@ -224,6 +226,9 @@ router.post('/:id/duplicate', authorize('admin', 'tester'), async (req: AuthRequ
         [newName, source.description, source.is_parallel, source.thread_count, source.tags ? JSON.stringify(source.tags) : null, req.userId]
       );
       const newId = result.rows[0].id;
+
+      // Increment user suites_created statistic
+      await client.query('UPDATE users SET suites_created = suites_created + 1 WHERE id = $1', [req.userId]);
 
       for (const s of scripts) {
         await client.query(
