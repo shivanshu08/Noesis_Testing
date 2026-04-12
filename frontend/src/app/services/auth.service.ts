@@ -1,15 +1,17 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal, computed, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { Observable, tap, catchError, throwError } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { User, LoginRequest, LoginResponse } from '../models/interfaces';
+import { SessionService } from './session.service';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly apiUrl = `${environment.apiUrl}/auth`;
   private readonly tokenKey = 'noesis_token';
   private readonly userKey = 'noesis_user';
+  private readonly sessionService = inject(SessionService);
 
   private currentUser = signal<User | null>(this.loadUser());
   readonly user = this.currentUser.asReadonly();
@@ -35,6 +37,20 @@ export class AuthService {
   }
 
   logout(): void {
+    localStorage.removeItem(this.tokenKey);
+    localStorage.removeItem(this.userKey);
+    this.currentUser.set(null);
+    this.router.navigate(['/login']);
+  }
+
+  /**
+   * Handles session expiration (401 from server).
+   * Shows a top-center alert, clears credentials, and redirects to login.
+   */
+  sessionExpired(): void {
+    // Only proceed if this is a fresh timeout (no duplicate alerts)
+    if (!this.sessionService.triggerSessionTimeout()) return;
+
     localStorage.removeItem(this.tokenKey);
     localStorage.removeItem(this.userKey);
     this.currentUser.set(null);

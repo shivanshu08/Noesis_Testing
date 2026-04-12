@@ -1,15 +1,16 @@
 import { HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { AuthService } from '../services/auth.service';
-import { Router } from '@angular/router';
 import { catchError, throwError } from 'rxjs';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
-  const router = inject(Router);
   const token = authService.getToken();
 
-  if (token) {
+  // Don't attach token or intercept 401 on login requests
+  const isLoginRequest = req.url.includes('/auth/login');
+
+  if (token && !isLoginRequest) {
     req = req.clone({
       setHeaders: {
         Authorization: `Bearer ${token}`,
@@ -19,10 +20,13 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
   return next(req).pipe(
     catchError(error => {
-      if (error.status === 401) {
-        authService.logout();
+      // Trigger session timeout alert on 401 (expired/invalid token)
+      // Skip for login requests — those have their own error handling
+      if (error.status === 401 && !isLoginRequest) {
+        authService.sessionExpired();
       }
       return throwError(() => error);
     })
   );
 };
+

@@ -23,9 +23,14 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
     req.userId = decoded.userId;
     req.userRole = decoded.role;
     next();
-  } catch (error) {
-    logger.warn('Invalid token attempt', { ip: req.ip });
-    res.status(401).json({ error: 'Invalid or expired token.' });
+  } catch (error: any) {
+    if (error.name === 'TokenExpiredError') {
+      logger.warn('Session expired', { ip: req.ip });
+      res.status(401).json({ error: 'Session expired.', code: 'SESSION_EXPIRED' });
+    } else {
+      logger.warn('Invalid token attempt', { ip: req.ip });
+      res.status(401).json({ error: 'Invalid or expired token.' });
+    }
   }
 }
 

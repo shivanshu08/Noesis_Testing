@@ -419,3 +419,107 @@ a {
     &.p-toast-message-error { border-left: 4px solid var(--noesis-danger) !important; .p-toast-message-icon { color: var(--noesis-danger); } }
   }
 }
+
+// ══════════════════════════════════════════════════════════════
+// SESSION TIMEOUT ALERT — Premium, theme-aware top-center banner
+// ══════════════════════════════════════════════════════════════
+.session-timeout-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 99999;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  padding-top: 1.25rem;
+  animation: sessionAlertSlideDown 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes sessionAlertSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.session-timeout-alert {
+  pointer-events: all;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 22px 14px 16px;
+  border-radius: 12px;
+  background: var(--noesis-surface);
+  border: 1px solid var(--noesis-border);
+  border-left: 4px solid var(--noesis-primary);
+  box-shadow:
+    0 8px 30px rgba(0, 0, 0, 0.12),
+    0 4px 12px rgba(0, 0, 0, 0.06);
+  backdrop-filter: blur(12px);
+  max-width: 480px;
+  min-width: 360px;
+}
+
+.dark-mode .session-timeout-alert {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(51, 65, 85, 0.7);
+  box-shadow:
+    0 8px 30px rgba(0, 0, 0, 0.35),
+    0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.session-timeout-icon {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--noesis-primary) 12%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--noesis-primary) 30%, transparent);
+
+  i {
+    font-size: 1.1rem;
+    color: var(--noesis-primary);
+  }
+}
+
+.session-timeout-message {
+  flex: 1;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--noesis-text);
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+}
+
+.session-timeout-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--noesis-text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  i {
+    font-size: 0.75rem;
+  }
+
+  &:hover {
+    background: color-mix(in srgb, var(--noesis-primary) 10%, transparent);
+    color: var(--noesis-primary);
+  }
+}
+
