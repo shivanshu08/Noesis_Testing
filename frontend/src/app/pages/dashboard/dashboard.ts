@@ -187,13 +187,22 @@ export class Dashboard implements OnInit, OnDestroy {
       const history = currentStats.recentHistory || [];
       const dateMap = new Map<string, { passed: number, failed: number, total: number }>();
       
+      // Initialize the last 30 days with 0s to ensure a full timeline
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const label = d.toLocaleString('en-US', { month: 'short', day: 'numeric' });
+        dateMap.set(label, { passed: 0, failed: 0, total: 0 });
+      }
+      
       history.forEach((h: any) => {
-          const d = this.formatDate(h.date).split(',')[0];
-          if (!dateMap.has(d)) dateMap.set(d, { passed: 0, failed: 0, total: 0 });
-          const entry = dateMap.get(d)!;
-          entry.total += Number(h.count);
-          if (h.status === 'passed') entry.passed += Number(h.count);
-          else if (h.status === 'failed' || h.status === 'error') entry.failed += Number(h.count);
+          const d = h.date ? new Date(h.date).toLocaleString('en-US', { month: 'short', day: 'numeric' }) : '';
+          if (dateMap.has(d)) {
+            const entry = dateMap.get(d)!;
+            entry.total += Number(h.count);
+            if (h.status === 'passed') entry.passed += Number(h.count);
+            else if (h.status === 'failed' || h.status === 'error') entry.failed += Number(h.count);
+          }
       });
 
       const labels = Array.from(dateMap.keys());

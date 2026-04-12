@@ -366,10 +366,24 @@ router.get('/stats', async (_req: AuthRequest, res: Response): Promise<void> => 
       "SELECT COUNT(*) as count FROM execution_runs WHERE status = 'running'"
     );
     const recentHistory = await query<any>(`
-      SELECT created_at::date as date, status, COUNT(*) as count
+      SELECT 
+        created_at::date as date,
+        'passed' as status,
+        SUM(passed_count)::int as count
       FROM execution_runs
       WHERE created_at >= NOW() - INTERVAL '30 days'
-      GROUP BY created_at::date, status
+      GROUP BY created_at::date
+      
+      UNION ALL
+      
+      SELECT 
+        created_at::date as date,
+        'failed' as status,
+        SUM(failed_count + error_count)::int as count
+      FROM execution_runs
+      WHERE created_at >= NOW() - INTERVAL '30 days'
+      GROUP BY created_at::date
+      
       ORDER BY date
     `);
 
