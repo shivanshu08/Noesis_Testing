@@ -2,63 +2,237 @@
   <div class="page-header">
     <div>
       <h1>Test Suites</h1>
-      <p class="subtitle">Create and manage custom test suites</p>
+      <p class="subtitle">Create, manage, and execute custom test suite collections</p>
     </div>
     <div class="header-actions">
-      <p-button label="Create Suite" icon="pi pi-plus" (onClick)="openCreate()" />
+      <p-button icon="pi pi-sync" severity="secondary" [text]="true" styleClass="toolbar-icon-btn" [loading]="loading()" pTooltip="Refresh" tooltipPosition="bottom" (onClick)="loadSuites()" />
+      @if (auth.canEdit()) {
+        <p-button label="Create Suite" icon="pi pi-plus" (onClick)="openCreate()" />
+      }
     </div>
   </div>
 
+  <!-- Stats Grid -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon total"><i class="pi pi-sitemap"></i></div>
+      <div class="stat-info">
+        <p class="stat-value">{{ totalSuites() }}</p>
+        <p class="stat-label">Total Suites</p>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon scripts"><i class="pi pi-code"></i></div>
+      <div class="stat-info">
+        <p class="stat-value">{{ totalScriptsInSuites() }}</p>
+        <p class="stat-label">Scripts in Suites</p>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon parallel"><i class="pi pi-arrows-h"></i></div>
+      <div class="stat-info">
+        <p class="stat-value">{{ parallelCount() }}</p>
+        <p class="stat-label">Parallel Suites</p>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon recent"><i class="pi pi-clock"></i></div>
+      <div class="stat-info">
+        <p class="stat-value">{{ lastCreated() }}</p>
+        <p class="stat-label">Last Created</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <p-card styleClass="filters-card">
+    <div class="filters-grid">
+      <p-iconfield styleClass="search-field">
+        <p-inputicon styleClass="pi pi-search" />
+        <input pInputText type="text" placeholder="Search suites..." [(ngModel)]="searchTerm" (input)="applyFilters()" />
+      </p-iconfield>
+
+      <p-select
+        [options]="filterModeOptions"
+        [(ngModel)]="filterMode"
+        optionLabel="label"
+        optionValue="value"
+        appendTo="body"
+        placeholder="Execution Mode"
+        [styleClass]="filterMode !== null ? 'filter-select has-value' : 'filter-select'"
+        [showClear]="filterMode !== null"
+        (onChange)="applyFilters()"
+      />
+
+      <p-select
+        [options]="sortOptions"
+        [(ngModel)]="sortField"
+        optionLabel="label"
+        optionValue="value"
+        appendTo="body"
+        placeholder="Sort By"
+        styleClass="filter-select"
+        (onChange)="applyFilters()"
+      />
+
+      <div class="filter-spacer"></div>
+
+      <p-button label="Clear" icon="pi pi-filter-slash" [text]="true" severity="secondary" styleClass="quick-btn" (onClick)="clearFilters()" />
+    </div>
+  </p-card>
+
   @if (loading()) {
-    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem; color: var(--text-color-secondary);">
-      <i class="pi pi-spinner pi-spin" style="font-size: 2.5rem; margin-bottom: 1rem; color: var(--noesis-primary);"></i>
-      <span style="font-size: 1.1rem; font-weight: 500;">Loading test suites...</span>
+    <div class="loading-state">
+      <i class="pi pi-spinner pi-spin"></i>
+      <span>Loading test suites...</span>
     </div>
   } @else {
-    <p-card styleClass="suites-card">
-      <p-table [value]="suites()" responsiveLayout="scroll" styleClass="p-datatable-sm">
-      <ng-template #header>
-        <tr>
-          <th>Name</th>
-          <th>Description</th>
-          <th>Scripts</th>
-          <th>Created</th>
-          <th style="width: 200px">Actions</th>
-        </tr>
-      </ng-template>
-      <ng-template #body let-suite>
-        <tr>
-          <td>
-            <div class="suite-name">
-              <i class="pi pi-sitemap"></i>
-              <strong>{{ suite.name }}</strong>
-            </div>
-          </td>
-          <td>{{ suite.description || '-' }}</td>
-          <td>
-            <p-tag [value]="(suite.scripts?.length || 0) + ' scripts'" severity="info" />
-          </td>
-          <td>{{ suite.createdAt | date: 'mediumDate' }}</td>
-          <td>
-            <div class="action-buttons">
-              <p-button icon="pi pi-play" [rounded]="true" [text]="true" severity="success" pTooltip="Run Suite" (onClick)="runSuite(suite)" [disabled]="!suite.scripts?.length" />
-              <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" pTooltip="Edit" (onClick)="openEdit(suite)" />
-              <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger" pTooltip="Delete" (onClick)="deleteSuite(suite)" />
-            </div>
-          </td>
-        </tr>
-      </ng-template>
-      <ng-template #emptymessage>
-        <tr>
-          <td colspan="5" class="empty-row">
-            <div class="empty-state">
-              <i class="pi pi-sitemap"></i>
-              <p>No test suites created yet</p>
-              <p-button label="Create Your First Suite" icon="pi pi-plus" (onClick)="openCreate()" />
-            </div>
-          </td>
-        </tr>
-      </ng-template>
+    <!-- Data Table -->
+    <p-card styleClass="suites-table-card">
+      <p-table [value]="filteredSuites()" responsiveLayout="scroll" [tableStyle]="{ 'table-layout': 'fixed', width: '100%' }" styleClass="p-datatable-sm suites-datatable" dataKey="id">
+        <ng-template #header>
+          <tr>
+            <th class="col-expand"></th>
+            <th class="col-name">Suite Name</th>
+            <th class="col-scripts">Scripts</th>
+            <th class="col-mode">Mode</th>
+            <th class="col-lastrun">Last Run</th>
+            <th class="col-tags">Tags</th>
+            <th class="col-created">Created</th>
+            <th class="col-actions">Actions</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-suite>
+          <tr class="suite-row" [class.expanded-active]="isExpanded(suite)">
+            <td class="col-expand">
+              <p-button
+                [icon]="isExpanded(suite) ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"
+                [text]="true"
+                styleClass="row-expand-btn"
+                pTooltip="Expand details"
+                tooltipPosition="bottom"
+                (onClick)="toggleExpand(suite)"
+              />
+            </td>
+            <td class="col-name">
+              <div class="suite-name-cell">
+                <div class="suite-icon-box">
+                  <i class="pi pi-sitemap"></i>
+                </div>
+                <div class="suite-name-info">
+                  <span class="suite-title">{{ suite.name }}</span>
+                  <span class="suite-desc" *ngIf="suite.description">{{ suite.description }}</span>
+                </div>
+              </div>
+            </td>
+            <td class="col-scripts">
+              <div class="script-count-pill">
+                <i class="pi pi-code"></i>
+                <span>{{ suite.scriptCount || 0 }}</span>
+              </div>
+            </td>
+            <td class="col-mode">
+              <div class="mode-pill" [class.parallel]="suite.isParallel" [class.sequential]="!suite.isParallel">
+                <i [class]="suite.isParallel ? 'pi pi-arrows-h' : 'pi pi-arrow-right'"></i>
+                <span>{{ suite.isParallel ? 'Parallel' : 'Sequential' }}</span>
+              </div>
+            </td>
+            <td class="col-lastrun">
+              <div class="lastrun-cell" *ngIf="suite.lastRunStatus">
+                <p-tag [value]="getStatusLabel(suite.lastRunStatus)" [severity]="getStatusSeverity(suite.lastRunStatus)" />
+                <span class="lastrun-time">{{ timeAgo(suite.lastRunAt!) }}</span>
+              </div>
+              <span class="text-muted" *ngIf="!suite.lastRunStatus">Never run</span>
+            </td>
+            <td class="col-tags">
+              <div class="tags-cell" *ngIf="suite.tags && suite.tags.length > 0">
+                <span class="tag-chip" *ngFor="let tag of suite.tags.slice(0, 2)">{{ tag }}</span>
+                <span class="tag-more" *ngIf="suite.tags.length > 2">+{{ suite.tags.length - 2 }}</span>
+              </div>
+              <span class="text-muted" *ngIf="!suite.tags || suite.tags.length === 0">—</span>
+            </td>
+            <td class="col-created">
+              <span class="date-cell">{{ suite.createdAt | date: 'mediumDate' }}</span>
+            </td>
+            <td class="col-actions">
+              <div class="actions-group">
+                <p-button icon="pi pi-play" [text]="true" styleClass="row-action-btn run-btn" pTooltip="Run Suite" tooltipPosition="bottom" (onClick)="runSuite(suite)" [disabled]="(suite.scriptCount || 0) === 0" />
+                <p-button icon="pi pi-eye" [text]="true" styleClass="row-action-btn" pTooltip="View Details" tooltipPosition="bottom" (onClick)="viewDetail(suite)" />
+                @if (auth.canEdit()) {
+                  <p-button icon="pi pi-pencil" [text]="true" styleClass="row-action-btn" pTooltip="Edit" tooltipPosition="bottom" (onClick)="openEdit(suite)" />
+                  <p-button icon="pi pi-copy" [text]="true" styleClass="row-action-btn" pTooltip="Duplicate" tooltipPosition="bottom" (onClick)="duplicateSuite(suite)" />
+                }
+                @if (auth.isAdmin()) {
+                  <p-button icon="pi pi-trash" [text]="true" severity="danger" styleClass="row-action-btn delete-btn" pTooltip="Delete" tooltipPosition="bottom" (onClick)="deleteSuite(suite)" />
+                }
+              </div>
+            </td>
+          </tr>
+
+          <!-- Expanded Row -->
+          @if (isExpanded(suite)) {
+            <tr class="expanded-inline-row">
+              <td colspan="8" class="expanded-cell">
+                <div class="expanded-content">
+                  <div class="expanded-header">
+                    <div class="expanded-title-group">
+                      <i class="pi pi-list"></i>
+                      <span class="expanded-title">Scripts in Suite</span>
+                      <p-tag [value]="(suite.scripts?.length || suite.scriptCount || 0) + ' total'" severity="info" />
+                    </div>
+                    <div class="expanded-meta-badges">
+                      <div class="meta-badge">
+                        <i [class]="suite.isParallel ? 'pi pi-arrows-h' : 'pi pi-arrow-right'"></i>
+                        <span>{{ suite.isParallel ? 'Parallel' : 'Sequential' }}</span>
+                      </div>
+                      <div class="meta-badge" *ngIf="suite.isParallel">
+                        <i class="pi pi-microchip"></i>
+                        <span>{{ suite.threadCount }} threads</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  @if (suite.scripts && suite.scripts.length > 0) {
+                    <div class="scripts-list">
+                      @for (script of suite.scripts; track script.id) {
+                        <div class="script-item">
+                          <span class="script-order">{{ script.executionOrder }}</span>
+                          <span class="script-category-dot" [style.background]="script.categoryColor"></span>
+                          <div class="script-item-info">
+                            <span class="script-item-name">{{ script.name }}</span>
+                            <span class="script-item-class">{{ script.className }}</span>
+                          </div>
+                          <p-tag [value]="script.categoryName" [style]="{ background: script.categoryColor + '20', color: script.categoryColor, border: '1px solid ' + script.categoryColor + '40' }" />
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <div class="scripts-loading">
+                      <i class="pi pi-spinner pi-spin"></i>
+                      <span>Loading scripts...</span>
+                    </div>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        </ng-template>
+
+        <ng-template #emptymessage>
+          <tr>
+            <td colspan="8" class="empty-row">
+              <div class="empty-state">
+                <i class="pi pi-sitemap"></i>
+                <h3>No test suites found</h3>
+                <p>{{ searchTerm || filterMode ? 'Try adjusting your search or filters.' : 'Create your first test suite to get started.' }}</p>
+                @if (!searchTerm && !filterMode && auth.canEdit()) {
+                  <p-button label="Create Your First Suite" icon="pi pi-plus" (onClick)="openCreate()" />
+                }
+              </div>
+            </td>
+          </tr>
+        </ng-template>
       </p-table>
     </p-card>
   }
@@ -69,7 +243,7 @@
   [header]="editing ? 'Edit Suite' : 'Create Suite'"
   [(visible)]="dialogVisible"
   [modal]="true"
-  [style]="{ width: '550px' }"
+  [style]="{ width: '620px' }"
   [draggable]="false"
 >
   <div class="suite-form">
@@ -97,6 +271,38 @@
         [style]="{ width: '100%' }"
       />
     </div>
+
+    <div class="form-row">
+      <div class="form-field flex-1">
+        <label>Execution Mode</label>
+        <div class="toggle-group">
+          <p-toggleSwitch [(ngModel)]="form.isParallel" />
+          <span class="toggle-label">{{ form.isParallel ? 'Parallel Execution' : 'Sequential Execution' }}</span>
+        </div>
+      </div>
+
+      @if (form.isParallel) {
+        <div class="form-field thread-field">
+          <label>Thread Count</label>
+          <p-inputNumber [(ngModel)]="form.threadCount" [min]="1" [max]="20" [showButtons]="true" buttonLayout="horizontal" incrementButtonIcon="pi pi-plus" decrementButtonIcon="pi pi-minus" [style]="{ width: '100%' }" />
+        </div>
+      }
+    </div>
+
+    <div class="form-field">
+      <label>Tags</label>
+      <div class="tags-input-group">
+        <div class="tags-display">
+          @for (tag of form.tags; track tag; let i = $index) {
+            <span class="form-tag-chip">
+              {{ tag }}
+              <i class="pi pi-times" (click)="removeTag(i)"></i>
+            </span>
+          }
+          <input type="text" class="tag-input" [(ngModel)]="newTag" placeholder="Type & press Enter" (keydown)="onTagKeydown($event)" />
+        </div>
+      </div>
+    </div>
   </div>
 
   <ng-template #footer>
@@ -105,4 +311,69 @@
   </ng-template>
 </p-dialog>
 
-<p-confirmDialog />
+<!-- Suite Detail Dialog -->
+<p-dialog
+  header="Suite Details"
+  [(visible)]="detailVisible"
+  [modal]="true"
+  [style]="{ width: '72vw', maxWidth: '900px' }"
+  [draggable]="false"
+>
+  @if (detailLoading) {
+    <div class="detail-loading">
+      <i class="pi pi-spinner pi-spin"></i>
+      <span>Loading suite details...</span>
+    </div>
+  } @else if (detailSuite(); as suite) {
+    <div class="detail-content">
+      <div class="detail-header-info">
+        <div class="detail-icon-box">
+          <i class="pi pi-sitemap"></i>
+        </div>
+        <div>
+          <h3>{{ suite.name }}</h3>
+          <p *ngIf="suite.description">{{ suite.description }}</p>
+        </div>
+      </div>
+
+      <div class="detail-meta-grid">
+        <div class="detail-meta-item">
+          <span class="meta-label">Mode</span>
+          <span class="meta-val">{{ suite.isParallel ? 'Parallel (' + suite.threadCount + ' threads)' : 'Sequential' }}</span>
+        </div>
+        <div class="detail-meta-item">
+          <span class="meta-label">Created By</span>
+          <span class="meta-val">{{ suite.createdBy || 'Unknown' }}</span>
+        </div>
+        <div class="detail-meta-item">
+          <span class="meta-label">Created At</span>
+          <span class="meta-val">{{ suite.createdAt | date: 'medium' }}</span>
+        </div>
+        <div class="detail-meta-item" *ngIf="suite.tags && suite.tags.length > 0">
+          <span class="meta-label">Tags</span>
+          <div class="meta-tags">
+            <span class="tag-chip" *ngFor="let tag of suite.tags">{{ tag }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-scripts-section" *ngIf="suite.scripts && suite.scripts.length > 0">
+        <h4><i class="pi pi-code"></i> Scripts ({{ suite.scripts.length }})</h4>
+        <div class="detail-scripts-list">
+          @for (script of suite.scripts; track script.id) {
+            <div class="detail-script-row">
+              <span class="script-order">#{{ script.executionOrder }}</span>
+              <span class="script-category-dot" [style.background]="script.categoryColor"></span>
+              <span class="detail-script-name">{{ script.name }}</span>
+              <span class="detail-script-class">{{ script.className }}</span>
+              <p-tag [value]="script.categoryName" [style]="{ background: script.categoryColor + '20', color: script.categoryColor, fontSize: '0.72rem' }" />
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</p-dialog>
+
+<p-confirmDialog [style]="{ width: '450px' }" />
+<p-toast position="bottom-right" />

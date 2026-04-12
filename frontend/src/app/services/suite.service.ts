@@ -18,7 +18,14 @@ export class SuiteService {
     return this.http.get<TestSuite>(`${this.apiUrl}/${id}`);
   }
 
-  createSuite(data: { name: string; description?: string; scriptIds: number[]; isParallel?: boolean }): Observable<any> {
+  createSuite(data: {
+    name: string;
+    description?: string;
+    scriptIds: number[];
+    isParallel?: boolean;
+    threadCount?: number;
+    tags?: string[];
+  }): Observable<any> {
     return this.http.post(this.apiUrl, data);
   }
 
@@ -28,5 +35,9 @@ export class SuiteService {
 
   deleteSuite(id: number): Observable<any> {
     return this.http.delete(`${this.apiUrl}/${id}`);
+  }
+
+  duplicateSuite(id: number): Observable<{ id: number; name: string; message: string }> {
+    return this.http.post<{ id: number; name: string; message: string }>(`${this.apiUrl}/${id}/duplicate`, {});
   }
 }

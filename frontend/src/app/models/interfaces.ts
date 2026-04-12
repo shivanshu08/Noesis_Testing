@@ -59,10 +59,14 @@ export interface TestSuite {
   description?: string;
   isParallel: boolean;
   threadCount: number;
+  tags?: string[];
   createdBy?: string;
   scriptCount?: number;
   scripts?: SuiteScript[];
+  lastRunStatus?: string;
+  lastRunAt?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface SuiteScript {
