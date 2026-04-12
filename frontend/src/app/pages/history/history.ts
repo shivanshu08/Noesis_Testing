@@ -93,4 +93,37 @@ export class History implements OnInit {
     const s = seconds % 60;
     return m > 0 ? `${m}m ${s}s` : `${s}s`;
   }
+
+  exportCSV() {
+    const csvData = this.runs();
+    if (!csvData || csvData.length === 0) {
+      return;
+    }
+
+    const headers = ['Run ID', 'Name', 'Status', 'Total Scripts', 'Passed', 'Failed', 'Duration (s)', 'Started At', 'Triggered By'];
+    const rows = csvData.map(run => {
+      return [
+        run.id,
+        `"${run.runName || 'Manual Run'}"`,
+        run.status,
+        run.totalScripts || 0,
+        run.passedCount || 0,
+        run.failedCount || 0,
+        run.durationMs ? (run.durationMs / 1000).toFixed(2) : 0,
+        `"${run.startedAt ? new Date(run.startedAt).toISOString() : '-'}"`,
+        `"${run.triggeredBy || '-'}"`
+      ].join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Execution_History_${new Date().getTime()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
 }

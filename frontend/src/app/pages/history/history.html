@@ -5,7 +5,7 @@
       <p class="subtitle">Browse past test execution results</p>
     </div>
     <div class="header-actions" style="display: flex; gap: 12px;">
-      <p-button label="Export CSV" icon="pi pi-file-excel" severity="secondary" />
+      <p-button label="Export CSV" icon="pi pi-file-excel" severity="secondary" (onClick)="exportCSV()" />
       <p-select
         [options]="statusOptions"
         [(ngModel)]="statusFilter"

@@ -18,7 +18,7 @@
       </div>
       <div class="header-actions">
         <a pButton class="p-button-secondary p-button" label="Re-run" icon="pi pi-refresh" routerLink="/runner" [queryParams]="{ rerun: r.id }" style="text-decoration: none;"></a>
-        <p-button label="Download Report" icon="pi pi-download" severity="info" class="ml-2" />
+        <p-button label="Download Report" icon="pi pi-download" class="ml-2" (click)="downloadPdf()" />
         @if (r.status === 'running') {
           <p-button label="Stop Run" icon="pi pi-stop" severity="danger" (onClick)="stopRun()" class="ml-2" />
         }

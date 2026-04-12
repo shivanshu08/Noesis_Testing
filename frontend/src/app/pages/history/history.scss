@@ -1,33 +1,85 @@
 .history-page {
-  max-width: 1400px;
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+
+.page-header {
+  .subtitle {
+    margin-top: 4px;
+    color: var(--noesis-text-secondary);
+    font-size: 0.9rem;
+  }
 }
 
 .history-card {
+  border-radius: 12px;
+  border: 1px solid var(--surface-border);
+  overflow: hidden;
+
+  ::ng-deep .p-card {
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  ::ng-deep .p-card-content {
+    padding: 0;
+  }
+
   code {
-    background: var(--noesis-hover);
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 0.82rem;
-  }
-
-  .run-name {
-    font-weight: 500;
-  }
-
-  .passed-count {
-    color: #22c55e;
+    background: color-mix(in srgb, var(--noesis-primary) 10%, var(--surface-ground));
+    color: var(--noesis-primary);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.8rem;
     font-weight: 600;
   }
 
+  .run-name {
+    font-weight: 600;
+    color: var(--noesis-text);
+  }
+
+  .passed-count {
+    color: var(--noesis-success, #22c55e);
+    font-weight: 700;
+  }
+
   .failed-count {
-    color: #ef4444;
+    color: var(--noesis-danger, #ef4444);
+    font-weight: 700;
+  }
+}
+
+:host ::ng-deep {
+  .p-datatable .p-datatable-thead > tr > th {
+    background: color-mix(in srgb, var(--surface-ground) 88%, var(--surface-card));
+    border-bottom: 1px solid var(--surface-border);
+    color: var(--noesis-text);
+    font-size: 0.86rem;
+    font-weight: 700;
+    padding: 12px 14px;
+  }
+
+  .p-datatable .p-datatable-tbody > tr > td {
+    padding: 12px 14px;
+    border-bottom: 1px solid color-mix(in srgb, var(--surface-border) 88%, transparent);
+    font-size: 0.88rem;
+  }
+
+  .p-datatable .p-datatable-tbody > tr:hover {
+    background: color-mix(in srgb, var(--noesis-primary) 4%, var(--surface-card));
+  }
+  
+  .p-tag {
     font-weight: 600;
   }
 }
 
 .empty-row {
   text-align: center;
-  padding: 48px !important;
+  padding: 54px !important;
 }
 
 .empty-state {
@@ -38,5 +90,5 @@
   color: var(--noesis-text-secondary);
 
   i { font-size: 2.5rem; opacity: 0.4; }
-  p { margin: 0; }
+  p { margin: 0; font-weight: 500; }
 }
