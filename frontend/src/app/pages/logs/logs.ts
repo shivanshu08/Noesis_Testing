@@ -217,11 +217,47 @@ export class LogsPage implements OnInit, OnDestroy {
     ];
   });
 
-  readonly errorCount = computed(() => this.allLogs().filter((l) => l.severity === 'error').length);
-  readonly warningCount = computed(() => this.allLogs().filter((l) => l.severity === 'warn').length);
-  readonly infoCount = computed(() => this.allLogs().filter((l) => l.severity === 'info').length);
-  readonly debugCount = computed(() => this.allLogs().filter((l) => l.severity === 'debug').length);
-  readonly uniqueRunCount = computed(() => new Set(this.allLogs().filter((l) => l.runId !== null).map((l) => l.runId)).size);
+  errorCount = signal(0);
+  warningCount = signal(0);
+  infoCount = signal(0);
+  debugCount = signal(0);
+  uniqueRunCount = signal(0);
+
+  readonly hasActiveFilters = computed(() => {
+    return !!(
+      this.searchTerm.trim() ||
+      this.selectedSeverity ||
+      this.selectedRunId !== null ||
+      this.selectedModule ||
+      this.selectedAction ||
+      this.dateFrom ||
+      this.dateTo
+    );
+  });
+
+  readonly activeFilterChips = computed(() => {
+    const chips: Array<{ key: string; label: string; value: any }> = [];
+    if (this.searchTerm.trim()) chips.push({ key: 'q', label: 'Search', value: this.searchTerm });
+    if (this.selectedSeverity) {
+      const label = this.locale.dropdowns.severities[this.selectedSeverity] || this.selectedSeverity;
+      chips.push({ key: 'severity', label: 'Severity', value: label });
+    }
+    if (this.selectedRunId !== null) chips.push({ key: 'runId', label: 'Run', value: `#${this.selectedRunId}` });
+    if (this.selectedModule) chips.push({ key: 'module', label: 'Module', value: this.selectedModule });
+    if (this.selectedAction) chips.push({ key: 'action', label: 'Action', value: this.selectedAction });
+    if (this.dateFrom) chips.push({ key: 'dateFrom', label: 'From', value: this.formatDisplayDate(this.dateFrom) });
+    if (this.dateTo) chips.push({ key: 'dateTo', label: 'To', value: this.formatDisplayDate(this.dateTo) });
+    return chips;
+  });
+
+  private formatDisplayDate(isoDate: string | null | undefined): string {
+    if (!isoDate) return '-';
+    const parts = String(isoDate).split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}-${parts[1]}-${parts[0]}`; // dd-mm-yyyy
+    }
+    return String(isoDate);
+  }
 
   private readonly destroy$ = new Subject<void>();
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -356,6 +392,15 @@ export class LogsPage implements OnInit, OnDestroy {
 
           this.allLogs.set(normalized);
           this.totalRecords.set(response?.meta?.total ?? normalized.length);
+
+          if (response?.summary) {
+            this.errorCount.set(response.summary.errorCount || 0);
+            this.warningCount.set(response.summary.warnCount || 0);
+            this.infoCount.set(response.summary.infoCount || 0);
+            this.debugCount.set(response.summary.debugCount || 0);
+            this.uniqueRunCount.set(response.summary.uniqueRunCount || 0);
+          }
+
           this.lastSyncedAt.set(new Date().toISOString());
           this.persistLogs(normalized);
           this.expandedLogIds.set(new Set<number>());
@@ -397,53 +442,9 @@ export class LogsPage implements OnInit, OnDestroy {
   }
 
   applyFilters(): void {
-    let result = [...this.allLogs()];
-
-    if (this.searchTerm.trim()) {
-      const term = this.searchTerm.trim().toLowerCase();
-      result = result.filter(
-        (log) =>
-          log.message.toLowerCase().includes(term) ||
-          log.source.toLowerCase().includes(term) ||
-          log.detailedDescription.toLowerCase().includes(term) ||
-          this.getSeverityLabel(log.severity).toLowerCase().includes(term)
-      );
-    }
-
-    if (this.selectedSeverity) {
-      result = result.filter((log) => log.severity === this.selectedSeverity);
-    }
-
-    if (this.selectedRunId !== null) {
-      result = result.filter((log) => log.runId === this.selectedRunId);
-    }
-    if (this.selectedModule) {
-      const moduleTerm = this.selectedModule.toLowerCase();
-      result = result.filter(
-        (log) =>
-          (log.sourceComponent || '').toLowerCase().includes(moduleTerm) ||
-          (log.source || '').toLowerCase().includes(moduleTerm)
-      );
-    }
-    if (this.selectedAction) {
-      const selectedAction = this.selectedAction.toLowerCase();
-      result = result.filter((log) => String(log.action || '').toLowerCase() === selectedAction);
-    }
-
-    const fromTime = this.getDateBoundaryMs(this.dateFrom, 'start');
-    const toTime = this.getDateBoundaryMs(this.dateTo, 'end');
-    if (fromTime !== null || toTime !== null) {
-      result = result.filter((log) => {
-        const logTime = new Date(log.timestamp).getTime();
-        if (!Number.isFinite(logTime)) return false;
-        if (fromTime !== null && logTime < fromTime) return false;
-        if (toTime !== null && logTime > toTime) return false;
-        return true;
-      });
-    }
-
-    result.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    this.filteredLogs.set(result);
+    // Backend now handles all filtering and sorting.
+    // We just set filteredLogs to match allLogs (the current page).
+    this.filteredLogs.set([...this.allLogs()]);
   }
 
   applySelectedFilters(): void {
@@ -619,6 +620,20 @@ export class LogsPage implements OnInit, OnDestroy {
     this.applyFilters();
     this.loadFilterDropdowns();
     this.fetchLogs(false);
+  }
+
+  removeActiveFilter(key: string): void {
+    if (key === 'q') { this.searchTerm = ''; this.draftSearchTerm = ''; }
+    if (key === 'severity') { this.selectedSeverity = null; this.draftSelectedSeverity = null; }
+    if (key === 'runId') { this.selectedRunId = null; this.draftSelectedRunId = null; }
+    if (key === 'module') { this.selectedModule = null; this.draftSelectedModule = null; }
+    if (key === 'action') { this.selectedAction = null; this.draftSelectedAction = null; }
+    if (key === 'dateFrom') { this.dateFrom = ''; this.draftDateFrom = ''; }
+    if (key === 'dateTo') { this.dateTo = ''; this.draftDateTo = ''; }
+
+    this.firstRow.set(0);
+    this.applyFilters();
+    this.fetchLogs(true);
   }
 
   exportToCSV(): void {
@@ -894,7 +909,7 @@ export class LogsPage implements OnInit, OnDestroy {
     return {
       id: Number.isFinite(parsedId) ? parsedId : Date.now() + Math.floor(Math.random() * 1000),
       runId: raw?.runId ? Number(raw.runId) : null,
-      resultId: raw?.resultId ? Number(raw.resultId) : null,
+      resultId: raw?.resultId ? Number(raw.runId) : null,
       severity,
       message: logicalMessage,
       summary: logicalMessage,
@@ -1005,16 +1020,12 @@ export class LogsPage implements OnInit, OnDestroy {
 
   private setDefaultDateRange(): void {
     const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
+    const rangeStr = this.toDateInput(today);
 
-    const from = this.toDateInput(yesterday);
-    const to = this.toDateInput(today);
-
-    this.dateFrom = from;
-    this.dateTo = to;
-    this.draftDateFrom = from;
-    this.draftDateTo = to;
+    this.dateFrom = rangeStr;
+    this.dateTo = rangeStr;
+    this.draftDateFrom = rangeStr;
+    this.draftDateTo = rangeStr;
   }
 
   onLazyLoad(event: any): void {

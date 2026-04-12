@@ -73,7 +73,18 @@ export class ExecutionService {
     sortOrder?: 'asc' | 'desc';
     limit?: number;
     offset?: number;
-  }): Observable<{ data: any[]; meta?: { total: number; limit: number; offset: number } }> {
+  }): Observable<{
+    data: any[];
+    summary?: {
+      total: number;
+      errorCount: number;
+      warnCount: number;
+      infoCount: number;
+      debugCount: number;
+      uniqueRunCount: number;
+    };
+    meta?: { total: number; limit: number; offset: number };
+  }> {
     let params = new HttpParams();
     if (filters?.days !== undefined) params = params.set('days', filters.days.toString());
     if (filters?.severity) params = params.set('severity', filters.severity);
@@ -89,10 +100,18 @@ export class ExecutionService {
     if (filters?.limit !== undefined) params = params.set('limit', filters.limit.toString());
     if (filters?.offset !== undefined) params = params.set('offset', filters.offset.toString());
 
-    return this.http.get<{ data: any[]; meta?: { total: number; limit: number; offset: number } }>(
-      `${this.apiUrl}/global-logs`,
-      { params }
-    );
+    return this.http.get<{
+      data: any[];
+      summary?: {
+        total: number;
+        errorCount: number;
+        warnCount: number;
+        infoCount: number;
+        debugCount: number;
+        uniqueRunCount: number;
+      };
+      meta?: { total: number; limit: number; offset: number };
+    }>(`${this.apiUrl}/global-logs`, { params });
   }
 
   getLogModules(filters?: {

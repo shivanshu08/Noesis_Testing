@@ -84,7 +84,7 @@ function sanitizeQueryKeys(query: AuthRequest['query']): string[] {
     .map((key) => (SENSITIVE_KEYS.has(key.toLowerCase()) ? `${key}:redacted` : key));
 }
 
-function shouldSkipAudit(req: AuthRequest): boolean {
+function shouldSkipAuditPreprocess(req: AuthRequest): boolean {
   const method = (req.method || '').toUpperCase();
   if (method === 'OPTIONS') return true;
 
@@ -93,15 +93,7 @@ function shouldSkipAudit(req: AuthRequest): boolean {
 
   if (path === '/api/health') return true;
 
-  // Avoid self-generated logging noise from logs screen reads.
-  if (method === 'GET') {
-    if (path.startsWith('/api/execution/global-logs')) return true;
-    if (path.startsWith('/api/logs/modules')) return true;
-    if (path.startsWith('/api/logs/actions')) return true;
-  }
-
-  // Script mutation endpoints are logged explicitly in scripts routes
-  // with richer metadata (script names/counts), so skip generic request logs here.
+  // Mutation endpoints already logged explicitly in specialized routes
   if (path.startsWith('/api/scripts/import')) return true;
   if (path.startsWith('/api/scripts/sync')) return true;
   if (path.startsWith('/api/scripts/delete-multiple')) return true;
@@ -113,7 +105,7 @@ function shouldSkipAudit(req: AuthRequest): boolean {
 }
 
 export function requestAuditMiddleware(req: AuthRequest, res: Response, next: NextFunction): void {
-  if (shouldSkipAudit(req)) {
+  if (shouldSkipAuditPreprocess(req)) {
     next();
     return;
   }
@@ -133,8 +125,34 @@ export function requestAuditMiddleware(req: AuthRequest, res: Response, next: Ne
   const userAgent = String(req.headers['user-agent'] || '').substring(0, 300);
 
   res.on('finish', () => {
-    const durationMs = Number((process.hrtime.bigint() - startNs) / 1000000n);
     const statusCode = res.statusCode || 0;
+    
+    // SKIP LOGGING for successful heartbeats and polling requests (noise)
+    // As per user request: "only log useful logs"
+    if (req.method === 'GET' && statusCode < 400) {
+      const rawPath = (req.path || req.originalUrl || '').toLowerCase();
+      const path = sanitizeHttpPath(rawPath);
+      
+      const noisePaths = [
+        '/api/execution/global-logs',
+        '/api/execution/runs',
+        '/api/logs/modules',
+        '/api/logs/actions',
+        '/api/scripts/workspace-status',
+        '/api/scripts',
+        '/api/scripts/categories',
+        '/api/scripts/tags',
+        '/api/dashboard/stats',
+        '/api/notifications',
+        '/api/notifications/unread-count'
+      ];
+
+      if (noisePaths.some(p => path.startsWith(p))) {
+        return;
+      }
+    }
+
+    const durationMs = Number((process.hrtime.bigint() - startNs) / 1000000n);
     const severity = classifySeverity(statusCode);
     const status = classifyStatus(statusCode);
     const action = classifyAction(req, moduleName);

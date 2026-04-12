@@ -191,6 +191,27 @@
 
   </p-card>
 
+  <div class="active-filters-bar" *ngIf="hasActiveFilters()">
+    <div class="summary-text">
+      Showing <strong>{{ totalRecords() | number }}</strong> filtered results
+    </div>
+    <div class="filter-chips">
+      <div *ngFor="let chip of activeFilterChips()" class="filter-chip">
+        <span class="chip-label">{{ chip.label }}:</span>
+        <span class="chip-value">{{ chip.value }}</span>
+        <i class="pi pi-times remove-chip" (click)="removeActiveFilter(chip.key)" pTooltip="Remove Filter"></i>
+      </div>
+      <p-button 
+        label="Clear All" 
+        [text]="true" 
+        severity="danger" 
+        size="small"
+        styleClass="clear-all-link"
+        (onClick)="clearFilters()" 
+      />
+    </div>
+  </div>
+
   <p-card styleClass="logs-table-card">
     <p-table
       [value]="filteredLogs()"

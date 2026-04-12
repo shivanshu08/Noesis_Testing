@@ -779,3 +779,102 @@
     grid-template-columns: 1fr;
   }
 }
+
+.active-filters-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding: 10px 16px;
+  background: color-mix(in srgb, var(--noesis-primary) 5%, var(--surface-card));
+  border: 1px dashed color-mix(in srgb, var(--noesis-primary) 24%, var(--surface-border));
+  border-radius: 10px;
+  animation: fadeInDown 0.3s ease-out;
+
+  .summary-text {
+    font-size: 0.88rem;
+    color: var(--noesis-text-secondary);
+    
+    strong {
+      color: var(--noesis-primary);
+      font-weight: 700;
+    }
+  }
+
+  .filter-chips {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--surface-card);
+    border: 1px solid var(--surface-border);
+    border-radius: 8px;
+    font-size: 0.78rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    transition: all 0.2s ease;
+
+    &:hover {
+      border-color: color-mix(in srgb, var(--noesis-primary) 35%, var(--surface-border));
+      transform: translateY(-1px);
+    }
+
+    .chip-label {
+      color: var(--noesis-text-secondary);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.65rem;
+      letter-spacing: 0.5px;
+    }
+
+    .chip-value {
+      color: var(--noesis-text);
+      font-weight: 700;
+    }
+
+    .remove-chip {
+      font-size: 0.75rem;
+      color: var(--noesis-text-secondary);
+      cursor: pointer;
+      padding: 4px;
+      margin-left: 2px;
+      border-radius: 6px;
+      transition: all 0.2s;
+
+      &:hover {
+        background: color-mix(in srgb, var(--noesis-danger) 12%, transparent);
+        color: var(--noesis-danger);
+        transform: rotate(90deg);
+      }
+    }
+  }
+
+  .clear-all-link {
+    font-size: 0.78rem !important;
+    font-weight: 700 !important;
+    height: auto !important;
+    padding: 6px 10px !important;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: color-mix(in srgb, var(--noesis-danger) 8%, transparent) !important;
+    }
+  }
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

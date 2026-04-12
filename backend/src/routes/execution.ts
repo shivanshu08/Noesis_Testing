@@ -667,16 +667,30 @@ router.get('/global-logs', async (req: AuthRequest, res: Response): Promise<void
       )
     `;
 
-    const totalRows = await query<{ count: string }>(
+    const summaryRows = await query<any>(
       `
       ${unionSql}
-      SELECT COUNT(*)::text as count
+      SELECT
+        COUNT(*)::int as total,
+        COUNT(*) FILTER (WHERE l.log_level = 'ERROR')::int as "errorCount",
+        COUNT(*) FILTER (WHERE l.log_level = 'WARN')::int as "warnCount",
+        COUNT(*) FILTER (WHERE l.log_level = 'INFO')::int as "infoCount",
+        COUNT(*) FILTER (WHERE l.log_level = 'DEBUG')::int as "debugCount",
+        COUNT(DISTINCT l.run_id)::int as "uniqueRunCount"
       FROM unified_logs l
       ${whereSql}
       `,
       params
     );
-    const total = Number(totalRows[0]?.count || 0);
+    const summary = summaryRows[0] || {
+      total: 0,
+      errorCount: 0,
+      warnCount: 0,
+      infoCount: 0,
+      debugCount: 0,
+      uniqueRunCount: 0,
+    };
+    const total = summary.total;
 
     const dataParams = [...params, limit, offset];
     const logs = await query<UnifiedLogRow>(
@@ -722,6 +736,7 @@ router.get('/global-logs', async (req: AuthRequest, res: Response): Promise<void
 
     res.json({
       data: transformedLogs,
+      summary,
       meta: {
         total,
         limit,
