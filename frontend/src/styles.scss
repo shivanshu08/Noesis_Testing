@@ -219,3 +219,155 @@ a {
 .font-semibold { font-weight: 600; }
 .text-secondary { color: var(--noesis-text-secondary); }
 .text-sm { font-size: 0.85rem; }
+// Global Professional Confirmation Dialog Overrides
+::ng-deep .p-confirm-dialog {
+  .p-dialog {
+    border-radius: 12px !important;
+    background: var(--noesis-surface) !important;
+    border: 1px solid var(--noesis-border) !important;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+    overflow: hidden;
+    min-width: 450px;
+  }
+
+  + .p-component-overlay {
+    backdrop-filter: blur(4px);
+    background-color: rgba(0, 0, 0, 0.4);
+  }
+
+  .p-dialog-header {
+    background: transparent !important;
+    padding: 1.5rem 1.5rem 0.5rem !important;
+    border: none !important;
+    
+    .p-dialog-title {
+      display: none; // Rely on icon and message for clean look
+    }
+
+    .p-dialog-header-icons {
+      .p-dialog-header-close {
+        color: var(--noesis-text-secondary);
+        transition: color 0.2s;
+        &:hover { color: var(--noesis-text); background: rgba(0,0,0,0.05); }
+      }
+    }
+  }
+
+  .p-dialog-content {
+    background: transparent !important;
+    padding: 1rem 2rem 2.5rem !important; // Increased breadth (side and bottom padding)
+    display: flex !important;
+    align-items: center !important;
+    gap: 28px !important; // More space between icon and text
+
+    .p-confirm-dialog-icon {
+      font-size: 1.5rem !important;
+      color: var(--noesis-warning) !important;
+      margin: 0 !important;
+      width: 48px !important;
+      height: 48px !important;
+      min-width: 48px !important;
+      border: 2px solid var(--noesis-warning) !important;
+      border-radius: 50% !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+
+      &.pi-exclamation-triangle { color: var(--noesis-danger) !important; border-color: var(--noesis-danger) !important; }
+      &.pi-question-circle { color: var(--noesis-info) !important; border-color: var(--noesis-info) !important; }
+    }
+
+    .p-confirm-dialog-message {
+      font-size: 1.1rem !important;
+      font-weight: 600 !important;
+      color: var(--noesis-text) !important;
+      margin: 0 !important;
+      line-height: 1.4 !important;
+    }
+  }
+
+  .p-dialog-footer {
+    background: transparent !important;
+    padding: 1rem 1.5rem 1.5rem !important;
+    border: none !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    gap: 12px !important;
+
+    button {
+      margin: 0 !important;
+      border-radius: 8px !important;
+      font-weight: 600 !important;
+      padding: 0.6rem 1.25rem !important;
+      border: 1px solid var(--noesis-border) !important;
+
+      &.p-confirm-dialog-reject {
+        background: transparent !important;
+        color: var(--noesis-text) !important;
+        &:hover { background: rgba(0,0,0,0.03) !important; }
+      }
+
+      &.p-confirm-dialog-accept {
+        background: var(--noesis-primary) !important;
+        border-color: var(--noesis-primary) !important;
+        color: white !important;
+        &:hover { background: var(--noesis-primary-dark) !important; }
+        
+        // Handle Delete/Danger variants
+        &.p-button-danger {
+            background: var(--noesis-danger) !important;
+            border-color: var(--noesis-danger) !important;
+            &:hover { background: #dc2626 !important; }
+        }
+      }
+    }
+  }
+}
+
+// Global Professional Toast Overrides
+::ng-deep .p-toast {
+  .p-toast-message {
+    background: var(--noesis-surface) !important;
+    border: 1px solid var(--noesis-border) !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+    border-radius: 10px !important;
+    
+    .p-toast-message-content {
+      padding: 1rem !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 12px !important;
+
+      .p-toast-message-icon {
+        font-size: 1.25rem !important;
+        margin: 0 !important;
+      }
+
+      .p-toast-message-text {
+        margin: 0 !important;
+
+        .p-toast-summary {
+          font-weight: 700 !important;
+          color: var(--noesis-text) !important;
+          margin-bottom: 2px !important;
+        }
+
+        .p-toast-detail {
+          color: var(--noesis-text-secondary) !important;
+          font-size: 0.9rem !important;
+        }
+      }
+
+      .p-toast-icon-close {
+        color: var(--noesis-text-secondary) !important;
+        position: static !important;
+        margin-left: auto !important;
+      }
+    }
+
+    &.p-toast-message-success { border-left: 4px solid var(--noesis-success) !important; .p-toast-message-icon { color: var(--noesis-success); } }
+    &.p-toast-message-info { border-left: 4px solid var(--noesis-info) !important; .p-toast-message-icon { color: var(--noesis-info); } }
+    &.p-toast-message-warn { border-left: 4px solid var(--noesis-warning) !important; .p-toast-message-icon { color: var(--noesis-warning); } }
+    &.p-toast-message-error { border-left: 4px solid var(--noesis-danger) !important; .p-toast-message-icon { color: var(--noesis-danger); } }
+  }
+}
