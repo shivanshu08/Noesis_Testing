@@ -70,8 +70,8 @@
     <div class="stat-card">
       <div class="stat-icon total"><i class="pi pi-server"></i></div>
       <div class="stat-info">
-        <p class="stat-value">{{ totalCount() }}</p>
-        <p class="stat-label">Loaded Records</p>
+        <p class="stat-value">{{ totalRecords() }}</p>
+        <p class="stat-label">Total Records</p>
       </div>
     </div>
 
@@ -102,12 +102,12 @@
 
   <p-card styleClass="filters-card">
     <div class="filters-grid">
-      <p-iconfield class="search-field">
+      <p-iconfield styleClass="search-field">
         <p-inputicon styleClass="pi pi-search" />
         <input
           pInputText
           type="text"
-          placeholder="Search message, source, detailed description"
+          placeholder="Search logs..."
           [(ngModel)]="draftSearchTerm"
         />
       </p-iconfield>
@@ -151,11 +151,12 @@
 
       <div class="date-filter-group">
         <label class="date-input">
-          <span>From Date</span>
+          <span>From</span>
           <input type="date" [(ngModel)]="draftDateFrom" />
         </label>
+        <div class="date-separator"></div>
         <label class="date-input">
-          <span>To Date</span>
+          <span>To</span>
           <input type="date" [(ngModel)]="draftDateTo" />
         </label>
       </div>
@@ -275,16 +276,6 @@
               styleClass="row-action-btn"
               pTooltip="View details"
               (onClick)="openDetails(log)"
-            />
-            <p-button
-              *ngIf="log.runId"
-              icon="pi pi-external-link"
-              [text]="true"
-              severity="secondary"
-              size="small"
-              styleClass="row-action-btn"
-              pTooltip="Open run"
-              (onClick)="openRun(log)"
             />
             <p-button
               icon="pi pi-copy"
