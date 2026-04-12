@@ -193,7 +193,21 @@
         </ng-template>
 
         @if (running()) {
-          <p-progressBar mode="indeterminate" [style]="{ height: '3px' }" />
+          <div class="execution-progress-section">
+            <div class="progress-info">
+              <span class="progress-label">
+                <i class="pi pi-cog pi-spin"></i>
+                {{ completedScripts() }} / {{ totalExecutionScripts() }} scripts completed
+              </span>
+              <span class="progress-pct">{{ executionProgress() }}%</span>
+            </div>
+            <p-progressBar [value]="executionProgress()" [showValue]="false" [style]="{ height: '6px' }" />
+            @if (currentExecutingScript()) {
+              <div class="current-script-label">
+                <i class="pi pi-play"></i> {{ currentExecutingScript() }}
+              </div>
+            }
+          </div>
         }
 
         <div class="log-viewer" #logContainer>

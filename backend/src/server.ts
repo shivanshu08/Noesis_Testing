@@ -99,16 +99,31 @@ app.use('/api/users', userRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/logs', logsRoutes);
 
-// Health check
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Health check (enhanced for dashboard system health widget)
+app.get('/api/health', async (_req, res) => {
+  let dbStatus = 'ok';
+  try {
+    const { query: dbQuery } = await import('./database/connection');
+    await dbQuery('SELECT 1');
+  } catch {
+    dbStatus = 'degraded';
+  }
+  const mem = process.memoryUsage();
+  res.json({
+    status: dbStatus === 'ok' ? 'ok' : 'degraded',
+    api: 'ok',
+    db: dbStatus,
+    uptime: Math.floor(process.uptime()),
+    memoryMB: Math.round(mem.rss / 1024 / 1024),
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // Error handling
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// Start server
+
 async function start() {
   const dbOk = await testConnection();
   if (!dbOk) {

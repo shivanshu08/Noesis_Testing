@@ -957,6 +957,35 @@
   }
 }
 
+// ── Health Badge ──────────────────────────────────────────
+.health-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+
+  &.healthy {
+    background: color-mix(in srgb, #10b981 14%, transparent);
+    color: #10b981;
+    border-color: color-mix(in srgb, #10b981 30%, transparent);
+  }
+
+  &.unstable {
+    background: color-mix(in srgb, #ef4444 14%, transparent);
+    color: #ef4444;
+    border-color: color-mix(in srgb, #ef4444 30%, transparent);
+  }
+
+  &.unknown {
+    color: var(--noesis-text-secondary);
+    opacity: 0.5;
+  }
+}
+
 // ── Responsive ────────────────────────────────────────────
 @media (max-width: 1260px) {
   .stats-grid {

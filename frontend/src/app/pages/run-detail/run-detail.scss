@@ -91,6 +91,95 @@
   }
 }
 
+// Execution Timeline
+.execution-timeline {
+  margin-bottom: 24px;
+  padding: 20px;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+
+  .timeline-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 16px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--noesis-text);
+
+    i {
+      color: var(--noesis-primary);
+      font-size: 1rem;
+    }
+  }
+
+  .timeline-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .timeline-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .timeline-script-name {
+    width: 160px;
+    min-width: 160px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--noesis-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: default;
+  }
+
+  .timeline-bar-track {
+    flex: 1;
+    height: 12px;
+    background: color-mix(in srgb, var(--surface-ground) 50%, var(--surface-card));
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .timeline-bar {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.6s ease;
+    min-width: 4px;
+
+    &.passed {
+      background: linear-gradient(90deg, #10b981, #34d399);
+    }
+    &.failed {
+      background: linear-gradient(90deg, #ef4444, #f87171);
+    }
+    &.running {
+      background: linear-gradient(90deg, #f59e0b, #fbbf24);
+      animation: pulse-bar 1.5s ease-in-out infinite;
+    }
+  }
+
+  .timeline-duration {
+    width: 60px;
+    min-width: 60px;
+    text-align: right;
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--noesis-text-secondary);
+  }
+}
+
+@keyframes pulse-bar {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
 .results-card {
   margin-bottom: 24px;
   border-radius: 12px;

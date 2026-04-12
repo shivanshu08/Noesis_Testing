@@ -63,6 +63,12 @@ export class Runner implements OnInit, OnDestroy {
   autoScroll = true;
   private scriptRegistrySubscription?: Subscription;
 
+  // Execution Progress
+  executionProgress = signal(0);
+  completedScripts = signal(0);
+  totalExecutionScripts = signal(0);
+  currentExecutingScript = signal('');
+
   // Run Confirmation Dialog
   showRunConfirm = false;
   runName = '';
@@ -239,6 +245,12 @@ export class Runner implements OnInit, OnDestroy {
     this.runStatus.set('running');
     this.startTimer();
 
+    // Initialize progress tracking
+    this.totalExecutionScripts.set(scriptIds.length);
+    this.completedScripts.set(0);
+    this.executionProgress.set(0);
+    this.currentExecutingScript.set('');
+
     this.messageService.add({ severity: 'info', summary: 'Execution Started', detail: `Running ${scriptIds.length} script(s)...` });
 
     this.executionService.runScripts(scriptIds, this.runName || undefined).subscribe({
@@ -256,6 +268,24 @@ export class Runner implements OnInit, OnDestroy {
             const newLines = serviceLogs.map(l => l.message);
             this.logs.update(existing => [...existing, ...newLines]);
             this.executionService.liveLogs.set([]);
+
+            // Parse lines for progress tracking
+            for (const line of newLines) {
+              if (line.includes('PASSED') || line.includes('FAILED') || line.includes('BUILD SUCCESS') || line.includes('BUILD FAILURE')) {
+                this.completedScripts.update(c => {
+                  const next = c + 1;
+                  const total = this.totalExecutionScripts();
+                  this.executionProgress.set(total > 0 ? Math.min(Math.round((next / total) * 100), 100) : 0);
+                  return next;
+                });
+              }
+              // Detect running script name
+              const runMatch = line.match(/^▶\s+Running:\s+(.+)/);
+              if (runMatch) {
+                this.currentExecutingScript.set(runMatch[1].trim());
+              }
+            }
+
             if (this.autoScroll) {
               setTimeout(() => this.scrollToBottom(), 50);
             }
@@ -265,6 +295,8 @@ export class Runner implements OnInit, OnDestroy {
             this.running.set(false);
             this.runStatus.set(status);
             this.stopTimer();
+            this.executionProgress.set(100);
+            this.currentExecutingScript.set('');
             clearInterval(checkInterval);
 
             if (status === 'completed' || status === 'passed') {
@@ -288,6 +320,7 @@ export class Runner implements OnInit, OnDestroy {
         this.running.set(false);
         this.runStatus.set('error');
         this.stopTimer();
+        this.executionProgress.set(0);
         this.messageService.add({ severity: 'error', summary: 'Execution Failed', detail: err.error?.message || 'Failed to start execution' });
       },
     });

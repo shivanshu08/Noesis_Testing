@@ -41,6 +41,8 @@ export interface Script {
   isActive: boolean;
   tags: string[];
   createdAt: string;
+  lastRunAt?: string;
+  lastRunStatus?: string;
 }
 
 export interface ScriptCategory {

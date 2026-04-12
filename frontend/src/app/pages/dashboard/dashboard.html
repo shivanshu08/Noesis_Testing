@@ -52,6 +52,41 @@
     </div>
   </div>
 
+  <!-- System Health Indicator -->
+  @if (systemHealth(); as health) {
+    <div class="system-health-bar">
+      <div class="health-title">
+        <i class="pi pi-server"></i>
+        <span>System Health</span>
+      </div>
+      <div class="health-indicators">
+        <div class="health-item">
+          <span class="health-dot" [class.ok]="health.api === 'ok'" [class.degraded]="health.api !== 'ok'"></span>
+          <span class="health-label">API</span>
+          <span class="health-status" [class.ok]="health.api === 'ok'">{{ health.api === 'ok' ? 'Operational' : 'Degraded' }}</span>
+        </div>
+        <div class="health-divider"></div>
+        <div class="health-item">
+          <span class="health-dot" [class.ok]="health.db === 'ok'" [class.degraded]="health.db !== 'ok'"></span>
+          <span class="health-label">Database</span>
+          <span class="health-status" [class.ok]="health.db === 'ok'">{{ health.db === 'ok' ? 'Connected' : 'Degraded' }}</span>
+        </div>
+        <div class="health-divider"></div>
+        <div class="health-item">
+          <i class="pi pi-clock" style="font-size: 0.7rem; color: var(--noesis-text-secondary);"></i>
+          <span class="health-label">Uptime</span>
+          <span class="health-status ok">{{ formatUptime(health.uptime) }}</span>
+        </div>
+        <div class="health-divider"></div>
+        <div class="health-item">
+          <i class="pi pi-microchip" style="font-size: 0.7rem; color: var(--noesis-text-secondary);"></i>
+          <span class="health-label">Memory</span>
+          <span class="health-status ok">{{ health.memoryMB }} MB</span>
+        </div>
+      </div>
+    </div>
+  }
+
   <!-- Category Distribution + Quick Actions -->
   <div class="content-grid">
     <p-card header="Script Categories" styleClass="categories-card">

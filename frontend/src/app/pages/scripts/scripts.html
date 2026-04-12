@@ -77,6 +77,7 @@
           <th style="width: 3rem"><p-tableHeaderCheckbox></p-tableHeaderCheckbox></th>
           <th pSortableColumn="name" style="min-width: 250px">Script Details <p-sortIcon field="name" /></th>
           <th>Category</th>
+          <th style="width: 150px">Last Run</th>
           <th pSortableColumn="isActive" style="width: 220px">Availability <p-sortIcon field="isActive" /></th>
           <th style="width: 160px; text-align: center;">Actions</th>
         </tr>
@@ -106,6 +107,13 @@
           </td>
           <td>
             <p-tag [value]="getCategoryName(script.categoryId)" [severity]="getCategorySeverity(getCategoryName(script.categoryId))" />
+          </td>
+          <td>
+            <div class="last-run-cell" *ngIf="script.lastRunAt">
+              <span class="last-run-dot" [class.passed]="script.lastRunStatus === 'passed'" [class.failed]="script.lastRunStatus === 'failed' || script.lastRunStatus === 'error'"></span>
+              <span class="last-run-time">{{ timeAgo(script.lastRunAt) }}</span>
+            </div>
+            <span class="text-muted" *ngIf="!script.lastRunAt">Never</span>
           </td>
           <td>
             <p-select 
@@ -163,7 +171,7 @@
       </ng-template>
       <ng-template #emptymessage>
         <tr>
-          <td colspan="5" class="empty-row">
+          <td colspan="6" class="empty-row">
             <div class="empty-state">
               <i class="pi pi-file-code"></i>
               <p>No scripts found</p>

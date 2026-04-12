@@ -10,6 +10,7 @@ import { FormsModule } from '@angular/forms';
 import { TooltipModule } from 'primeng/tooltip';
 import { ExecutionService } from '../../services/execution.service';
 import { ExecutionRun } from '../../models/interfaces';
+import { HttpClient } from '@angular/common/http';
 
 @Component({
   selector: 'app-history',
@@ -25,6 +26,12 @@ export class History implements OnInit {
   page = 1;
   rows = 10;
   statusFilter: string | null = null;
+
+  // Summary stats
+  totalRunsCount = signal(0);
+  overallPassRate = signal(0);
+  avgDuration = signal('-');
+  lastRunDate = signal('-');
 
   statusOptions = [
     { label: 'All Status', value: null },
@@ -54,6 +61,24 @@ export class History implements OnInit {
         this.loading.set(false);
       },
       error: () => this.loading.set(false),
+    });
+
+    // Fetch summary stats from all runs
+    this.executionService.getRuns({ limit: 500 }).subscribe({
+      next: (allRuns) => {
+        this.totalRunsCount.set(allRuns.length);
+        const completed = allRuns.filter(r => r.status === 'passed' || r.status === 'failed');
+        const passed = allRuns.filter(r => r.status === 'passed').length;
+        this.overallPassRate.set(completed.length > 0 ? Math.round((passed / completed.length) * 100) : 0);
+        const durations = allRuns.filter(r => r.durationMs).map(r => r.durationMs! / 1000);
+        if (durations.length > 0) {
+          const avg = Math.round(durations.reduce((s, d) => s + d, 0) / durations.length);
+          this.avgDuration.set(this.formatDuration(avg));
+        }
+        if (allRuns.length > 0 && allRuns[0].startedAt) {
+          this.lastRunDate.set(this.formatDate(allRuns[0].startedAt));
+        }
+      },
     });
   }
 

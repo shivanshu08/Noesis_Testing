@@ -57,7 +57,31 @@
       <p-progressBar mode="indeterminate" [style]="{ height: '3px', 'margin-bottom': '20px' }" />
     }
 
-    <!-- Results Table -->
+    <!-- Execution Timeline -->
+    @if (r.results && r.results.length > 0) {
+      <div class="execution-timeline">
+        <h3 class="timeline-title"><i class="pi pi-chart-bar"></i> Execution Timeline</h3>
+        <div class="timeline-bars">
+          @for (result of r.results; track result.scriptId) {
+            <div class="timeline-row">
+              <span class="timeline-script-name" [pTooltip]="result.scriptName || 'Script #' + result.scriptId">
+                {{ (result.scriptName || 'Script #' + result.scriptId) | slice:0:25 }}
+              </span>
+              <div class="timeline-bar-track">
+                <div class="timeline-bar"
+                  [class.passed]="result.status === 'passed'"
+                  [class.failed]="result.status === 'failed' || result.status === 'error'"
+                  [class.running]="result.status === 'running'"
+                  [style.width.%]="getTimelineWidth(result.durationMs)"
+                  [pTooltip]="formatDuration(result.durationMs ? result.durationMs / 1000 : null)">
+                </div>
+              </div>
+              <span class="timeline-duration">{{ formatDuration(result.durationMs ? result.durationMs / 1000 : null) }}</span>
+            </div>
+          }
+        </div>
+      </div>
+    }
     @if (r.results && r.results.length > 0) {
       <p-card header="Test Results" styleClass="results-card">
         <p-table [value]="r.results" responsiveLayout="scroll" styleClass="p-datatable-sm">

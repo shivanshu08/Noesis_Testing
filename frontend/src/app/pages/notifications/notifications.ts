@@ -59,6 +59,17 @@ export class Notifications implements OnInit {
   // Pagination
   rows = signal(10);
 
+  // Severity counts for quick filter chips
+  severityCounts = computed(() => {
+    const all = this.notificationService.notifications();
+    return {
+      error: all.filter(n => n.severity === 'error').length,
+      warn: all.filter(n => n.severity === 'warn').length,
+      info: all.filter(n => n.severity === 'info').length,
+      success: all.filter(n => n.severity === 'success').length,
+    };
+  });
+
   // Available filter options
   severityOptions = [
     { label: 'All Severities', value: undefined },
@@ -98,6 +109,15 @@ export class Notifications implements OnInit {
 
   ngOnInit() {
     this.notificationService.load(30);
+    this.applyFilters();
+  }
+
+  quickFilterSeverity(severity: string | undefined) {
+    if (this.selectedSeverity() === severity) {
+      this.selectedSeverity.set(undefined);
+    } else {
+      this.selectedSeverity.set(severity);
+    }
     this.applyFilters();
   }
 

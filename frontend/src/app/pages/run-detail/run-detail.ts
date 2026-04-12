@@ -105,6 +105,14 @@ export class RunDetail implements OnInit, OnDestroy {
     return Math.round(((r.passedCount || 0) / r.totalScripts) * 100);
   }
 
+  getTimelineWidth(durationMs: number | undefined | null): number {
+    const r = this.run();
+    if (!r || !r.results || !durationMs) return 10;
+    const maxDuration = Math.max(...r.results.map(res => res.durationMs || 0));
+    if (maxDuration === 0) return 50;
+    return Math.max(10, Math.round((durationMs / maxDuration) * 100));
+  }
+
   downloadPdf() {
     try {
       const r = this.run();

@@ -99,6 +99,7 @@
             <th class="col-lastrun">Last Run</th>
             <th class="col-tags">Tags</th>
             <th class="col-created">Created</th>
+            <th class="col-health" style="width: 90px; text-align: center;">Health</th>
             <th class="col-actions">Actions</th>
           </tr>
         </ng-template>
@@ -154,6 +155,11 @@
             </td>
             <td class="col-created">
               <span class="date-cell">{{ suite.createdAt | date: 'mediumDate' }}</span>
+            </td>
+            <td class="col-health" style="text-align: center;">
+              <span class="health-badge" [class.healthy]="suite.lastRunStatus === 'passed'" [class.unstable]="suite.lastRunStatus === 'failed' || suite.lastRunStatus === 'error'" [class.unknown]="!suite.lastRunStatus">
+                {{ getHealthLabel(suite.lastRunStatus) }}
+              </span>
             </td>
             <td class="col-actions">
               <div class="actions-group">

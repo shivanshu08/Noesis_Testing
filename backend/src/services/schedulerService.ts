@@ -11,6 +11,7 @@ interface ScheduledRunRow {
   cron_expression: string;
   environment: string;
   is_one_time: boolean;
+  is_active: boolean;
   created_by: number | null;
 }
 

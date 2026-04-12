@@ -19,6 +19,38 @@
     </div>
   </div>
 
+  <!-- Summary Stats -->
+  <div class="history-stats-grid">
+    <div class="history-stat-card">
+      <div class="hstat-icon total"><i class="pi pi-play-circle"></i></div>
+      <div class="hstat-info">
+        <span class="hstat-value">{{ totalRunsCount() }}</span>
+        <span class="hstat-label">Total Runs</span>
+      </div>
+    </div>
+    <div class="history-stat-card">
+      <div class="hstat-icon pass"><i class="pi pi-check-circle"></i></div>
+      <div class="hstat-info">
+        <span class="hstat-value">{{ overallPassRate() }}%</span>
+        <span class="hstat-label">Pass Rate</span>
+      </div>
+    </div>
+    <div class="history-stat-card">
+      <div class="hstat-icon duration"><i class="pi pi-stopwatch"></i></div>
+      <div class="hstat-info">
+        <span class="hstat-value">{{ avgDuration() }}</span>
+        <span class="hstat-label">Avg Duration</span>
+      </div>
+    </div>
+    <div class="history-stat-card">
+      <div class="hstat-icon recent"><i class="pi pi-calendar"></i></div>
+      <div class="hstat-info">
+        <span class="hstat-value date">{{ lastRunDate() }}</span>
+        <span class="hstat-label">Last Run</span>
+      </div>
+    </div>
+  </div>
+
   <p-card styleClass="history-card">
     <p-table
       [value]="runs()"
@@ -28,7 +60,7 @@
       [totalRecords]="totalRecords()"
       [lazy]="true"
       (onLazyLoad)="onPageChange($event)"
-      [rowsPerPageOptions]="[10, 20, 50]"
+      [rowsPerPageOptions]="[10, 20, 30, 40, 50]"
       responsiveLayout="scroll"
       styleClass="p-datatable-sm"
     >

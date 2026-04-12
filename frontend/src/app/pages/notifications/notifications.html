@@ -17,6 +17,30 @@
     </div>
   </div>
 
+  <!-- Severity Quick-Filter Chips -->
+  <div class="severity-chips-bar">
+    <button class="severity-chip error" [class.active]="selectedSeverity() === 'error'" (click)="quickFilterSeverity('error')">
+      <i class="pi pi-times-circle"></i>
+      <span class="chip-label">Error</span>
+      <span class="chip-count">{{ severityCounts().error }}</span>
+    </button>
+    <button class="severity-chip warn" [class.active]="selectedSeverity() === 'warn'" (click)="quickFilterSeverity('warn')">
+      <i class="pi pi-exclamation-triangle"></i>
+      <span class="chip-label">Warning</span>
+      <span class="chip-count">{{ severityCounts().warn }}</span>
+    </button>
+    <button class="severity-chip info" [class.active]="selectedSeverity() === 'info'" (click)="quickFilterSeverity('info')">
+      <i class="pi pi-info-circle"></i>
+      <span class="chip-label">Info</span>
+      <span class="chip-count">{{ severityCounts().info }}</span>
+    </button>
+    <button class="severity-chip success" [class.active]="selectedSeverity() === 'success'" (click)="quickFilterSeverity('success')">
+      <i class="pi pi-check-circle"></i>
+      <span class="chip-label">Success</span>
+      <span class="chip-count">{{ severityCounts().success }}</span>
+    </button>
+  </div>
+
   <!-- Filters Section -->
   <p-card styleClass="filters-card">
     <ng-template #header>
@@ -191,7 +215,7 @@
       [value]="filteredNotifications()"
       [paginator]="true"
       [rows]="rows()"
-      [rowsPerPageOptions]="[5, 10, 20, 50]"
+      [rowsPerPageOptions]="[10, 20, 30, 40, 50]"
       [loading]="notificationService.loading()"
       [globalFilterFields]="['summary', 'detail', 'source']"
       responsiveLayout="scroll"

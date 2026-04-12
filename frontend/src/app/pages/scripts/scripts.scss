@@ -405,18 +405,34 @@
 
 @keyframes spin { 100% { transform: rotate(360deg); } }
 
-:host ::ng-deep {
-  .p-datatable .p-paginator .p-paginator-pages .p-paginator-page {
-    min-width: 1.8rem !important;
-    height: 1.8rem !important;
-    border-radius: 50% !important;
-    font-size: 0.85rem;
-  }
-
-  .p-datatable .p-paginator .p-paginator-pages .p-paginator-page.p-highlight,
-  .p-datatable .p-paginator .p-paginator-pages .p-paginator-page-selected {
-    background-color: color-mix(in srgb, var(--noesis-primary) 15%, transparent) !important;
-    border: 1px solid var(--noesis-primary) !important;
-    color: var(--noesis-primary) !important;
-  }
+.last-run-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
+
+.last-run-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--noesis-text-secondary);
+
+  &.passed { background: var(--noesis-success); box-shadow: 0 0 4px rgba(16, 185, 129, 0.4); }
+  &.failed { background: var(--noesis-danger); box-shadow: 0 0 4px rgba(239, 68, 68, 0.4); }
+}
+
+.last-run-time {
+  font-size: 0.8rem;
+  color: var(--noesis-text-secondary);
+  font-weight: 500;
+}
+
+.text-muted {
+  color: var(--noesis-text-secondary);
+  font-size: 0.8rem;
+  font-style: italic;
+  opacity: 0.6;
+}
+
+/* Paginator styling is now handled globally in styles.scss */

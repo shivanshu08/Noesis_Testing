@@ -404,4 +404,11 @@ export class Suites implements OnInit, OnDestroy {
       next: (data) => this.allScripts.set(data),
     });
   }
+
+  getHealthLabel(status: string | undefined): string {
+    if (!status) return '—';
+    if (status === 'passed') return '✓ Healthy';
+    if (status === 'failed' || status === 'error') return '✗ Unstable';
+    return '—';
+  }
 }

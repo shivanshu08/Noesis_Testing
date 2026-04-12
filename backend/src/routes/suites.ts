@@ -123,6 +123,7 @@ router.post('/', authorize('admin', 'tester'), async (req: AuthRequest, res: Res
     try {
       await client.query('BEGIN');
 
+      const result = await client.query(
         'INSERT INTO test_suites (name, description, is_parallel, thread_count, tags, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
         [name, description, isParallel, threadCount, tags ? JSON.stringify(tags) : null, req.userId]
       );

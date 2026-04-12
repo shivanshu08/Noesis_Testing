@@ -1,4 +1,5 @@
 import { Component, OnInit, OnDestroy, signal, effect } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { CardModule } from 'primeng/card';
@@ -27,6 +28,9 @@ export class Dashboard implements OnInit, OnDestroy {
   categories = signal<ScriptCategory[]>([]);
   loading = signal(true);
 
+  // System Health
+  systemHealth = signal<{ api: string; db: string; uptime: number; memoryMB: number; status: string } | null>(null);
+
   categoryChartData: any;
   historyChartData: any;
   chartOptions: any;
@@ -41,7 +45,8 @@ export class Dashboard implements OnInit, OnDestroy {
     private scriptService: ScriptService,
     public auth: AuthService,
     public themeService: ThemeService,
-    private router: Router
+    private router: Router,
+    private http: HttpClient
   ) {
     effect(() => {
       const isDark = this.themeService.isDarkMode();
@@ -89,6 +94,22 @@ export class Dashboard implements OnInit, OnDestroy {
       },
       error: () => this.loading.set(false),
     });
+
+    // Fetch system health
+    this.http.get<any>('/api/health').subscribe({
+      next: (data) => this.systemHealth.set(data),
+      error: () => this.systemHealth.set({ api: 'degraded', db: 'unknown', uptime: 0, memoryMB: 0, status: 'degraded' }),
+    });
+  }
+
+  formatUptime(seconds: number): string {
+    if (!seconds) return '-';
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
   }
 
   getPercentage(count: number, total: number | undefined): number {

@@ -499,9 +499,18 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { category, search, active } = req.query;
     let sql = `
-      SELECT s.*, sc.name as category_name, sc.icon as category_icon, sc.color as category_color
+      SELECT s.*, sc.name as category_name, sc.icon as category_icon, sc.color as category_color,
+        lr.last_run_at, lr.last_run_status
       FROM scripts s
       JOIN script_categories sc ON s.category_id = sc.id
+      LEFT JOIN LATERAL (
+        SELECT er.started_at AS last_run_at, er.status AS last_run_status
+        FROM execution_results eres
+        JOIN execution_runs er ON eres.run_id = er.id
+        WHERE eres.script_id = s.id
+        ORDER BY er.started_at DESC NULLS LAST
+        LIMIT 1
+      ) lr ON TRUE
       WHERE 1=1
     `;
     const params: any[] = [];
@@ -523,7 +532,7 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
 
     sql += ' ORDER BY sc.sort_order, s.name';
 
-    const scripts = await query<ScriptRow>(sql, params);
+    const scripts = await query<ScriptRow & { last_run_at?: Date; last_run_status?: string }>(sql, params);
     res.json(scripts.map(s => ({
       id: s.id,
       name: (s.name || '').replace(/\.java$/i, ''),
@@ -539,6 +548,8 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
       isActive: s.is_active,
       tags: s.tags || [],
       createdAt: s.created_at,
+      lastRunAt: s.last_run_at || null,
+      lastRunStatus: s.last_run_status || null,
     })));
   } catch (error) {
     logger.error('List scripts error:', error);
@@ -1024,7 +1035,10 @@ router.post('/sync', authorize('admin'), async (req: AuthRequest, res: Response)
           'INSERT INTO scripts (name, class_name, category_id, file_path, is_active) VALUES ($1, $2, $3, $4, TRUE) RETURNING id',
           [standardName, className, inferredCategoryId, relPath]
         );
-        addedScripts.push(standardName);`r`n`r`n        // Increment user scripts_registered statistic`r`n        await execute('UPDATE users SET scripts_registered = scripts_registered + 1 WHERE id = $1', [req.userId]);
+        addedScripts.push(standardName);
+
+        // Increment user scripts_registered statistic
+        await execute('UPDATE users SET scripts_registered = scripts_registered + 1 WHERE id = $1', [req.userId]);
 
         const insertedId = Number(inserted.rows?.[0]?.id || 0);
         const insertedRow: ScriptSyncRow = {
