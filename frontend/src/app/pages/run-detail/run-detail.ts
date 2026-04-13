@@ -332,14 +332,49 @@ export class RunDetail implements OnInit, OnDestroy {
     return `${secs}s`;
   }
 
-  getTimelineWidth(durationMs: number | undefined | null): number {
+  getTimelineWidth(durationMs: number | undefined | null, status: string): number {
+    const normStatus = this.normalizeStatus(status);
+    if (['skipped', 'queued', 'stopped'].includes(normStatus)) {
+      return 0;
+    }
+
     const r = this.run();
-    if (!r || !r.results || !durationMs) return 10;
+    if (!r || !r.results || !durationMs) return 0;
 
     const maxDuration = Math.max(...r.results.map((res) => res.durationMs || 0));
     if (maxDuration === 0) return 50;
 
     return Math.max(10, Math.round((durationMs / maxDuration) * 100));
+  }
+
+  getDurationLabel(result: ExecutionResult): string {
+    const status = this.normalizeStatus(result.status);
+    if (status === 'skipped') return 'Skipped';
+    if (status === 'queued') return 'Queued';
+    if (status === 'stopped') return 'Stopped';
+    if (status === 'running') return 'In Progress';
+
+    return this.formatDuration(result.durationMs ? result.durationMs / 1000 : null);
+  }
+
+  getRemarksLabel(result: ExecutionResult): string {
+    if (result.errorMessage) return result.errorMessage;
+
+    const status = this.normalizeStatus(result.status);
+    switch (status) {
+      case 'passed':
+        return 'Execution completed';
+      case 'skipped':
+        return 'Script was skipped';
+      case 'queued':
+        return 'Awaiting execution';
+      case 'running':
+        return 'Actively executing...';
+      case 'stopped':
+        return 'Execution was manually stopped';
+      default:
+        return '-';
+    }
   }
 
   getRunMetadataValue(field: keyof NonNullable<ExecutionRun['runMetadata']>): string {

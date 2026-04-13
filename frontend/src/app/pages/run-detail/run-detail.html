@@ -130,7 +130,7 @@
 
       <article class="kpi-card">
         <span class="kpi-label">Artifacts</span>
-        <strong class="kpi-value">{{ artifacts().length }}</strong>
+        <strong class="kpi-value">{{ artifacts().length + 1 }}</strong>
       </article>
     </section>
 
@@ -209,19 +209,17 @@
                   <p-tag [value]="result.status | titlecase" [severity]="getStatusSeverity(result.status)" />
                 </td>
                 <td class="duration-col">
-                  <span class="duration-value">{{ formatDuration(result.durationMs ? result.durationMs / 1000 : null) }}</span>
+                  <span class="duration-value">{{ getDurationLabel(result) }}</span>
                 </td>
                 <td class="timeline-col">
                   <div class="duration-track">
-                    <span class="duration-fill" [style.width.%]="getTimelineWidth(result.durationMs)"></span>
+                    <span class="duration-fill" [style.width.%]="getTimelineWidth(result.durationMs, result.status)"></span>
                   </div>
                 </td>
                 <td class="remarks-col">
-                  @if (result.errorMessage) {
-                    <span class="error-text" [pTooltip]="result.errorMessage" tooltipPosition="top">{{ result.errorMessage }}</span>
-                  } @else {
-                    <span class="empty-mark">-</span>
-                  }
+                  <span class="remarks-text" [pTooltip]="result.errorMessage" tooltipPosition="top">
+                    {{ getRemarksLabel(result) }}
+                  </span>
                 </td>
               </tr>
             </ng-template>
@@ -336,70 +334,6 @@
       </div>
 
       <aside class="side-column">
-        <p-card styleClass="detail-card artifacts-hub">
-          <div class="card-head">
-            <div class="card-head-main">
-              <h3><i class="pi pi-box"></i> Artifacts Hub</h3>
-              <p>Collected files and ready-to-download reports</p>
-            </div>
-            <span class="count-pill" *ngIf="artifacts().length > 0">{{ artifacts().length }}</span>
-          </div>
-
-          <div class="hub-shell">
-            <div class="hub-metrics">
-              <div class="hub-metric">
-                <span class="label">PDF</span>
-                <strong class="value">Ready</strong>
-              </div>
-              <div class="hub-metric">
-                <span class="label">Artifacts</span>
-                <strong class="value">{{ artifacts().length }}</strong>
-              </div>
-              <div class="hub-metric">
-                <span class="label">Downloads</span>
-                <strong class="value">{{ artifacts().length + 1 }}</strong>
-              </div>
-            </div>
-
-            <div class="artifact-items">
-              <div class="artifact-box report-artifact feature" (click)="downloadPdf()">
-                <div class="artifact-icon pdf">
-                  <i class="pi pi-file-pdf"></i>
-                </div>
-                <div class="artifact-details">
-                  <span class="name">Noesis Run Report</span>
-                  <span class="size">Download PDF</span>
-                </div>
-                <div class="artifact-link">
-                  <i class="pi pi-download"></i>
-                </div>
-              </div>
-
-              @if (artifacts().length > 0) {
-                @for (artifact of artifacts(); track artifact.id) {
-                  <div class="artifact-box" (click)="downloadArtifact(artifact)">
-                    <div class="artifact-icon" [class]="artifact.artifactType">
-                      <i class="pi" [ngClass]="{ 'pi-file-pdf': artifact.artifactType === 'pdf', 'pi-file': artifact.artifactType === 'html' }"></i>
-                    </div>
-                    <div class="artifact-details">
-                      <span class="name">{{ artifact.fileName }}</span>
-                      <span class="size">{{ artifact.fileSizeBytes ? (artifact.fileSizeBytes / 1024 | number:'1.0-1') + ' KB' : '--' }}</span>
-                    </div>
-                    <div class="artifact-link">
-                      <i class="pi pi-download"></i>
-                    </div>
-                  </div>
-                }
-              } @else {
-                <div class="empty-artifacts">
-                  <i class="pi pi-cloud-download"></i>
-                  <p>No uploaded artifacts available for this run</p>
-                </div>
-              }
-            </div>
-          </div>
-        </p-card>
-
         <p-card styleClass="detail-card env-details">
           <div class="card-head">
             <div class="card-head-main">
@@ -452,6 +386,70 @@
                 <span class="key"><i class="pi pi-folder-open"></i>Reports Directory</span>
                 <span class="val">{{ getRunMetadataValue('reportsDirectory') }}</span>
               </div>
+            </div>
+          </div>
+        </p-card>
+
+        <p-card styleClass="detail-card artifacts-hub">
+          <div class="card-head">
+            <div class="card-head-main">
+              <h3><i class="pi pi-box"></i> Artifacts Hub</h3>
+              <p>Collected files and ready-to-download reports</p>
+            </div>
+            <span class="count-pill">{{ artifacts().length + 1 }}</span>
+          </div>
+
+          <div class="hub-shell">
+            <div class="hub-metrics">
+              <div class="hub-metric">
+                <span class="label">PDF</span>
+                <strong class="value">Ready</strong>
+              </div>
+              <div class="hub-metric">
+                <span class="label">Artifacts</span>
+                <strong class="value">{{ artifacts().length + 1 }}</strong>
+              </div>
+              <div class="hub-metric">
+                <span class="label">Downloads</span>
+                <strong class="value">{{ artifacts().length + 1 }}</strong>
+              </div>
+            </div>
+
+            <div class="artifact-items">
+              <div class="artifact-box report-artifact feature" (click)="downloadPdf()">
+                <div class="artifact-icon pdf">
+                  <i class="pi pi-file-pdf"></i>
+                </div>
+                <div class="artifact-details">
+                  <span class="name">Noesis Run Report</span>
+                  <span class="size">Download PDF</span>
+                </div>
+                <div class="artifact-link">
+                  <i class="pi pi-download"></i>
+                </div>
+              </div>
+
+              @if (artifacts().length > 0) {
+                @for (artifact of artifacts(); track artifact.id) {
+                  <div class="artifact-box" (click)="downloadArtifact(artifact)">
+                    <div class="artifact-icon" [class]="artifact.artifactType">
+                      <i class="pi" [ngClass]="{ 'pi-file-pdf': artifact.artifactType === 'pdf', 'pi-file': artifact.artifactType === 'html' }"></i>
+                    </div>
+                    <div class="artifact-details">
+                      <span class="name">{{ artifact.fileName }}</span>
+                      <span class="size">{{ artifact.fileSizeBytes ? (artifact.fileSizeBytes / 1024 | number:'1.0-1') + ' KB' : '--' }}</span>
+                    </div>
+                    <div class="artifact-link">
+                      <i class="pi pi-download"></i>
+                    </div>
+                  </div>
+                }
+              } @else {
+                <div class="empty-artifacts">
+                  <i class="pi pi-cloud-download"></i>
+                  <p>No uploaded artifacts available for this run</p>
+                </div>
+              }
             </div>
           </div>
         </p-card>
