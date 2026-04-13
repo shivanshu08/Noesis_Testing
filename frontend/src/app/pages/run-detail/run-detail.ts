@@ -11,6 +11,7 @@ import { ProgressBarModule } from 'primeng/progressbar';
 import { ExecutionService } from '../../services/execution.service';
 import { ExecutionRun, ExecutionLog, ExecutionArtifact } from '../../models/interfaces';
 import { AuthService } from '../../services/auth.service';
+import { environment } from '../../../environments/environment';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -28,6 +29,19 @@ export class RunDetail implements OnInit, OnDestroy {
   artifacts = signal<ExecutionArtifact[]>([]);
   loading = signal(true);
   runId = 0;
+  readonly executionRunUrl = `${environment.apiUrl}/execution/run`;
+
+  get executionAppUrl(): string {
+    const value = this.run()?.runMetadata?.appUrl;
+    if (value === null || value === undefined || value === '') return '-';
+    return String(value);
+  }
+
+  get executionEnvironmentLabel(): string {
+    const url = this.executionAppUrl;
+    if (url === '-') return '-';
+    return inferEnvironmentFromUrl(url);
+  }
 
   constructor(
     private route: ActivatedRoute,
@@ -266,4 +280,14 @@ export class RunDetail implements OnInit, OnDestroy {
       alert('Error generating PDF: ' + e.message);
     }
   }
+}
+
+function inferEnvironmentFromUrl(url: string): string {
+  const normalizedUrl = (url || '').toLowerCase();
+
+  if (!normalizedUrl) return '-';
+  if (normalizedUrl.includes('val')) return 'Validation';
+  if (normalizedUrl.includes('dev') || normalizedUrl.includes('sandbox')) return 'Staging';
+  if (normalizedUrl.includes('localhost') || normalizedUrl.includes('127.0.0.1')) return 'Local';
+  return 'Production';
 }

@@ -217,23 +217,27 @@
           </div>
           <div class="env-info">
             <div class="info-row">
-              <span class="key">Source</span>
-              <span class="val">{{ getRunMetadataValue('executionSource') }}</span>
+              <span class="key">Execution Environment</span>
+              <span class="val">{{ executionEnvironmentLabel }}</span>
             </div>
             <div class="info-row">
-              <span class="key">Branch</span>
-              <span class="val">{{ getRunMetadataValue('gitBranch') }}</span>
+              <span class="key">URL</span>
+              <span class="val">{{ executionAppUrl }}</span>
             </div>
             <div class="info-row">
-              <span class="key">Repository</span>
+              <span class="key">Execution API</span>
+              <span class="val">POST {{ executionRunUrl }}</span>
+            </div>
+            <div class="info-row">
+              <span class="key">Git Repository</span>
               <span class="val">{{ getRunMetadataValue('gitRepoUrl') }}</span>
             </div>
             <div class="info-row">
-              <span class="key">Workspace</span>
-              <span class="val">{{ getRunMetadataValue('workspacePath') }}</span>
+              <span class="key">Suite XML</span>
+              <span class="val">{{ getRunMetadataValue('suiteFileName') }}</span>
             </div>
             <div class="info-row">
-              <span class="key">Reports</span>
+              <span class="key">Reports Directory</span>
               <span class="val">{{ getRunMetadataValue('reportsDirectory') }}</span>
             </div>
           </div>

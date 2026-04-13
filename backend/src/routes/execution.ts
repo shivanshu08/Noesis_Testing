@@ -70,6 +70,7 @@ interface RunMetadata {
   executionSource: 'git' | 'local';
   gitRepoUrl: string | null;
   gitBranch: string | null;
+  appUrl?: string | null;
   workspacePath: string;
   suiteFilePath: string;
   suiteFileName: string;
@@ -342,6 +343,59 @@ router.get('/runs/:id', async (req: AuthRequest, res: Response): Promise<void> =
     `, [req.params.id]);
 
     const r = runs[0];
+    const runMetadata: Record<string, unknown> = r.run_metadata && typeof r.run_metadata === 'object'
+      ? { ...(r.run_metadata as Record<string, unknown>) }
+      : {};
+
+    const rawAppUrl = runMetadata.appUrl;
+    const existingAppUrl = typeof rawAppUrl === 'string' && rawAppUrl.trim()
+      ? rawAppUrl.trim()
+      : null;
+
+    if (!existingAppUrl) {
+      let derivedAppUrl: string | null = resolveExecutionAppUrlFromLogOutput(results);
+
+      const rawWorkspacePath = runMetadata.workspacePath;
+      const workspacePath = typeof rawWorkspacePath === 'string' ? rawWorkspacePath : null;
+
+      if (!derivedAppUrl) {
+        const rawReportsDirectory = runMetadata.reportsDirectory;
+        const reportsDirectory = typeof rawReportsDirectory === 'string' ? rawReportsDirectory : null;
+        const reportsWorkspacePath = resolveWorkspaceRootFromReportsDirectory(reportsDirectory);
+
+        const rawSuiteFilePath = runMetadata.suiteFilePath;
+        const suiteFilePath = typeof rawSuiteFilePath === 'string' ? rawSuiteFilePath : null;
+        const suiteWorkspacePath = suiteFilePath ? path.dirname(suiteFilePath) : null;
+
+        const automationRoot = resolveFirstExistingPath([
+          workspacePath,
+          reportsWorkspacePath,
+          suiteWorkspacePath,
+          config.stAutomation.gitCachePath,
+          path.join(process.cwd(), '.cache', 'automation-testing-repo'),
+          path.join(process.cwd(), 'backend', '.cache', 'automation-testing-repo'),
+          config.stAutomation.path,
+        ]);
+
+        if (automationRoot) {
+          const classNamesFromResults = results.map((res) => res.class_name).filter(Boolean);
+          const classNamesFromXml = extractTestClassNamesFromTestNgXml(r.config_xml);
+          const classNames = Array.from(new Set([...classNamesFromResults, ...classNamesFromXml]));
+
+          derivedAppUrl = resolveExecutionAppUrlFromTestClasses(r.id, automationRoot, classNames);
+
+          if (!derivedAppUrl) {
+            derivedAppUrl = resolveExecutionAppUrlFromWorkspaceResources(r.id, automationRoot);
+          }
+        }
+      }
+
+      if (derivedAppUrl) {
+        runMetadata.appUrl = derivedAppUrl;
+        await persistRunMetadata(r.id, runMetadata);
+      }
+    }
+
     res.json({
       id: r.id,
       runName: r.run_name,
@@ -355,7 +409,7 @@ router.get('/runs/:id', async (req: AuthRequest, res: Response): Promise<void> =
       durationMs: r.duration_ms,
       environment: r.environment,
       configXml: r.config_xml,
-      runMetadata: r.run_metadata,
+      runMetadata,
       triggeredBy: r.triggered_by_name,
       startedAt: r.started_at,
       completedAt: r.completed_at,
@@ -850,6 +904,460 @@ function inferKeyword(message: string): string | undefined {
   return undefined;
 }
 
+function extractTestClassNamesFromTestNgXml(testngXml: unknown): string[] {
+  if (typeof testngXml !== 'string') return [];
+  const value = testngXml.trim();
+  if (!value) return [];
+
+  const classNames: string[] = [];
+  const regex = /<class\b[^>]*\bname="([^"]+)"[^>]*>/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(value)) !== null) {
+    const name = match[1]?.trim();
+    if (name) classNames.push(name);
+  }
+  return classNames;
+}
+
+function resolveFirstExistingPath(candidates: Array<string | null | undefined>): string | null {
+  const fs = require('fs');
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const trimmed = String(candidate).trim();
+    if (!trimmed) continue;
+    if (fs.existsSync(trimmed)) return trimmed;
+  }
+
+  return null;
+}
+
+function resolveWorkspaceRootFromReportsDirectory(reportsDirectory: string | null): string | null {
+  if (!reportsDirectory) return null;
+  const trimmed = String(reportsDirectory).trim();
+  if (!trimmed) return null;
+
+  const normalized = path.normalize(trimmed);
+  const parts = normalized.split(path.sep);
+  const targetIndex = parts.findIndex((part) => String(part || '').toLowerCase() === 'target');
+  if (targetIndex > 0) {
+    const prefix = parts.slice(0, targetIndex).join(path.sep);
+    if (prefix) return prefix;
+  }
+
+  try {
+    return path.dirname(path.dirname(normalized));
+  } catch {
+    return null;
+  }
+}
+
+function resolveJavaSourcePath(stPath: string, sourceSet: 'main' | 'test', className: string): string {
+  const relativePath = className.replace(/\./g, path.sep) + '.java';
+  return path.join(stPath, 'src', sourceSet, 'java', relativePath);
+}
+
+function findJavaSourcePath(stPath: string, className: string, preferredSourceSets: Array<'main' | 'test'>): string | null {
+  const fs = require('fs');
+  if (!stPath || !className) return null;
+
+  for (const sourceSet of preferredSourceSets) {
+    const candidatePath = resolveJavaSourcePath(stPath, sourceSet, className);
+    if (fs.existsSync(candidatePath)) return candidatePath;
+  }
+
+  return null;
+}
+
+function buildJavaImportMap(javaSource: string): Map<string, string> {
+  const map = new Map<string, string>();
+  const importRegex = /^\s*import\s+([A-Za-z0-9_.]+)\s*;\s*$/gm;
+  let match: RegExpExecArray | null;
+  while ((match = importRegex.exec(javaSource)) !== null) {
+    const fullName = match[1];
+    const simpleName = fullName.split('.').pop() || fullName;
+    map.set(simpleName, fullName);
+  }
+  return map;
+}
+
+function extractConfigClassNameFromTestSource(javaSource: string): string | null {
+  const patterns = [
+    /\b([A-Za-z_][A-Za-z0-9_]*Config)\s*\.\s*getInstance\s*\(/,
+    /\b([A-Za-z_][A-Za-z0-9_]*Config)\s*\.\s*forEnvironment\s*\(/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = javaSource.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+
+  return null;
+}
+
+function extractConfigJsonResourcePath(configSource: string): string | null {
+  const directLiteral = configSource.match(
+    /ConfigurationLoader\.loadConfiguration\([\s\S]*?,\s*\"([^\"]+\.json)\"\s*,/m
+  );
+  if (directLiteral?.[1]) return directLiteral[1];
+
+  const varMatch = configSource.match(
+    /ConfigurationLoader\.loadConfiguration\([\s\S]*?,\s*([A-Za-z_][A-Za-z0-9_]*)\s*,/m
+  );
+  if (varMatch?.[1]) {
+    const varName = varMatch[1];
+    const assignRegex = new RegExp(`\\b${varName}\\b\\s*=\\s*\"([^\"]+\\.json)\"`);
+    const assignMatch = configSource.match(assignRegex);
+    if (assignMatch?.[1]) return assignMatch[1];
+  }
+
+  const anyJsonLiteral = configSource.match(/\"([^\"]+\.json)\"/m);
+  if (anyJsonLiteral?.[1]) return anyJsonLiteral[1];
+
+  return null;
+}
+
+function findAppUrlInJson(value: unknown): string | null {
+  if (typeof value !== 'object' || value === null) return null;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findAppUrlInJson(item);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>);
+  for (const [key, child] of entries) {
+    const normalizedKey = key.toLowerCase();
+    if (normalizedKey === 'appurl' || normalizedKey === 'app_url') {
+      if (typeof child === 'string' && child.trim()) return child.trim();
+    }
+  }
+
+  for (const [, child] of entries) {
+    const found = findAppUrlInJson(child);
+    if (found) return found;
+  }
+
+  return null;
+}
+
+function resolveAppUrlFromConfigResource(stPath: string, configResourcePath: string): string | null {
+  const fs = require('fs');
+  const trimmedPath = String(configResourcePath || '').trim();
+  if (!stPath || !trimmedPath) return null;
+
+  const relativeResourcePath = trimmedPath
+    .replace(/^[\\/]+/, '')
+    .replace(/\//g, path.sep)
+    .replace(/^src[\\/]+main[\\/]+resources[\\/]+/i, '')
+    .replace(/^src[\\/]+test[\\/]+resources[\\/]+/i, '');
+
+  const candidatePaths: Array<string | null> = [
+    /^[A-Za-z]:[\\/]/.test(trimmedPath) || trimmedPath.startsWith('\\\\') ? trimmedPath : null,
+    path.join(stPath, 'src', 'main', 'resources', relativeResourcePath),
+    path.join(stPath, 'src', 'test', 'resources', relativeResourcePath),
+  ];
+
+  for (const candidate of candidatePaths) {
+    if (!candidate || !fs.existsSync(candidate)) continue;
+
+    try {
+      const content = fs.readFileSync(candidate, 'utf8');
+      try {
+        const parsed = JSON.parse(content);
+        const found = findAppUrlInJson(parsed);
+        if (found) return found;
+      } catch {
+        const match = content.match(/\"appUrl\"\s*:\s*\"([^\"]+)\"/i);
+        const found = match?.[1]?.trim();
+        if (found) return found;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+function sanitizeUrlCandidate(value: string): string | null {
+  const trimmed = String(value || '').trim().replace(/^['"]+|['"]+$/g, '');
+  if (!trimmed) return null;
+
+  const cleaned = trimmed.replace(/[)\]}>.,;:]+$/g, '');
+  if (!/^https?:\/\//i.test(cleaned)) return null;
+  return cleaned;
+}
+
+function scoreUrlCandidate(url: string): number {
+  const normalized = String(url || '').toLowerCase();
+  let score = 0;
+  if (normalized.startsWith('https://')) score += 5;
+  if (normalized.includes('sandbox')) score += 15;
+  if (normalized.includes('dev')) score += 10;
+  if (normalized.includes('val')) score += 12;
+  if (normalized.includes('drogevate.com')) score += 10;
+  if (normalized.includes('localhost') || normalized.includes('127.0.0.1')) score -= 50;
+  if (normalized.includes('/api/')) score -= 10;
+  return score;
+}
+
+function pickBestUrlCandidate(urls: string[]): string | null {
+  const cleaned = urls.map(sanitizeUrlCandidate).filter(Boolean) as string[];
+  if (cleaned.length === 0) return null;
+
+  const frequency = new Map<string, { url: string; count: number }>();
+  for (const url of cleaned) {
+    const key = url.trim().replace(/\/+$/, '').toLowerCase();
+    const existing = frequency.get(key);
+    if (existing) {
+      existing.count += 1;
+      continue;
+    }
+    frequency.set(key, { url: url.trim(), count: 1 });
+  }
+
+  let best: { url: string; count: number } | null = null;
+  for (const entry of frequency.values()) {
+    if (!best) {
+      best = entry;
+      continue;
+    }
+
+    if (entry.count > best.count) {
+      best = entry;
+      continue;
+    }
+
+    if (entry.count === best.count && scoreUrlCandidate(entry.url) > scoreUrlCandidate(best.url)) {
+      best = entry;
+    }
+  }
+
+  return best?.url || null;
+}
+
+function resolveExecutionAppUrlFromLogOutput(results: ResultRow[]): string | null {
+  if (!Array.isArray(results) || results.length === 0) return null;
+
+  const uniqueOutputs: string[] = [];
+  const seen = new Set<string>();
+  for (const result of results) {
+    if (typeof result.log_output !== 'string') continue;
+    const trimmed = result.log_output.trim();
+    if (!trimmed) continue;
+    if (seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    uniqueOutputs.push(trimmed);
+    if (uniqueOutputs.length >= 3) break;
+  }
+
+  const combinedText = uniqueOutputs.join('\n').slice(0, 250_000);
+
+  if (!combinedText) return null;
+
+  const urls: string[] = [];
+  const regex = /https?:\/\/[^\s"'<>]+/gi;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(combinedText)) !== null) {
+    urls.push(match[0]);
+  }
+
+  return pickBestUrlCandidate(urls);
+}
+
+function resolveExecutionAppUrlFromWorkspaceResources(runId: number, stPath: string): string | null {
+  const fs = require('fs');
+  if (!stPath || !fs.existsSync(stPath)) return null;
+
+  const resourceRoots: string[] = [
+    path.join(stPath, 'src', 'main', 'resources'),
+    path.join(stPath, 'src', 'test', 'resources'),
+  ].filter((candidate) => fs.existsSync(candidate));
+
+  if (resourceRoots.length === 0) return null;
+
+  const urls: string[] = [];
+  const skipDirNames = new Set(['.git', 'target', 'node_modules', 'build', 'dist', 'out', '.idea', '.vscode']);
+  const stack: string[] = [...resourceRoots];
+
+  while (stack.length > 0) {
+    const currentDir = stack.pop() as string;
+    let entries: any[] = [];
+
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      if (entry?.isDirectory?.()) {
+        if (skipDirNames.has(entry.name)) continue;
+        stack.push(path.join(currentDir, entry.name));
+        continue;
+      }
+
+      if (!entry?.isFile?.()) continue;
+      if (!String(entry.name || '').toLowerCase().endsWith('.json')) continue;
+
+      const filePath = path.join(currentDir, entry.name);
+
+      try {
+        const stat = fs.statSync(filePath);
+        if (typeof stat?.size === 'number' && stat.size > 2_000_000) continue;
+      } catch {
+        continue;
+      }
+
+      let content = '';
+      try {
+        content = fs.readFileSync(filePath, 'utf8');
+      } catch {
+        continue;
+      }
+
+      try {
+        const parsed = JSON.parse(content);
+        const found = findAppUrlInJson(parsed);
+        if (found) urls.push(found);
+      } catch {
+        const match = content.match(/\"appUrl\"\s*:\s*\"([^\"]+)\"/i);
+        const found = match?.[1]?.trim();
+        if (found) urls.push(found);
+      }
+    }
+  }
+
+  if (urls.length === 0) {
+    logger.warn(`Run ${runId}: No appUrl candidates found under workspace resources.`);
+    return null;
+  }
+
+  return pickBestUrlCandidate(urls);
+}
+
+function resolveExecutionAppUrlFromTestClasses(runId: number, stPath: string, testClassNames: string[]): string | null {
+  const fs = require('fs');
+  if (!stPath || !fs.existsSync(stPath) || !Array.isArray(testClassNames) || testClassNames.length === 0) return null;
+
+  const uniqueClassNames = Array.from(new Set(testClassNames.filter(Boolean)));
+  const searchRoots: string[] = [
+    path.join(stPath, 'src', 'test', 'java'),
+    path.join(stPath, 'src', 'main', 'java'),
+  ].filter((candidate) => fs.existsSync(candidate));
+
+  const skipDirNames = new Set(['.git', 'target', 'node_modules', 'build', 'dist', 'out', '.idea', '.vscode']);
+  const fileNameSearchCache = new Map<string, string | null>();
+
+  const findFileByName = (root: string, targetFileName: string): string | null => {
+    const stack: string[] = [root];
+
+    while (stack.length > 0) {
+      const currentDir = stack.pop() as string;
+      let entries: any[] = [];
+
+      try {
+        entries = fs.readdirSync(currentDir, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+
+      for (const entry of entries) {
+        if (entry?.isDirectory?.()) {
+          if (skipDirNames.has(entry.name)) continue;
+          stack.push(path.join(currentDir, entry.name));
+          continue;
+        }
+
+        if (entry?.isFile?.() && entry.name === targetFileName) {
+          return path.join(currentDir, entry.name);
+        }
+      }
+    }
+
+    return null;
+  };
+
+  const resolveTestClassPath = (className: string): string | null => {
+    const directPath = findJavaSourcePath(stPath, className, ['test', 'main']);
+    if (directPath) return directPath;
+
+    const simpleName = String(className || '').split('.').pop()?.replace(/\.java$/i, '').trim();
+    if (!simpleName) return null;
+
+    const cacheKey = simpleName.toLowerCase();
+    if (fileNameSearchCache.has(cacheKey)) {
+      return fileNameSearchCache.get(cacheKey) || null;
+    }
+
+    const targetFileName = `${simpleName}.java`;
+    for (const root of searchRoots) {
+      const found = findFileByName(root, targetFileName);
+      if (found) {
+        fileNameSearchCache.set(cacheKey, found);
+        return found;
+      }
+    }
+
+    fileNameSearchCache.set(cacheKey, null);
+    return null;
+  };
+
+  for (const testClassName of uniqueClassNames) {
+    const testClassPath = resolveTestClassPath(testClassName);
+    if (!testClassPath) continue;
+
+    let testSource = '';
+    try {
+      testSource = fs.readFileSync(testClassPath, 'utf8');
+    } catch (error: any) {
+      logger.warn(`Run ${runId}: Failed to read test source ${testClassPath}: ${error?.message || error}`);
+      continue;
+    }
+
+    const configClassSimpleName = extractConfigClassNameFromTestSource(testSource);
+
+    // Fallback: some scripts may load configuration JSON directly without a dedicated *Config class.
+    const inlineConfigJsonPath = extractConfigJsonResourcePath(testSource);
+    if (inlineConfigJsonPath) {
+      const inlineAppUrl = resolveAppUrlFromConfigResource(stPath, inlineConfigJsonPath);
+      if (inlineAppUrl) return inlineAppUrl;
+    }
+
+    if (!configClassSimpleName) continue;
+
+    const importMap = buildJavaImportMap(testSource);
+    const candidates: string[] = [];
+    const importedFullName = importMap.get(configClassSimpleName);
+    if (importedFullName) candidates.push(importedFullName);
+    candidates.push(`org.example.config.${configClassSimpleName}`);
+    candidates.push(`org.example.config.manual.${configClassSimpleName}`);
+
+    for (const fullConfigClassName of candidates) {
+      const configClassPath = findJavaSourcePath(stPath, fullConfigClassName, ['main', 'test']);
+      if (!configClassPath) continue;
+
+      let configSource = '';
+      try {
+        configSource = fs.readFileSync(configClassPath, 'utf8');
+      } catch {
+        continue;
+      }
+
+      const configJsonResourcePath = extractConfigJsonResourcePath(configSource);
+      if (!configJsonResourcePath) continue;
+
+      const appUrl = resolveAppUrlFromConfigResource(stPath, configJsonResourcePath);
+      if (appUrl) return appUrl;
+    }
+  }
+
+  return null;
+}
+
 function buildDetailedDescription(
   runId: number,
   logLevel: string,
@@ -885,7 +1393,7 @@ async function insertExecutionLog(
   );
 }
 
-async function persistRunMetadata(runId: number, metadata: RunMetadata): Promise<void> {
+async function persistRunMetadata(runId: number, metadata: Record<string, unknown>): Promise<void> {
   try {
     await execute(
       `UPDATE execution_runs SET run_metadata = $1 WHERE id = $2`,
@@ -1328,20 +1836,31 @@ async function executeScripts(runId: number, testngXml: string, scripts: any[], 
 
     // Determine Maven command
     const mvnCmd = process.platform === 'win32' ? 'mvn.cmd' : 'mvn';
+    const surefireReportsDirectory = path.join('target', 'surefire-reports', `run-${runId}`);
     const mavenArgs = [
-      'clean',
       'test',
       `-Dsurefire.suiteXmlFiles=${suiteFileName}`,
       `-DsuiteXmlFile=${suiteFileName}`,
+      `-Dsurefire.reportsDirectory=${surefireReportsDirectory}`,
     ];
 
     const commandPreview = [mvnCmd, ...mavenArgs].join(' ');
-    const reportsDirectory = path.join(stPath, 'target', 'surefire-reports');
+    const reportsDirectory = path.join(stPath, surefireReportsDirectory);
+    let appUrl = resolveExecutionAppUrlFromTestClasses(
+      runId,
+      stPath,
+      scripts.map((script: any) => script.class_name).filter(Boolean)
+    );
+
+    if (!appUrl) {
+      appUrl = resolveExecutionAppUrlFromWorkspaceResources(runId, stPath);
+    }
 
     const runMetadata: RunMetadata = {
       executionSource: source === 'git' ? 'git' : 'local',
       gitRepoUrl: source === 'git' ? config.stAutomation.gitRepoUrl || null : null,
       gitBranch: source === 'git' ? config.stAutomation.gitBranch || null : null,
+      appUrl: appUrl || null,
       workspacePath: stPath,
       suiteFilePath: tempXmlPath,
       suiteFileName,
@@ -1591,7 +2110,9 @@ async function captureReportArtifacts(runId: number, scripts: any[], executionWo
   const fs = await import('fs');
   const path = await import('path');
 
-  const surefirePath = path.join(executionWorkspacePath, 'target', 'surefire-reports');
+  const surefireBasePath = path.join(executionWorkspacePath, 'target', 'surefire-reports');
+  const runSurefirePath = path.join(surefireBasePath, `run-${runId}`);
+  const surefirePath = fs.existsSync(runSurefirePath) ? runSurefirePath : surefireBasePath;
   const reportsOutputBase = (config.stAutomation as any).reportsPath || path.join(executionWorkspacePath, 'noesis-reports');
   const runReportDir = path.join(reportsOutputBase, `run-${runId}`);
 

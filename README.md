@@ -387,15 +387,31 @@ The platform implements multiple layers of security:
 
 ## Environment Configuration
 
-The backend uses a `.env` file for all environment-specific configuration. A `.env.example` template is provided with the following configurable sections:
+The backend is configured via `backend/.env` (copy from `backend/.env.example`). Common settings:
 
-| Category      | Variables                              | Description                          |
-|:--------------|:---------------------------------------|:-------------------------------------|
-| **Server**    | `PORT`, `NODE_ENV`                     | Server port and environment mode     |
-| **Database**  | `DB_HOST`, `DB_PORT`, `DB_NAME`, etc.  | PostgreSQL connection parameters     |
-| **Auth**      | `JWT_SECRET`, `JWT_EXPIRES_IN`         | Token signing and expiration config  |
-| **Automation**| `ST_AUTOMATION_PATH`, `MAVEN_HOME`     | Test automation project paths        |
-| **CORS**      | `CORS_ORIGIN`                          | Allowed frontend origin              |
+| Feature                     | Env var(s)                                                                 | Example value (default)                                           |
+|:----------------------------|:---------------------------------------------------------------------------|:------------------------------------------------------------------|
+| **Backend port**            | `PORT`                                                                     | `3000`                                                            |
+| **Node environment**        | `NODE_ENV`                                                                 | `development`                                                     |
+| **Postgres host/port**      | `DB_HOST`, `DB_PORT`                                                       | `localhost`, `5432`                                               |
+| **Postgres credentials**    | `DB_USER`, `DB_PASSWORD`                                                   | `postgres`, `your_postgres_password`                              |
+| **Postgres database**       | `DB_NAME`                                                                  | `noesis_testing`                                                  |
+| **DB pool size**            | `DB_CONNECTION_LIMIT`                                                      | `10`                                                              |
+| **JWT secret**              | `JWT_SECRET`                                                               | `noesis-testing-jwt-secret-change-in-production`                  |
+| **JWT expiry**              | `JWT_EXPIRES_IN`                                                           | `24h`                                                             |
+| **Automation source**       | `ST_AUTOMATION_SOURCE`                                                     | `git` (or `local`)                                                |
+| **Automation workspace**    | `ST_AUTOMATION_PATH`                                                       | `D:\\ST Automation`                                               |
+| **Automation repo (git)**   | `ST_AUTOMATION_GIT_REPO_URL`, `ST_AUTOMATION_GIT_BRANCH`                   | `https://github.com/prashantguleria/AutomationTesting.git`, `main` |
+| **Automation cache (git)**  | `ST_AUTOMATION_GIT_CACHE_PATH`                                              | `D:\\ST Automation\\.cache\\automation-testing-repo`               |
+| **Reports output**          | `ST_AUTOMATION_REPORTS_PATH`                                                | `D:\\ST Automation\\noesis-reports`                               |
+| **Maven home**              | `MAVEN_HOME`                                                               | `C:\\Program Files\\Apache\\maven`                                |
+| **Frontend origin (CORS)**  | `CORS_ORIGIN`                                                              | `http://localhost:4200`                                           |
+
+**Backend base URL:** `http://localhost:<PORT>` (default: `http://localhost:3000`)
+
+**Script runner URL (UI):** `http://localhost:4200/runner`
+
+**Script execution URL (API):** `POST http://localhost:<PORT>/api/execution/run`
 
 > ⚠️ **Important**: Never commit the `.env` file to version control. It is already included in `.gitignore`.
 

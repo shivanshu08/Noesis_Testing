@@ -98,6 +98,7 @@ export interface ExecutionRun {
     executionSource?: 'git' | 'local';
     gitRepoUrl?: string | null;
     gitBranch?: string | null;
+    appUrl?: string | null;
     workspacePath?: string;
     suiteFilePath?: string;
     suiteFileName?: string;
