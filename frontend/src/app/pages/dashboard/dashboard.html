@@ -87,67 +87,6 @@
     </div>
   }
 
-  <!-- Category Distribution + Quick Actions -->
-  <div class="content-grid">
-    <p-card header="Script Categories" styleClass="categories-card">
-      <div class="category-list">
-        @for (cat of categories(); track cat.id) {
-          <div class="category-item">
-            <div class="category-info">
-              <span class="category-name">{{ cat.name }}</span>
-              <span class="category-count">{{ cat.scriptCount }} scripts</span>
-            </div>
-            <p-progressBar
-              [value]="cat.scriptCount && stats()?.totalScripts ? (cat.scriptCount / stats()!.totalScripts) * 100 : 0"
-              [showValue]="false"
-              [style]="{ height: '6px' }"
-            />
-          </div>
-        }
-        @if (categories().length === 0) {
-          <p class="empty-message">No categories found</p>
-        }
-      </div>
-    </p-card>
-
-    <p-card header="Quick Actions" styleClass="actions-card">
-      <div class="quick-actions">
-        <a *ngIf="auth.canEdit()" routerLink="/runner" class="action-item">
-          <div class="action-icon run"><i class="pi pi-play"></i></div>
-          <div>
-            <span class="action-label">Run All Scripts</span>
-            <span class="action-desc">Execute complete test suite</span>
-          </div>
-          <i class="pi pi-chevron-right" style="margin-left:auto; opacity:0.3; font-size:0.75rem"></i>
-        </a>
-        <a routerLink="/scripts" class="action-item">
-          <div class="action-icon manage"><i class="pi pi-cog"></i></div>
-          <div>
-            <span class="action-label">Manage Scripts</span>
-            <span class="action-desc">Enable/disable & configure tests</span>
-          </div>
-          <i class="pi pi-chevron-right" style="margin-left:auto; opacity:0.3; font-size:0.75rem"></i>
-        </a>
-        <a routerLink="/suites" class="action-item">
-          <div class="action-icon suite"><i class="pi pi-sitemap"></i></div>
-          <div>
-            <span class="action-label">Test Suites</span>
-            <span class="action-desc">Create custom test suites</span>
-          </div>
-          <i class="pi pi-chevron-right" style="margin-left:auto; opacity:0.3; font-size:0.75rem"></i>
-        </a>
-        <a routerLink="/history" class="action-item">
-          <div class="action-icon history"><i class="pi pi-history"></i></div>
-          <div>
-            <span class="action-label">View History</span>
-            <span class="action-desc">Browse past execution results</span>
-          </div>
-          <i class="pi pi-chevron-right" style="margin-left:auto; opacity:0.3; font-size:0.75rem"></i>
-        </a>
-      </div>
-    </p-card>
-  </div>
-
   <!-- Scripts Overview -->
   <div style="margin-bottom: 24px;">
     <p-card styleClass="report-sources-card chart-card">

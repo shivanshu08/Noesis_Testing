@@ -6,27 +6,24 @@ import { CardModule } from 'primeng/card';
 import { ButtonModule } from 'primeng/button';
 import { TagModule } from 'primeng/tag';
 import { TableModule } from 'primeng/table';
-import { ProgressBarModule } from 'primeng/progressbar';
 import { ChartModule } from 'primeng/chart';
 import { ExecutionService } from '../../services/execution.service';
 import { ScriptService } from '../../services/script.service';
 import { AuthService } from '../../services/auth.service';
 import { ThemeService } from '../../services/theme.service';
-import { DashboardStats, ExecutionRun, ScriptCategory } from '../../models/interfaces';
+import { DashboardStats, ExecutionRun } from '../../models/interfaces';
 import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterModule, CardModule, ButtonModule, TagModule, TableModule, ProgressBarModule, ChartModule],
+  imports: [CommonModule, RouterModule, CardModule, ButtonModule, TagModule, TableModule, ChartModule],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
 })
 export class Dashboard implements OnInit, OnDestroy {
   stats = signal<DashboardStats | null>(null);
   recentRuns = signal<ExecutionRun[]>([]);
-  categories = signal<ScriptCategory[]>([]);
-  loading = signal(true);
 
   // System Health
   systemHealth = signal<{ api: string; db: string; uptime: number; memoryMB: number; status: string } | null>(null);
@@ -72,8 +69,6 @@ export class Dashboard implements OnInit, OnDestroy {
   }
 
   loadData() {
-    this.loading.set(true);
-
     this.executionService.getStats().subscribe({
       next: (data) => {
         this.stats.set(data);
@@ -85,14 +80,6 @@ export class Dashboard implements OnInit, OnDestroy {
     this.executionService.getRuns({ limit: 5 }).subscribe({
       next: (data) => this.recentRuns.set(data),
       error: () => {},
-    });
-
-    this.scriptService.getCategories().subscribe({
-      next: (data) => {
-        this.categories.set(data);
-        this.loading.set(false);
-      },
-      error: () => this.loading.set(false),
     });
 
     // Fetch system health
