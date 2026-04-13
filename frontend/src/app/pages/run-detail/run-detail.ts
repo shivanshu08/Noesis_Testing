@@ -69,7 +69,16 @@ export class RunDetail implements OnInit, OnDestroy {
 
   loadArtifacts() {
     this.executionService.getArtifacts(this.runId).subscribe({
-      next: (data) => this.artifacts.set(data),
+      next: (data) => this.artifacts.set(this.filterArtifacts(data)),
+    });
+  }
+
+  private filterArtifacts(artifacts: ExecutionArtifact[]): ExecutionArtifact[] {
+    const excludedFileNames = new Set(['emailable-report.html', 'index.html']);
+    return artifacts.filter((artifact) => {
+      const fileName = artifact.fileName || '';
+      const baseName = fileName.split(/[/\\]/).pop()?.toLowerCase() || '';
+      return !excludedFileNames.has(baseName);
     });
   }
 
