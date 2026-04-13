@@ -9,7 +9,7 @@ import { TabsModule } from 'primeng/tabs';
 import { TooltipModule } from 'primeng/tooltip';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { ExecutionService } from '../../services/execution.service';
-import { ExecutionRun, ExecutionLog } from '../../models/interfaces';
+import { ExecutionRun, ExecutionLog, ExecutionArtifact } from '../../models/interfaces';
 import { AuthService } from '../../services/auth.service';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -25,6 +25,7 @@ export class RunDetail implements OnInit, OnDestroy {
   run = signal<ExecutionRun | null>(null);
   logs = signal<ExecutionLog[]>([]);
   liveLogs = signal<string[]>([]);
+  artifacts = signal<ExecutionArtifact[]>([]);
   loading = signal(true);
   runId = 0;
 
@@ -38,6 +39,7 @@ export class RunDetail implements OnInit, OnDestroy {
     this.runId = Number(this.route.snapshot.paramMap.get('id'));
     this.loadRunDetails();
     this.loadLogs();
+    this.loadArtifacts();
   }
 
   ngOnDestroy() {
@@ -63,6 +65,16 @@ export class RunDetail implements OnInit, OnDestroy {
     this.executionService.getLogs(this.runId).subscribe({
       next: (data) => this.logs.set(data),
     });
+  }
+
+  loadArtifacts() {
+    this.executionService.getArtifacts(this.runId).subscribe({
+      next: (data) => this.artifacts.set(data),
+    });
+  }
+
+  downloadArtifact(artifact: ExecutionArtifact) {
+    this.executionService.downloadArtifactBlob(artifact.id, artifact.fileName);
   }
 
   stopRun() {

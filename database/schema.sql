@@ -203,6 +203,24 @@ CREATE TABLE IF NOT EXISTS execution_logs (
 CREATE INDEX IF NOT EXISTS idx_logs_run_timestamp ON execution_logs(run_id, timestamp);
 
 -- ============================================================
+-- Execution Artifacts (HTML/PDF reports)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS execution_artifacts (
+    id SERIAL PRIMARY KEY,
+    run_id INT NOT NULL REFERENCES execution_runs(id) ON DELETE CASCADE,
+    script_id INT DEFAULT NULL REFERENCES scripts(id) ON DELETE SET NULL,
+    artifact_type VARCHAR(20) NOT NULL,
+    file_name VARCHAR(500) NOT NULL,
+    stored_path VARCHAR(1000) NOT NULL,
+    file_size_bytes BIGINT DEFAULT NULL,
+    mime_type VARCHAR(100) DEFAULT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_artifacts_run_id ON execution_artifacts(run_id);
+CREATE INDEX IF NOT EXISTS idx_artifacts_type ON execution_artifacts(artifact_type);
+
+-- ============================================================
 -- Centralized Application Logs (API + System + Audit)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS app_logs (

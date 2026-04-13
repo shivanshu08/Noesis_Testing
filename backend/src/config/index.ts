@@ -25,9 +25,10 @@ export const config = {
     path: process.env.ST_AUTOMATION_PATH || 'D:\\ST Automation',
     importPath: process.env.ST_AUTOMATION_IMPORT_PATH || path.join(process.cwd(), 'scripts'),
     gitRepoUrl: process.env.ST_AUTOMATION_GIT_REPO_URL || 'https://github.com/prashantguleria/AutomationTesting.git',
-    gitCachePath: process.env.ST_AUTOMATION_GIT_CACHE_PATH || path.join(process.cwd(), '.cache', 'automation-testing-repo'),
+    gitCachePath: process.env.ST_AUTOMATION_GIT_CACHE_PATH || path.join(process.env.ST_AUTOMATION_PATH || 'D:\\ST Automation', '.cache', 'automation-testing-repo'),
     gitBranch: process.env.ST_AUTOMATION_GIT_BRANCH || '',
     mavenHome: process.env.MAVEN_HOME || '',
+    reportsPath: process.env.ST_AUTOMATION_REPORTS_PATH || path.join(process.env.ST_AUTOMATION_PATH || 'D:\\ST Automation', 'noesis-reports'),
   },
 
   cors: {

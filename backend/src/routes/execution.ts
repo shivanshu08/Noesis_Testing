@@ -3,7 +3,7 @@ import { query, execute, getConnection } from '../database/connection';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { logger } from '../utils/logger';
 import { config } from '../config';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, execSync, ChildProcess } from 'child_process';
 import path from 'path';
 import { Server as SocketIOServer } from 'socket.io';
 import { appLogService } from '../services/appLogService';
@@ -852,43 +852,104 @@ async function insertExecutionLog(
   );
 }
 
+function ensureGitRepository(runId: number, repoUrl: string, cachePath: string, branch: string): { success: boolean; error?: any } {
+  try {
+    const fs = require('fs');
+    const lockPath = path.join(cachePath, '.git', 'index.lock');
+    const targetBranch = branch || 'main';
+
+    const clearStaleIndexLock = () => {
+      if (fs.existsSync(lockPath)) {
+        try {
+          fs.unlinkSync(lockPath);
+          logger.warn(`Run ${runId}: Removed stale git lock file at ${lockPath}`);
+        } catch (lockErr: any) {
+          logger.warn(`Run ${runId}: Failed to remove stale git lock at ${lockPath}: ${lockErr?.message || lockErr}`);
+        }
+      }
+    };
+
+    const syncExistingRepo = () => {
+      execSync(`git fetch origin`, { cwd: cachePath, stdio: 'pipe' });
+      execSync(`git reset --hard origin/${targetBranch}`, { cwd: cachePath, stdio: 'pipe' });
+      execSync(`git pull origin ${targetBranch}`, { cwd: cachePath, stdio: 'pipe' });
+    };
+
+    if (!fs.existsSync(cachePath)) {
+      fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+      logger.info(`Run ${runId}: Cloning repository ${repoUrl} to ${cachePath}`);
+      execSync(`git clone ${branch ? `-b ${branch} ` : ''}"${repoUrl}" "${cachePath}"`, { stdio: 'pipe' });
+    } else {
+      logger.info(`Run ${runId}: Fetching latest from ${repoUrl}`);
+      clearStaleIndexLock();
+      try {
+        syncExistingRepo();
+      } catch (firstErr: any) {
+        const errMessage = String(firstErr?.message || '');
+        if (errMessage.includes('index.lock')) {
+          logger.warn(`Run ${runId}: Git sync hit index.lock; retrying once after lock cleanup.`);
+          clearStaleIndexLock();
+          syncExistingRepo();
+        } else {
+          throw firstErr;
+        }
+      }
+    }
+    return { success: true };
+  } catch (err: any) {
+    logger.error(`Git synchronization failed for run ${runId}`, err);
+    return { success: false, error: err };
+  }
+}
+
 async function executeScripts(runId: number, testngXml: string, scripts: any[], userId: number, runName: string) {
-  const stPath = config.stAutomation.path;
+  let stPath = config.stAutomation.path;
+  const source = config.stAutomation.source;
   const fs = await import('fs');
-  const tempXmlPath = path.join(stPath, `temp-run-${runId}.xml`);
+  let tempXmlPath: string | null = null;
 
   try {
-    // Write temporary TestNG XML
-    fs.writeFileSync(tempXmlPath, testngXml, 'utf8');
-
-    // Log start
-    await insertExecutionLog(
-      runId,
-      'INFO',
-      `Execution started for ${scripts.length} script(s)`,
-      {
-        phase: 'start',
-        runName,
-        scriptCount: scripts.length,
-        capturedAt: new Date().toISOString(),
-      }
-    );
+    // Log start immediately
+    await insertExecutionLog(runId, 'INFO', `Execution triggered for ${scripts.length} script(s)`, {
+      phase: 'start', runName, scriptCount: scripts.length, capturedAt: new Date().toISOString()
+    });
 
     if (io) {
       io.to(`run-${runId}`).emit('run-log', {
-        runId,
-        level: 'INFO',
-        message: `Execution started for ${scripts.length} script(s)`,
-        timestamp: new Date(),
+        runId, level: 'INFO', message: `Execution triggered for ${scripts.length} script(s)`, timestamp: new Date()
       });
     }
+
+    if (source === 'git') {
+      if (io) {
+        io.to(`run-${runId}`).emit('run-log', {
+          runId, level: 'INFO', message: `▶ Syncing repository from Git... (${config.stAutomation.gitRepoUrl})`, timestamp: new Date()
+        });
+      }
+      const syncRes = ensureGitRepository(runId, config.stAutomation.gitRepoUrl, config.stAutomation.gitCachePath, config.stAutomation.gitBranch);
+      if (!syncRes.success) {
+        throw new Error(`Git Sync Failed: ${syncRes.error?.message || 'Unknown error'}`);
+      }
+      stPath = config.stAutomation.gitCachePath;
+      if (io) {
+        io.to(`run-${runId}`).emit('run-log', {
+          runId, level: 'INFO', message: `✅ Repository synced to cached workspace.`, timestamp: new Date()
+        });
+      }
+    }
+
+    tempXmlPath = path.join(stPath, `temp-run-${runId}.xml`);
+    
+    // Write temporary TestNG XML
+    fs.writeFileSync(tempXmlPath, testngXml, 'utf8');
 
     // Determine Maven command
     const mvnCmd = process.platform === 'win32' ? 'mvn.cmd' : 'mvn';
     const args = [
+      'clean',
       'test',
-      `-DsuiteXmlFile=${tempXmlPath}`,
-      '-f', path.join(stPath, 'pom.xml'),
+      `"-DsuiteXmlFile=${tempXmlPath}"`,
+      '-f', `"${path.join(stPath, 'pom.xml')}"`,
     ];
 
     const child = spawn(mvnCmd, args, {
@@ -996,17 +1057,28 @@ async function executeScripts(runId: number, testngXml: string, scripts: any[], 
         [userId, severity, summary, detail, icon, 'Script Execution', 'Test Run']
       ).catch(e => logger.error('Notification error', e));
 
+      // Capture report artifacts
+      let artifacts = [];
+      try {
+        artifacts = await captureReportArtifacts(runId, scripts, stPath);
+      } catch (e) {
+        logger.error(`Failed to capture report artifacts for run ${runId}`, e);
+      }
+
       if (io) {
+        if (artifacts.length > 0) {
+          io.to(`run-${runId}`).emit('run-artifacts-ready', artifacts);
+        }
         io.to(`run-${runId}`).emit('run-completed', {
-          runId, status: finalStatus, passed, failed, errors, skipped,
+          runId, status: finalStatus, passed, failed, errors, skipped, artifacts
         });
         io.emit('global-run-status', {
-          runId, runName, status: finalStatus, passed, failed, errors, skipped,
+          runId, runName, status: finalStatus, passed, failed, errors, skipped, artifacts
         });
       }
 
       // Clean up temp file
-      try { fs.unlinkSync(tempXmlPath); } catch {} 
+      try { if (tempXmlPath) fs.unlinkSync(tempXmlPath); } catch {} 
 
       logger.info(`Run ${runId} completed with status: ${finalStatus}`);
     });
@@ -1042,11 +1114,32 @@ async function executeScripts(runId: number, testngXml: string, scripts: any[], 
 
   } catch (error: any) {
     logger.error(`Execute scripts error for run ${runId}:`, error);
+    const failureMessage = error?.message || 'Execution failed before process startup.';
+
+    await insertExecutionLog(runId, 'ERROR', failureMessage, {
+      phase: 'status',
+      runName,
+      capturedAt: new Date().toISOString(),
+      keyword: 'execution_start_failure',
+    }).catch(() => {});
+
     await execute(
       "UPDATE execution_runs SET status = 'error', completed_at = NOW() WHERE id = $1",
       [runId]
     );
-    try { (await import('fs')).unlinkSync(tempXmlPath); } catch {}
+
+    if (io) {
+      io.to(`run-${runId}`).emit('run-log', {
+        runId,
+        level: 'ERROR',
+        message: `✗ ${failureMessage}`,
+        timestamp: new Date(),
+      });
+      io.to(`run-${runId}`).emit('run-error', { runId, error: failureMessage });
+      io.emit('global-run-status', { runId, runName, status: 'error', error: failureMessage });
+    }
+
+    if (tempXmlPath) { try { (await import('fs')).unlinkSync(tempXmlPath); } catch {} }
   }
 }
 
@@ -1066,10 +1159,151 @@ function parseTestResults(output: string): { passed: number; failed: number; err
   return { passed, failed, errors, skipped };
 }
 
+async function captureReportArtifacts(runId: number, scripts: any[], executionWorkspacePath: string) {
+  const fs = await import('fs');
+  const path = await import('path');
+
+  const surefirePath = path.join(executionWorkspacePath, 'target', 'surefire-reports');
+  const reportsOutputBase = (config.stAutomation as any).reportsPath || path.join(executionWorkspacePath, 'noesis-reports');
+  const runReportDir = path.join(reportsOutputBase, `run-${runId}`);
+
+  if (!fs.existsSync(surefirePath)) {
+    logger.warn(`Surefire reports directory not found at ${surefirePath}`);
+    return [];
+  }
+
+  if (!fs.existsSync(runReportDir)) {
+    fs.mkdirSync(runReportDir, { recursive: true });
+  }
+
+  const files = fs.readdirSync(surefirePath);
+  const reportFiles = files.filter(file => {
+    const lowerFile = file.toLowerCase();
+    return lowerFile.endsWith('.html') || lowerFile.endsWith('.pdf');
+  });
+
+  if (reportFiles.length === 0) {
+    return [];
+  }
+
+  const reportCandidates = reportFiles.map((file) => {
+    const lowerFile = file.toLowerCase();
+    let scriptId: number | null = null;
+
+    for (const script of scripts) {
+      const scriptName = String(script?.name || '').trim().toLowerCase();
+      if (scriptName && lowerFile.includes(scriptName)) {
+        scriptId = script.id;
+        break;
+      }
+    }
+
+    return { file, scriptId };
+  });
+
+  const hasScriptMatchedArtifacts = reportCandidates.some(candidate => candidate.scriptId !== null);
+  if (!hasScriptMatchedArtifacts) {
+    logger.warn(`Run ${runId}: no report files matched script names. Persisting all HTML/PDF artifacts with null script mapping.`);
+  }
+
+  const capturedArtifacts: any[] = [];
+
+  for (const candidate of reportCandidates) {
+    if (hasScriptMatchedArtifacts && candidate.scriptId === null) {
+      continue;
+    }
+
+    const file = candidate.file;
+    const srcPath = path.join(surefirePath, file);
+    const destPath = path.join(runReportDir, file);
+    fs.copyFileSync(srcPath, destPath);
+
+    const stats = fs.statSync(destPath);
+    const ext = path.extname(file).toLowerCase();
+    const artifactType = ext === '.pdf' ? 'pdf' : ext === '.html' ? 'html' : 'other';
+    const mimeType = ext === '.pdf' ? 'application/pdf' : 'text/html';
+    const scriptId = candidate.scriptId;
+
+    const result = await execute(
+      `INSERT INTO execution_artifacts (run_id, script_id, artifact_type, file_name, stored_path, file_size_bytes, mime_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [runId, scriptId, artifactType, file, destPath, stats.size, mimeType]
+    );
+    
+    capturedArtifacts.push({
+      id: result.rows[0].id,
+      runId,
+      scriptId,
+      artifactType,
+      fileName: file,
+      fileSizeBytes: stats.size,
+      mimeType,
+      createdAt: new Date()
+    });
+  }
+  
+  return capturedArtifacts;
+}
+
 // Expose executeScripts for the scheduler service to call
 export function triggerScheduledExecution(runId: number, testngXml: string, scripts: any[], userId: number, runName: string) {
   executeScripts(runId, testngXml, scripts, userId, runName);
 }
+
+// ---- Artifact Routes ----
+
+// GET /api/execution/runs/:runId/artifacts - Get artifacts for a run
+router.get('/runs/:runId/artifacts', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const runId = parseInt(req.params.runId as string);
+    const rows = await query<any>(
+      'SELECT * FROM execution_artifacts WHERE run_id = $1 ORDER BY created_at ASC',
+      [runId]
+    );
+    
+    res.json(rows.map(r => ({
+      id: r.id,
+      runId: r.run_id,
+      scriptId: r.script_id,
+      artifactType: r.artifact_type,
+      fileName: r.file_name,
+      fileSizeBytes: r.file_size_bytes,
+      mimeType: r.mime_type,
+      createdAt: r.created_at,
+    })));
+  } catch (error) {
+    logger.error('List artifacts error:', error);
+    res.status(500).json({ error: 'Failed to fetch artifacts.' });
+  }
+});
+
+// GET /api/execution/artifacts/:id/download - Download an artifact
+router.get('/artifacts/:id/download', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const artifactId = parseInt(req.params.id as string);
+    const rows = await query<any>(
+      'SELECT * FROM execution_artifacts WHERE id = $1',
+      [artifactId]
+    );
+    
+    if (rows.length === 0) {
+      res.status(404).json({ error: 'Artifact not found.' });
+      return;
+    }
+    
+    const artifact = rows[0];
+    const fs = await import('fs');
+    if (!fs.existsSync(artifact.stored_path)) {
+      res.status(404).json({ error: 'Artifact file not found on disk.' });
+      return;
+    }
+    
+    res.download(artifact.stored_path, artifact.file_name);
+  } catch (error) {
+    logger.error('Download artifact error:', error);
+    res.status(500).json({ error: 'Failed to download artifact.' });
+  }
+});
 
 // ---- Schedule CRUD Routes ----
 

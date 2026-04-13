@@ -18,7 +18,7 @@ import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { DatePickerModule } from 'primeng/datepicker';
 import { ScriptService } from '../../services/script.service';
 import { ExecutionService } from '../../services/execution.service';
-import { Script, ScriptCategory, ScheduledRun } from '../../models/interfaces';
+import { Script, ScriptCategory, ScheduledRun, ExecutionArtifact } from '../../models/interfaces';
 import { AuthService } from '../../services/auth.service';
 import { MessageService } from 'primeng/api';
 import { Subscription } from 'rxjs';
@@ -57,6 +57,7 @@ export class Runner implements OnInit, OnDestroy {
   currentRunId = signal<number | null>(null);
   runStatus = signal<string>('');
   schedules = signal<ScheduledRun[]>([]);
+  artifacts = signal<ExecutionArtifact[]>([]);
 
   selectedCategory: number | null = null;
   searchTerm = '';
@@ -250,6 +251,7 @@ export class Runner implements OnInit, OnDestroy {
     this.completedScripts.set(0);
     this.executionProgress.set(0);
     this.currentExecutingScript.set('');
+    this.artifacts.set([]);
 
     this.messageService.add({ severity: 'info', summary: 'Execution Started', detail: `Running ${scriptIds.length} script(s)...` });
 
@@ -299,14 +301,21 @@ export class Runner implements OnInit, OnDestroy {
             this.currentExecutingScript.set('');
             clearInterval(checkInterval);
 
-            if (status === 'completed' || status === 'passed') {
+            if (status === 'completed' || status === 'passed' || status === 'failed') {
               const logText = this.logs().join('\n');
               const passedMatch = logText.match(/(\d+)\s+passed/i);
               const failedMatch = logText.match(/(\d+)\s+failed/i);
               const passed = passedMatch ? parseInt(passedMatch[1]) : 0;
               const failed = failedMatch ? parseInt(failedMatch[1]) : scriptIds.length;
               const total = passed + failed;
-              this.messageService.add({ severity: 'success', summary: 'Execution Completed', detail: `Total: ${total}, Passed: ${passed}, Failed: ${failed}` });
+              this.messageService.add({ severity: status === 'failed' ? 'error' : 'success', summary: 'Execution Completed', detail: `Total: ${total}, Passed: ${passed}, Failed: ${failed}` });
+
+              const readyArtifacts = this.executionService.artifactsReady();
+              if (readyArtifacts.length > 0) {
+                this.artifacts.set(readyArtifacts);
+              } else {
+                this.executionService.getArtifacts(res.runId).subscribe(data => this.artifacts.set(data));
+              }
             } else if (status === 'error') {
               this.messageService.add({ severity: 'error', summary: 'Execution Failed', detail: 'An error occurred during execution' });
             } else if (status === 'stopped') {
@@ -353,6 +362,37 @@ export class Runner implements OnInit, OnDestroy {
     this.runStatus.set('');
     this.currentRunId.set(null);
     this.elapsedSeconds = 0;
+    this.artifacts.set([]);
+  }
+
+  // ---- Artifacts & Completion ----
+  
+  viewRunDetails() {
+    if (this.currentRunId()) {
+      window.open(`/run/${this.currentRunId()}`, '_blank');
+    }
+  }
+
+  canViewDetailedReport(): boolean {
+    const runId = this.currentRunId();
+    if (!runId || this.running()) {
+      return false;
+    }
+
+    return ['passed', 'failed', 'completed', 'stopped', 'error'].includes(this.runStatus());
+  }
+  
+  downloadArtifact(artifact: ExecutionArtifact) {
+    const url = this.executionService.getArtifactDownloadUrl(artifact.id);
+    window.open(url, '_blank');
+  }
+  
+  downloadAllArtifacts() {
+    this.artifacts().forEach((artifact, index) => {
+      setTimeout(() => {
+        this.downloadArtifact(artifact);
+      }, index * 500); // Stagger downloads slightly
+    });
   }
 
   // ---- Timer ----

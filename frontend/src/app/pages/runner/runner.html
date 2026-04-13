@@ -184,6 +184,17 @@
               }
             </div>
             <div class="log-actions">
+              @if (canViewDetailedReport()) {
+                <p-button
+                  label="View Detailed Report"
+                  icon="pi pi-arrow-right"
+                  iconPos="right"
+                  severity="primary"
+                  size="small"
+                  (onClick)="viewRunDetails()"
+                  id="btn-view-detailed-report-top"
+                />
+              }
               @if (logs().length > 0 && !running()) {
                 <p-button icon="pi pi-download" [text]="true" size="small" severity="secondary" pTooltip="Download Logs" (onClick)="downloadLogs()" id="btn-download-logs" />
               }
@@ -224,7 +235,6 @@
           }
         </div>
       </p-card>
-
 
     </div>
   </div>

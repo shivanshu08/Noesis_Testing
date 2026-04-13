@@ -54,7 +54,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     const token = jwt.sign(
       { userId: user.id, role: user.role },
       config.jwt.secret,
-      { expiresIn: config.jwt.expiresIn } // Session timeout from config (default: 24h)
+      { expiresIn: config.jwt.expiresIn as any } // Session timeout from config (default: 24h)
     );
 
     logger.info(`User logged in: ${user.username}`);

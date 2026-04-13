@@ -97,7 +97,11 @@ export class MainLayout implements OnInit, OnDestroy {
       const severity = data.status === 'passed' ? 'success' : (data.status === 'error' || data.status === 'failed' ? 'error' : 'warn');
       const summary = `Execution ${data.status === 'passed' ? 'Passed' : 'Failed'}`;
       const detail = `Suite "${data.runName}" finished.`;
-      this.messageService.add({ severity, summary, detail, life: 6000 });
+      const currentUrl = this.router.url || '';
+      const isExecutionScreen = currentUrl.startsWith('/runner') || currentUrl.startsWith('/run/');
+      if (!isExecutionScreen) {
+        this.messageService.add({ severity, summary, detail, life: 6000 });
+      }
 
       // Optimistic UI Update: Instantly show the notification so it NEVER looks empty!
       this.notificationService.notifications.update(n => [{

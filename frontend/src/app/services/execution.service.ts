@@ -3,7 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, Subject, retry } from 'rxjs';
 import { io, Socket } from 'socket.io-client';
 import { environment } from '../../environments/environment';
-import { ExecutionRun, ExecutionLog, DashboardStats, ScheduledRun } from '../models/interfaces';
+import { ExecutionRun, ExecutionLog, DashboardStats, ScheduledRun, ExecutionArtifact } from '../models/interfaces';
 
 @Injectable({ providedIn: 'root' })
 export class ExecutionService {
@@ -14,6 +14,7 @@ export class ExecutionService {
 
   readonly liveLogs = signal<ExecutionLog[]>([]);
   readonly activeRunStatus = signal<string | null>(null);
+  readonly artifactsReady = signal<ExecutionArtifact[]>([]);
   
   readonly globalRunUpdates = new Subject<any>();
 
@@ -57,6 +58,30 @@ export class ExecutionService {
 
   getLogs(runId: number): Observable<ExecutionLog[]> {
     return this.http.get<ExecutionLog[]>(`${this.apiUrl}/logs/${runId}`);
+  }
+
+  getArtifacts(runId: number): Observable<ExecutionArtifact[]> {
+    return this.http.get<ExecutionArtifact[]>(`${this.apiUrl}/runs/${runId}/artifacts`);
+  }
+
+  getArtifactDownloadUrl(artifactId: number): string {
+    return `${this.apiUrl}/artifacts/${artifactId}/download`;
+  }
+
+  downloadArtifactBlob(artifactId: number, fileName: string): void {
+    this.http.get(`${this.apiUrl}/artifacts/${artifactId}/download`, { responseType: 'blob' }).subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      },
+      error: (err) => console.error('Artifact download failed', err),
+    });
   }
 
   getGlobalLogs(filters?: {
@@ -183,6 +208,7 @@ export class ExecutionService {
   // WebSocket for live log streaming
   connectToRun(runId: number): void {
     this.liveLogs.set([]);
+    this.artifactsReady.set([]);
     this.activeRunStatus.set('running');
 
     if (this.socket) {
@@ -203,6 +229,10 @@ export class ExecutionService {
 
     this.socket.on('run-completed', (data: any) => {
       this.activeRunStatus.set(data.status);
+    });
+
+    this.socket.on('run-artifacts-ready', (artifacts: ExecutionArtifact[]) => {
+      this.artifactsReady.set(artifacts);
     });
 
     this.socket.on('run-stopped', () => {

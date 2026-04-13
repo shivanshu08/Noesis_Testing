@@ -146,3 +146,14 @@ export interface ScheduledRun {
   createdBy?: string;
   createdAt: string;
 }
+
+export interface ExecutionArtifact {
+  id: number;
+  runId: number;
+  scriptId?: number;
+  artifactType: 'html' | 'pdf' | 'xml' | 'log' | 'other' | string;
+  fileName: string;
+  fileSizeBytes?: number;
+  mimeType?: string;
+  createdAt: string;
+}

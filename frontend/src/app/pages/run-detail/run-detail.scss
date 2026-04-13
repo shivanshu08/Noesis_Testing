@@ -229,6 +229,80 @@
   }
 }
 
+.artifacts-card {
+  margin-bottom: 24px;
+  border-radius: 12px;
+  border: 1px solid var(--surface-border);
+  overflow: hidden;
+
+  ::ng-deep .p-card {
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  ::ng-deep .p-card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--surface-border);
+    font-weight: 700;
+    font-size: 1.1rem;
+  }
+
+  ::ng-deep .p-card-content {
+    padding: 16px 20px;
+  }
+
+  .artifact-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    .artifact-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--surface-hover);
+      padding: 12px 16px;
+      border-radius: 6px;
+      border: 1px solid var(--surface-border);
+      transition: background 0.2s, border-color 0.2s;
+
+      &:hover {
+        background: color-mix(in srgb, var(--surface-hover) 80%, white 5%);
+      }
+
+      .artifact-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+
+        i {
+          font-size: 1.4rem;
+          &.pi-file-pdf { color: #ef4444; }
+          &.pi-file-o { color: #6366f1; }
+        }
+
+        .meta {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+
+          .artifact-name {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--noesis-text);
+          }
+
+          .artifact-size {
+            font-size: 0.75rem;
+            color: var(--noesis-text-secondary);
+          }
+        }
+      }
+    }
+  }
+}
+
 .logs-card {
   border-radius: 12px;
   border: 1px solid var(--surface-border);

@@ -118,6 +118,26 @@
       </p-card>
     }
 
+    <!-- Artifacts -->
+    @if (artifacts().length > 0) {
+      <p-card header="Report Artifacts" styleClass="artifacts-card">
+        <div class="artifact-list">
+          @for (artifact of artifacts(); track artifact.id) {
+            <div class="artifact-item">
+              <div class="artifact-info">
+                <i class="pi" [ngClass]="{'pi-file-pdf': artifact.artifactType === 'pdf', 'pi-file-o': artifact.artifactType !== 'pdf'}"></i>
+                <div class="meta">
+                  <span class="artifact-name">{{ artifact.fileName }}</span>
+                  <span class="artifact-size">{{ artifact.fileSizeBytes ? (artifact.fileSizeBytes / 1024 | number:'1.0-1') + ' KB' : 'Unknown size' }}</span>
+                </div>
+              </div>
+              <p-button icon="pi pi-download" label="Download" size="small" (onClick)="downloadArtifact(artifact)" />
+            </div>
+          }
+        </div>
+      </p-card>
+    }
+
     <!-- Logs -->
     <p-card header="Execution Logs" styleClass="logs-card">
       <div class="log-viewer">
