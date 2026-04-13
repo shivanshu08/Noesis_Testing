@@ -1,282 +1,468 @@
-<div class="run-detail-page report-center">
-  <!-- Breadcrumb and Top Actions -->
-  <div class="report-header-toolbar">
-    <div class="breadcrumb">
-      <a routerLink="/history" class="back-link">
-        <i class="pi pi-arrow-left"></i>
-        <span>Back to History</span>
-      </a>
-    </div>
-    
-    @if (run(); as r) {
-      <div class="header-actions">
+<div class="run-detail-page">
+  <div class="details-toolbar">
+    <a routerLink="/history" class="back-link">
+      <i class="pi pi-arrow-left"></i>
+      <span>Back to History</span>
+    </a>
+
+    <div class="toolbar-actions">
+      <p-button
+        label="Refresh"
+        icon="pi pi-sync"
+        severity="secondary"
+        [text]="true"
+        [loading]="loading()"
+        (onClick)="refreshRunData(true)"
+      />
+
+      <p-button
+        label="Copy Link"
+        icon="pi pi-link"
+        severity="secondary"
+        [text]="true"
+        (onClick)="copyRunLink()"
+      />
+
+      @if (run(); as r) {
         <a pButton class="p-button-sm p-button-secondary" label="Trigger Re-run" icon="pi pi-refresh" routerLink="/runner" [queryParams]="{ rerun: r.id }"></a>
+
         @if (r.status === 'running') {
-          <p-button label="Abort Execution" icon="pi pi-stop" severity="danger" (onClick)="stopRun()" class="ml-2" />
+          <p-button
+            [label]="autoRefreshEnabled ? 'Auto-refresh On' : 'Auto-refresh Off'"
+            icon="pi pi-bolt"
+            severity="secondary"
+            [outlined]="!autoRefreshEnabled"
+            (onClick)="toggleAutoRefresh()"
+          />
+
+          <p-button label="Abort Execution" icon="pi pi-stop" severity="danger" (onClick)="stopRun()" [disabled]="!auth.canEdit()" />
         }
-      </div>
-    }
+      }
+    </div>
   </div>
 
   @if (loading()) {
-    <div class="report-loader">
-      <div class="loader-content">
-        <i class="pi pi-spin pi-spinner"></i>
-        <h3>Analyzing execution intelligence...</h3>
-        <p>Retrieving results and generating artifacts</p>
-      </div>
+    <div class="state-card loading-state">
+      <i class="pi pi-spin pi-spinner"></i>
+      <h3>Loading run details</h3>
+      <p>Fetching results, logs, and artifacts from the latest execution snapshot.</p>
     </div>
   } @else if (run(); as r) {
-    
-    <!-- Hero Header -->
-    <div class="report-hero">
-      <div class="hero-content">
-        <div class="title-area">
-          <div class="run-id-badge">Run #{{ r.id }}</div>
-          <h1>{{ r.runName || 'Ad-hoc Execution' }}</h1>
-          <div class="status-indicator" [class]="r.status">
-            <i class="pi" [ngClass]="{
-              'pi-check-circle': r.status === 'passed',
-              'pi-times-circle': r.status === 'failed' || r.status === 'error',
-              'pi-spin pi-spinner': r.status === 'running'
-            }"></i>
-            <span>{{ r.status | titlecase }}</span>
-          </div>
+    <section class="overview-card">
+      <div class="overview-main">
+        <div class="overview-top">
+          <span class="run-id">Run #{{ r.id }}</span>
+          <p-tag [value]="r.status | titlecase" [severity]="getStatusSeverity(r.status)" />
+          <span class="meta-pill"><i class="pi pi-cloud"></i>{{ executionEnvironmentLabel }}</span>
+          <span class="meta-pill"><i class="pi pi-sitemap"></i>{{ (r.runType || 'manual') | titlecase }}</span>
+          @if (r.runMetadata?.executionSource) {
+            <span class="meta-pill"><i class="pi pi-bolt"></i>{{ (r.runMetadata?.executionSource || 'manual') | titlecase }}</span>
+          }
         </div>
-        
-        <div class="hero-stats">
-          <div class="stat-group">
-            <span class="label">Duration</span>
-            <span class="value">{{ formatDuration(r.durationMs ? r.durationMs / 1000 : null) }}</span>
-          </div>
-          <div class="stat-separator"></div>
-          <div class="stat-group">
-            <span class="label">Date</span>
-            <span class="value">{{ formatDate(r.startedAt) }}</span>
-          </div>
-          <div class="stat-separator"></div>
-          <div class="stat-group">
-            <span class="label">Triggered By</span>
-            <span class="value user">{{ r.triggeredBy || 'System' }}</span>
-          </div>
+
+        <h1>{{ r.runName || 'Ad-hoc Execution' }}</h1>
+
+        <div class="overview-meta">
+          <span><i class="pi pi-user"></i>{{ r.triggeredBy || 'System' }}</span>
+          <span><i class="pi pi-calendar"></i>{{ formatDate(r.startedAt || r.createdAt) }}</span>
+          <span><i class="pi pi-clock"></i>{{ formatDuration(r.durationMs ? r.durationMs / 1000 : null) }}</span>
         </div>
       </div>
-      
-      <!-- Visual Scoreboard -->
-      <div class="hero-scoreboard">
-        <div class="score-card passed">
-          <div class="score">{{ r.passedCount || 0 }}</div>
-          <div class="score-label">Passed</div>
-        </div>
-        <div class="score-card failed">
-          <div class="score">{{ (r.failedCount || 0) + (r.errorCount || 0) }}</div>
-          <div class="score-label">Failed</div>
-        </div>
-        <div class="score-card rate">
-          <div class="score">{{ passRate }}%</div>
-          <div class="score-label">Success Rate</div>
-        </div>
+
+      <div class="overview-actions">
+        <button type="button" class="ghost-action" (click)="copyToClipboard(r.id)" pTooltip="Copy Run ID" tooltipPosition="left">
+          <i class="pi pi-hashtag"></i>
+          <span>Copy Run ID</span>
+        </button>
+        <button type="button" class="ghost-action" (click)="copyToClipboard(r.triggeredBy || 'System')" pTooltip="Copy Triggered By" tooltipPosition="left">
+          <i class="pi pi-user"></i>
+          <span>Copy User</span>
+        </button>
+        <button
+          type="button"
+          class="ghost-action"
+          (click)="copyAppUrl()"
+          pTooltip="Copy Application URL"
+          tooltipPosition="left"
+          [disabled]="executionAppUrl === '-'"
+        >
+          <i class="pi pi-copy"></i>
+          <span>Copy App URL</span>
+        </button>
       </div>
-    </div>
+    </section>
 
     @if (r.status === 'running') {
-      <div class="live-progress">
-        <div class="progress-info">
-          <span>Execution in progress...</span>
-          <span>{{ r.passedCount + r.failedCount }} / {{ r.totalScripts }} Scripts</span>
+      <section class="live-progress">
+        <div class="live-progress-head">
+          <span class="label">Execution in progress</span>
+          <span class="value">{{ completedCount }} / {{ totalScriptsValue }} scripts completed</span>
         </div>
         <p-progressBar mode="indeterminate" [style]="{ height: '6px' }" />
-      </div>
+      </section>
     }
 
-    <div class="report-grid">
-      <!-- Main Content Column -->
+    <section class="kpi-grid">
+      <article class="kpi-card">
+        <span class="kpi-label">Total Scripts</span>
+        <strong class="kpi-value">{{ totalScriptsValue }}</strong>
+      </article>
+
+      <article class="kpi-card">
+        <span class="kpi-label">Passed</span>
+        <strong class="kpi-value success">{{ passedCountValue }}</strong>
+      </article>
+
+      <article class="kpi-card">
+        <span class="kpi-label">Failed + Error</span>
+        <strong class="kpi-value danger">{{ failureCount }}</strong>
+      </article>
+
+      <article class="kpi-card">
+        <span class="kpi-label">Skipped</span>
+        <strong class="kpi-value">{{ skippedCountValue }}</strong>
+      </article>
+
+      <article class="kpi-card">
+        <span class="kpi-label">Pass Rate</span>
+        <strong class="kpi-value">{{ passRate }}%</strong>
+      </article>
+
+      <article class="kpi-card">
+        <span class="kpi-label">Artifacts</span>
+        <strong class="kpi-value">{{ artifacts().length }}</strong>
+      </article>
+    </section>
+
+    <div class="details-grid">
       <div class="main-column">
-        
-        <!-- Results Table -->
-        <p-card styleClass="report-card results-section">
-          <div class="card-header">
-            <h3><i class="pi pi-list"></i> Detailed script Execution</h3>
+        <p-card styleClass="detail-card results-card">
+          <div class="card-head">
+            <div>
+              <h3><i class="pi pi-list"></i> Script Results</h3>
+              <p>{{ filteredResults().length }} of {{ resultTotalCount }} scripts shown</p>
+            </div>
+
+            <p-button
+              label="Clear Filters"
+              icon="pi pi-filter-slash"
+              severity="secondary"
+              [text]="true"
+              [disabled]="!hasResultFilters"
+              (onClick)="clearResultFilters()"
+            />
           </div>
-          
-          <p-table [value]="r.results || []" responsiveLayout="scroll" styleClass="p-datatable-sm modern-table">
+
+          <div class="control-row">
+            <p-iconfield styleClass="control-field">
+              <p-inputicon styleClass="pi pi-search" />
+              <input
+                pInputText
+                type="text"
+                placeholder="Search script, class, status, or error"
+                [(ngModel)]="resultSearchTerm"
+                (ngModelChange)="applyResultFilters()"
+              />
+            </p-iconfield>
+
+            <p-select
+              styleClass="control-select"
+              [options]="resultStatusOptions"
+              [(ngModel)]="resultStatusFilter"
+              optionLabel="label"
+              optionValue="value"
+              appendTo="body"
+              (onChange)="applyResultFilters()"
+            />
+
+            <p-select
+              styleClass="control-select"
+              [options]="resultSortOptions"
+              [(ngModel)]="resultSortBy"
+              optionLabel="label"
+              optionValue="value"
+              appendTo="body"
+              (onChange)="applyResultFilters()"
+            />
+          </div>
+
+          <p-table [value]="filteredResults()" responsiveLayout="scroll" styleClass="p-datatable-sm detail-table" [rowTrackBy]="trackByResult">
             <ng-template #header>
               <tr>
-                <th>Test Script</th>
-                <th>Status</th>
-                <th>Execution Time</th>
-                <th>Remarks</th>
+                <th class="script-col">Script</th>
+                <th class="status-col">Status</th>
+                <th class="duration-col">Duration</th>
+                <th class="timeline-col">Runtime Profile</th>
+                <th class="remarks-col">Remarks</th>
               </tr>
             </ng-template>
+
             <ng-template #body let-result>
-              <tr [class.row-error]="result.status === 'failed' || result.status === 'error'">
-                <td>
-                  <div class="script-cell">
-                    <i class="pi pi-code"></i>
-                    <span>{{ result.scriptName || 'Unknown Script' }}</span>
+              <tr>
+                <td class="script-col">
+                  <div class="script-meta">
+                    <span class="script-name">{{ result.scriptName || ('Script #' + result.scriptId) }}</span>
+                    <small>{{ result.className || 'No class metadata' }}</small>
                   </div>
                 </td>
-                <td>
+                <td class="status-col">
                   <p-tag [value]="result.status | titlecase" [severity]="getStatusSeverity(result.status)" />
                 </td>
-                <td>
-                  <div class="duration-cell">
-                    <i class="pi pi-clock"></i>
-                    {{ formatDuration(result.durationMs ? result.durationMs / 1000 : null) }}
+                <td class="duration-col">
+                  <span class="duration-value">{{ formatDuration(result.durationMs ? result.durationMs / 1000 : null) }}</span>
+                </td>
+                <td class="timeline-col">
+                  <div class="duration-track">
+                    <span class="duration-fill" [style.width.%]="getTimelineWidth(result.durationMs)"></span>
                   </div>
                 </td>
-                <td class="error-cell">
+                <td class="remarks-col">
                   @if (result.errorMessage) {
-                    <span class="error-text" [pTooltip]="result.errorMessage">
-                      <i class="pi pi-exclamation-triangle"></i>
-                      {{ result.errorMessage }}
-                    </span>
+                    <span class="error-text" [pTooltip]="result.errorMessage" tooltipPosition="top">{{ result.errorMessage }}</span>
                   } @else {
-                    <span class="success-text"><i class="pi pi-check" *ngIf="result.status === 'passed'"></i></span>
+                    <span class="empty-mark">-</span>
                   }
+                </td>
+              </tr>
+            </ng-template>
+
+            <ng-template #emptymessage>
+              <tr>
+                <td colspan="5" class="empty-cell">
+                  <div class="table-empty-state">
+                    <i class="pi pi-search"></i>
+                    <h4>No matching script results</h4>
+                    <p>Try clearing one or more filters to view additional script outcomes.</p>
+                  </div>
                 </td>
               </tr>
             </ng-template>
           </p-table>
         </p-card>
 
-        <!-- Dynamic Timeline -->
-        @if (r.results && r.results.length > 0) {
-          <p-card styleClass="report-card timeline-section">
-            <div class="card-header">
-              <h3><i class="pi pi-chart-line"></i> Performance Timeline</h3>
-            </div>
-            <div class="timeline-visual">
-              @for (result of r.results; track result.scriptId) {
-                <div class="timeline-entry" [class]="result.status">
-                  <div class="marker"></div>
-                  <div class="entry-line"></div>
-                  <div class="entry-content">
-                    <span class="entry-name">{{ result.scriptName | slice:0:30 }}...</span>
-                    <span class="entry-time">{{ formatDuration(result.durationMs ? result.durationMs / 1000 : null) }}</span>
-                  </div>
-                </div>
-              }
-            </div>
-          </p-card>
-        }
-      </div>
-
-      <!-- Sidebar Column -->
-      <div class="sidebar-column">
-        
-        <!-- Artifacts Hub -->
-        <p-card styleClass="report-card artifacts-hub">
-          <div class="card-header">
-            <h3><i class="pi pi-box"></i> Artifacts Hub</h3>
-            <span class="badge" *ngIf="artifacts().length > 0">{{ artifacts().length }}</span>
-          </div>
-          
-          <div class="artifact-items">
-            <div class="artifact-box report-artifact" (click)="downloadPdf()">
-              <div class="artifact-icon pdf">
-                <i class="pi pi-file-pdf"></i>
-              </div>
-              <div class="artifact-details">
-                <span class="name">Noesis Run Report</span>
-                <span class="size">Download PDF</span>
-              </div>
-              <div class="artifact-link">
-                <i class="pi pi-download"></i>
-              </div>
+        <p-card styleClass="detail-card logs-card">
+          <div class="card-head">
+            <div>
+              <h3><i class="pi pi-align-left"></i> Execution Logs</h3>
+              <p>{{ filteredLogs().length }} entries shown</p>
             </div>
 
-            @if (artifacts().length > 0) {
-              @for (artifact of artifacts(); track artifact.id) {
-                <div class="artifact-box" (click)="downloadArtifact(artifact)">
-                  <div class="artifact-icon" [class]="artifact.artifactType">
-                    <i class="pi" [ngClass]="{'pi-file-pdf': artifact.artifactType === 'pdf', 'pi-file': artifact.artifactType === 'html'}"></i>
-                  </div>
-                  <div class="artifact-details">
-                    <span class="name">{{ artifact.fileName }}</span>
-                    <span class="size">{{ artifact.fileSizeBytes ? (artifact.fileSizeBytes / 1024 | number:'1.0-1') + ' KB' : '--' }}</span>
-                  </div>
-                  <div class="artifact-link">
-                    <i class="pi pi-download"></i>
-                  </div>
-                </div>
-              }
-            } @else {
-              <div class="empty-artifacts">
-                <i class="pi pi-cloud-download"></i>
-                <p>No uploaded artifacts available for this run</p>
-              </div>
-            }
-          </div>
-        </p-card>
-
-        <!-- Execution Environment -->
-        <p-card styleClass="report-card env-details">
-          <div class="card-header">
-            <h3><i class="pi pi-server"></i> Environment</h3>
-          </div>
-          <div class="env-info">
-            <div class="info-row">
-              <span class="key">Execution Environment</span>
-              <span class="val">{{ executionEnvironmentLabel }}</span>
-            </div>
-            <div class="info-row">
-              <span class="key">URL</span>
-              <span class="val">{{ executionAppUrl }}</span>
-            </div>
-            <div class="info-row">
-              <span class="key">Execution API</span>
-              <span class="val">POST {{ executionRunUrl }}</span>
-            </div>
-            <div class="info-row">
-              <span class="key">Git Repository</span>
-              <span class="val">{{ getRunMetadataValue('gitRepoUrl') }}</span>
-            </div>
-            <div class="info-row">
-              <span class="key">Suite XML</span>
-              <span class="val">{{ getRunMetadataValue('suiteFileName') }}</span>
-            </div>
-            <div class="info-row">
-              <span class="key">Reports Directory</span>
-              <span class="val">{{ getRunMetadataValue('reportsDirectory') }}</span>
+            <div class="card-actions">
+              <p-button
+                label="Download TXT"
+                icon="pi pi-download"
+                severity="secondary"
+                [text]="true"
+                [disabled]="filteredLogs().length === 0"
+                (onClick)="downloadLogsTxt()"
+              />
+              <p-button
+                label="Clear Filters"
+                icon="pi pi-filter-slash"
+                severity="secondary"
+                [text]="true"
+                [disabled]="!hasLogFilters"
+                (onClick)="clearLogFilters()"
+              />
             </div>
           </div>
-        </p-card>
 
-      </div>
-    </div>
+          <div class="control-row logs-controls">
+            <p-iconfield styleClass="control-field">
+              <p-inputicon styleClass="pi pi-search" />
+              <input
+                pInputText
+                type="text"
+                placeholder="Search logs"
+                [(ngModel)]="logSearchTerm"
+                (ngModelChange)="applyLogFilters()"
+              />
+            </p-iconfield>
 
-    <!-- Logs Deep-Dive -->
-    <div class="logs-section">
-      <p-card styleClass="report-card logs-card">
-        <p-tabs [scrollable]="true">
-          <p-tablist>
+            <p-select
+              styleClass="control-select"
+              [options]="logLevelOptions"
+              [(ngModel)]="logLevelFilter"
+              optionLabel="label"
+              optionValue="value"
+              appendTo="body"
+              (onChange)="applyLogFilters()"
+            />
+          </div>
+
+          <p-tabs [scrollable]="true">
+            <p-tablist>
               <p-tab value="0">Detailed Logs</p-tab>
-              <p-tab value="1" *ngIf="liveLogs().length > 0">Live Output</p-tab>
-          </p-tablist>
-          <p-tabpanels>
+              <p-tab value="1" *ngIf="liveLogLines().length > 0">Live Output</p-tab>
+            </p-tablist>
+
+            <p-tabpanels>
               <p-tabpanel value="0">
                 <div class="log-container">
-                  @for (log of logs(); track $index) {
-                    <div class="log-row" [class]="log.level.toLowerCase()">
-                      <span class="log-time">{{ log.timestamp | date:'HH:mm:ss' }}</span>
-                      <span class="log-level">{{ log.level || 'INFO' }}</span>
-                      <span class="log-msg">{{ log.message }}</span>
+                  @if (filteredLogs().length === 0) {
+                    <div class="log-empty-state">
+                      <i class="pi pi-file"></i>
+                      <p>No log entries match the current filters.</p>
                     </div>
+                  } @else {
+                    @for (log of filteredLogs(); track trackByLog($index, log)) {
+                      <div class="log-row" [class]="(log.level || 'info').toLowerCase()">
+                        <span class="log-time">{{ log.timestamp | date:'HH:mm:ss' }}</span>
+                        <span class="log-level">{{ (log.level || 'INFO').toUpperCase() }}</span>
+                        <span class="log-msg">{{ log.message }}</span>
+                      </div>
+                    }
                   }
                 </div>
               </p-tabpanel>
+
               <p-tabpanel value="1">
                 <div class="log-container console">
-                  @for (log of liveLogs(); track $index) {
-                    <div class="log-row">{{ log }}</div>
+                  @if (liveLogLines().length === 0) {
+                    <div class="log-empty-state">
+                      <i class="pi pi-wave-pulse"></i>
+                      <p>Live output will appear here while the run is active.</p>
+                    </div>
+                  } @else {
+                    @for (line of liveLogLines(); track $index) {
+                      <div class="log-row raw">{{ line }}</div>
+                    }
                   }
                 </div>
               </p-tabpanel>
-          </p-tabpanels>
-        </p-tabs>
-      </p-card>
-    </div>
+            </p-tabpanels>
+          </p-tabs>
+        </p-card>
+      </div>
 
+      <aside class="side-column">
+        <p-card styleClass="detail-card artifacts-hub">
+          <div class="card-head">
+            <div class="card-head-main">
+              <h3><i class="pi pi-box"></i> Artifacts Hub</h3>
+              <p>Collected files and ready-to-download reports</p>
+            </div>
+            <span class="count-pill" *ngIf="artifacts().length > 0">{{ artifacts().length }}</span>
+          </div>
+
+          <div class="hub-shell">
+            <div class="hub-metrics">
+              <div class="hub-metric">
+                <span class="label">PDF</span>
+                <strong class="value">Ready</strong>
+              </div>
+              <div class="hub-metric">
+                <span class="label">Artifacts</span>
+                <strong class="value">{{ artifacts().length }}</strong>
+              </div>
+              <div class="hub-metric">
+                <span class="label">Downloads</span>
+                <strong class="value">{{ artifacts().length + 1 }}</strong>
+              </div>
+            </div>
+
+            <div class="artifact-items">
+              <div class="artifact-box report-artifact feature" (click)="downloadPdf()">
+                <div class="artifact-icon pdf">
+                  <i class="pi pi-file-pdf"></i>
+                </div>
+                <div class="artifact-details">
+                  <span class="name">Noesis Run Report</span>
+                  <span class="size">Download PDF</span>
+                </div>
+                <div class="artifact-link">
+                  <i class="pi pi-download"></i>
+                </div>
+              </div>
+
+              @if (artifacts().length > 0) {
+                @for (artifact of artifacts(); track artifact.id) {
+                  <div class="artifact-box" (click)="downloadArtifact(artifact)">
+                    <div class="artifact-icon" [class]="artifact.artifactType">
+                      <i class="pi" [ngClass]="{ 'pi-file-pdf': artifact.artifactType === 'pdf', 'pi-file': artifact.artifactType === 'html' }"></i>
+                    </div>
+                    <div class="artifact-details">
+                      <span class="name">{{ artifact.fileName }}</span>
+                      <span class="size">{{ artifact.fileSizeBytes ? (artifact.fileSizeBytes / 1024 | number:'1.0-1') + ' KB' : '--' }}</span>
+                    </div>
+                    <div class="artifact-link">
+                      <i class="pi pi-download"></i>
+                    </div>
+                  </div>
+                }
+              } @else {
+                <div class="empty-artifacts">
+                  <i class="pi pi-cloud-download"></i>
+                  <p>No uploaded artifacts available for this run</p>
+                </div>
+              }
+            </div>
+          </div>
+        </p-card>
+
+        <p-card styleClass="detail-card env-details">
+          <div class="card-head">
+            <div class="card-head-main">
+              <h3><i class="pi pi-server"></i> Environment</h3>
+              <p>Execution context and pipeline metadata</p>
+            </div>
+            <button
+              type="button"
+              class="icon-btn"
+              [disabled]="executionAppUrl === '-'"
+              (click)="copyAppUrl()"
+              pTooltip="Copy URL"
+              tooltipPosition="left"
+            >
+              <i class="pi pi-copy"></i>
+            </button>
+          </div>
+
+          <div class="env-shell">
+            <div class="env-banner">
+              <div class="env-badge">
+                <i class="pi pi-cloud"></i>
+                <span>{{ executionEnvironmentLabel }}</span>
+              </div>
+              <span class="env-helper">Environment inferred from current run URL</span>
+            </div>
+
+            <div class="env-info">
+              <div class="info-row">
+                <span class="key"><i class="pi pi-map-marker"></i>Execution Environment</span>
+                <span class="val">{{ executionEnvironmentLabel }}</span>
+              </div>
+              <div class="info-row">
+                <span class="key"><i class="pi pi-globe"></i>URL</span>
+                <span class="val">{{ executionAppUrl }}</span>
+              </div>
+              <div class="info-row">
+                <span class="key"><i class="pi pi-bolt"></i>Execution API</span>
+                <span class="val">POST {{ executionRunUrl }}</span>
+              </div>
+              <div class="info-row">
+                <span class="key"><i class="pi pi-github"></i>Git Repository</span>
+                <span class="val">{{ getRunMetadataValue('gitRepoUrl') }}</span>
+              </div>
+              <div class="info-row">
+                <span class="key"><i class="pi pi-file"></i>Suite XML</span>
+                <span class="val">{{ getRunMetadataValue('suiteFileName') }}</span>
+              </div>
+              <div class="info-row">
+                <span class="key"><i class="pi pi-folder-open"></i>Reports Directory</span>
+                <span class="val">{{ getRunMetadataValue('reportsDirectory') }}</span>
+              </div>
+            </div>
+          </div>
+        </p-card>
+      </aside>
+    </div>
+  } @else {
+    <div class="state-card empty-state">
+      <i class="pi pi-inbox"></i>
+      <h3>Run not found</h3>
+      <p>The requested run detail is not available. Return to History and select another execution.</p>
+      <a routerLink="/history" pButton label="Back to History" icon="pi pi-arrow-left"></a>
+    </div>
   }
 </div>
