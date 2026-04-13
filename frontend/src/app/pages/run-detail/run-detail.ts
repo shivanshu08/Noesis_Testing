@@ -125,6 +125,14 @@ export class RunDetail implements OnInit, OnDestroy {
     return Math.max(10, Math.round((durationMs / maxDuration) * 100));
   }
 
+  getRunMetadataValue(field: keyof NonNullable<ExecutionRun['runMetadata']>): string {
+    const value = this.run()?.runMetadata?.[field];
+    if (value === null || value === undefined || value === '') {
+      return '-';
+    }
+    return String(value);
+  }
+
   downloadPdf() {
     try {
       const r = this.run();

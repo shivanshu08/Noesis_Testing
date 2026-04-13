@@ -1,161 +1,266 @@
-<div class="run-detail-page">
-  <!-- Breadcrumb -->
-  <div class="breadcrumb">
-    <a routerLink="/history"><i class="pi pi-arrow-left"></i> Back to History</a>
+<div class="run-detail-page report-center">
+  <!-- Breadcrumb and Top Actions -->
+  <div class="report-header-toolbar">
+    <div class="breadcrumb">
+      <a routerLink="/history" class="back-link">
+        <i class="pi pi-arrow-left"></i>
+        <span>Back to History</span>
+      </a>
+    </div>
+    
+    @if (run(); as r) {
+      <div class="header-actions">
+        <p-button label="Download PDF Report" icon="pi pi-file-pdf" severity="danger" [outlined]="true" (onClick)="downloadPdf()" styleClass="p-button-sm" />
+        <a pButton class="p-button-sm p-button-secondary ml-2" label="Trigger Re-run" icon="pi pi-refresh" routerLink="/runner" [queryParams]="{ rerun: r.id }"></a>
+        @if (r.status === 'running') {
+          <p-button label="Abort Execution" icon="pi pi-stop" severity="danger" (onClick)="stopRun()" class="ml-2" />
+        }
+      </div>
+    }
   </div>
 
   @if (loading()) {
-    <div class="loading-state">
-      <i class="pi pi-spinner pi-spin"></i>
-      <span>Loading run details...</span>
+    <div class="report-loader">
+      <div class="loader-content">
+        <i class="pi pi-spin pi-spinner"></i>
+        <h3>Analyzing execution intelligence...</h3>
+        <p>Retrieving results and generating artifacts</p>
+      </div>
     </div>
   } @else if (run(); as r) {
-    <!-- Header -->
-    <div class="page-header">
-      <div>
-        <h1>Run #{{ r.id }} <p-tag [value]="r.status | titlecase" [severity]="getStatusSeverity(r.status)" /></h1>
-        <p class="subtitle">{{ r.runName || 'Manual Run' }}</p>
+    
+    <!-- Hero Header -->
+    <div class="report-hero">
+      <div class="hero-content">
+        <div class="title-area">
+          <div class="run-id-badge">Run #{{ r.id }}</div>
+          <h1>{{ r.runName || 'Ad-hoc Execution' }}</h1>
+          <div class="status-indicator" [class]="r.status">
+            <i class="pi" [ngClass]="{
+              'pi-check-circle': r.status === 'passed',
+              'pi-times-circle': r.status === 'failed' || r.status === 'error',
+              'pi-spin pi-spinner': r.status === 'running'
+            }"></i>
+            <span>{{ r.status | titlecase }}</span>
+          </div>
+        </div>
+        
+        <div class="hero-stats">
+          <div class="stat-group">
+            <span class="label">Duration</span>
+            <span class="value">{{ formatDuration(r.durationMs ? r.durationMs / 1000 : null) }}</span>
+          </div>
+          <div class="stat-separator"></div>
+          <div class="stat-group">
+            <span class="label">Date</span>
+            <span class="value">{{ formatDate(r.startedAt) }}</span>
+          </div>
+          <div class="stat-separator"></div>
+          <div class="stat-group">
+            <span class="label">Triggered By</span>
+            <span class="value user">{{ r.triggeredBy || 'System' }}</span>
+          </div>
+        </div>
       </div>
-      <div class="header-actions">
-        <a pButton class="p-button-secondary p-button" label="Re-run" icon="pi pi-refresh" routerLink="/runner" [queryParams]="{ rerun: r.id }" style="text-decoration: none;"></a>
-        <p-button label="Download Report" icon="pi pi-download" class="ml-2" (click)="downloadPdf()" />
-        @if (r.status === 'running') {
-          <p-button label="Stop Run" icon="pi pi-stop" severity="danger" (onClick)="stopRun()" class="ml-2" />
-        }
-      </div>
-    </div>
-
-    <!-- Stats -->
-    <div class="run-stats">
-      <div class="stat-item">
-        <span class="stat-label">Total Scripts</span>
-        <span class="stat-value">{{ r.totalScripts || 0 }}</span>
-      </div>
-      <div class="stat-item passed">
-        <span class="stat-label">Passed</span>
-        <span class="stat-value">{{ r.passedCount || 0 }}</span>
-      </div>
-      <div class="stat-item failed">
-        <span class="stat-label">Failed</span>
-        <span class="stat-value">{{ r.failedCount || 0 }}</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">Pass Rate</span>
-        <span class="stat-value">{{ passRate }}%</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">Duration</span>
-        <span class="stat-value">{{ formatDuration(r.durationMs ? r.durationMs / 1000 : null) }}</span>
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">Started</span>
-        <span class="stat-value date">{{ formatDate(r.startedAt) }}</span>
+      
+      <!-- Visual Scoreboard -->
+      <div class="hero-scoreboard">
+        <div class="score-card passed">
+          <div class="score">{{ r.passedCount || 0 }}</div>
+          <div class="score-label">Passed</div>
+        </div>
+        <div class="score-card failed">
+          <div class="score">{{ (r.failedCount || 0) + (r.errorCount || 0) }}</div>
+          <div class="score-label">Failed</div>
+        </div>
+        <div class="score-card rate">
+          <div class="score">{{ passRate }}%</div>
+          <div class="score-label">Success Rate</div>
+        </div>
       </div>
     </div>
 
     @if (r.status === 'running') {
-      <p-progressBar mode="indeterminate" [style]="{ height: '3px', 'margin-bottom': '20px' }" />
-    }
-
-    <!-- Execution Timeline -->
-    @if (r.results && r.results.length > 0) {
-      <div class="execution-timeline">
-        <h3 class="timeline-title"><i class="pi pi-chart-bar"></i> Execution Timeline</h3>
-        <div class="timeline-bars">
-          @for (result of r.results; track result.scriptId) {
-            <div class="timeline-row">
-              <span class="timeline-script-name" [pTooltip]="result.scriptName || 'Script #' + result.scriptId">
-                {{ (result.scriptName || 'Script #' + result.scriptId) | slice:0:25 }}
-              </span>
-              <div class="timeline-bar-track">
-                <div class="timeline-bar"
-                  [class.passed]="result.status === 'passed'"
-                  [class.failed]="result.status === 'failed' || result.status === 'error'"
-                  [class.running]="result.status === 'running'"
-                  [style.width.%]="getTimelineWidth(result.durationMs)"
-                  [pTooltip]="formatDuration(result.durationMs ? result.durationMs / 1000 : null)">
-                </div>
-              </div>
-              <span class="timeline-duration">{{ formatDuration(result.durationMs ? result.durationMs / 1000 : null) }}</span>
-            </div>
-          }
+      <div class="live-progress">
+        <div class="progress-info">
+          <span>Execution in progress...</span>
+          <span>{{ r.passedCount + r.failedCount }} / {{ r.totalScripts }} Scripts</span>
         </div>
+        <p-progressBar mode="indeterminate" [style]="{ height: '6px' }" />
       </div>
     }
-    @if (r.results && r.results.length > 0) {
-      <p-card header="Test Results" styleClass="results-card">
-        <p-table [value]="r.results" responsiveLayout="scroll" styleClass="p-datatable-sm">
-          <ng-template #header>
-            <tr>
-              <th>Script</th>
-              <th>Status</th>
-              <th>Duration</th>
-              <th>Error</th>
-            </tr>
-          </ng-template>
-          <ng-template #body let-result>
-            <tr>
-              <td>
-                <div class="script-name">
-                  <i class="pi pi-file-code"></i>
-                  {{ result.scriptName || 'Script #' + result.scriptId }}
-                </div>
-              </td>
-              <td>
-                <p-tag [value]="result.status | titlecase" [severity]="getStatusSeverity(result.status)" />
-              </td>
-              <td>{{ formatDuration(result.durationMs ? result.durationMs / 1000 : null) }}</td>
-              <td>
-                @if (result.errorMessage) {
-                  <code class="error-msg" [pTooltip]="result.errorMessage">{{ result.errorMessage }}</code>
-                } @else {
-                  -
-                }
-              </td>
-            </tr>
-          </ng-template>
-        </p-table>
-      </p-card>
-    }
 
-    <!-- Artifacts -->
-    @if (artifacts().length > 0) {
-      <p-card header="Report Artifacts" styleClass="artifacts-card">
-        <div class="artifact-list">
-          @for (artifact of artifacts(); track artifact.id) {
-            <div class="artifact-item">
-              <div class="artifact-info">
-                <i class="pi" [ngClass]="{'pi-file-pdf': artifact.artifactType === 'pdf', 'pi-file-o': artifact.artifactType !== 'pdf'}"></i>
-                <div class="meta">
-                  <span class="artifact-name">{{ artifact.fileName }}</span>
-                  <span class="artifact-size">{{ artifact.fileSizeBytes ? (artifact.fileSizeBytes / 1024 | number:'1.0-1') + ' KB' : 'Unknown size' }}</span>
-                </div>
-              </div>
-              <p-button icon="pi pi-download" label="Download" size="small" (onClick)="downloadArtifact(artifact)" />
-            </div>
-          }
-        </div>
-      </p-card>
-    }
+    <div class="report-grid">
+      <!-- Main Content Column -->
+      <div class="main-column">
+        
+        <!-- Results Table -->
+        <p-card styleClass="report-card results-section">
+          <div class="card-header">
+            <h3><i class="pi pi-list"></i> Detailed script Execution</h3>
+          </div>
+          
+          <p-table [value]="r.results || []" responsiveLayout="scroll" styleClass="p-datatable-sm modern-table">
+            <ng-template #header>
+              <tr>
+                <th>Test Script</th>
+                <th>Status</th>
+                <th>Execution Time</th>
+                <th>Remarks</th>
+              </tr>
+            </ng-template>
+            <ng-template #body let-result>
+              <tr [class.row-error]="result.status === 'failed' || result.status === 'error'">
+                <td>
+                  <div class="script-cell">
+                    <i class="pi pi-code"></i>
+                    <span>{{ result.scriptName || 'Unknown Script' }}</span>
+                  </div>
+                </td>
+                <td>
+                  <p-tag [value]="result.status | titlecase" [severity]="getStatusSeverity(result.status)" />
+                </td>
+                <td>
+                  <div class="duration-cell">
+                    <i class="pi pi-clock"></i>
+                    {{ formatDuration(result.durationMs ? result.durationMs / 1000 : null) }}
+                  </div>
+                </td>
+                <td class="error-cell">
+                  @if (result.errorMessage) {
+                    <span class="error-text" [pTooltip]="result.errorMessage">
+                      <i class="pi pi-exclamation-triangle"></i>
+                      {{ result.errorMessage }}
+                    </span>
+                  } @else {
+                    <span class="success-text"><i class="pi pi-check" *ngIf="result.status === 'passed'"></i></span>
+                  }
+                </td>
+              </tr>
+            </ng-template>
+          </p-table>
+        </p-card>
 
-    <!-- Logs -->
-    <p-card header="Execution Logs" styleClass="logs-card">
-      <div class="log-viewer">
-        @if (logs().length > 0) {
-          @for (log of logs(); track $index) {
-            <div class="log-line" [class]="log.level">
-              <span class="log-time">{{ log.timestamp | date: 'HH:mm:ss' }}</span>
-              <span class="log-msg">{{ log.message }}</span>
+        <!-- Dynamic Timeline -->
+        @if (r.results && r.results.length > 0) {
+          <p-card styleClass="report-card timeline-section">
+            <div class="card-header">
+              <h3><i class="pi pi-chart-line"></i> Performance Timeline</h3>
             </div>
-          }
-        }
-        @for (line of liveLogs(); track $index) {
-          <div class="log-line live">{{ line }}</div>
-        }
-        @if (logs().length === 0 && liveLogs().length === 0) {
-          <div class="log-empty">No logs available for this run</div>
+            <div class="timeline-visual">
+              @for (result of r.results; track result.scriptId) {
+                <div class="timeline-entry" [class]="result.status">
+                  <div class="marker"></div>
+                  <div class="entry-line"></div>
+                  <div class="entry-content">
+                    <span class="entry-name">{{ result.scriptName | slice:0:30 }}...</span>
+                    <span class="entry-time">{{ formatDuration(result.durationMs ? result.durationMs / 1000 : null) }}</span>
+                  </div>
+                </div>
+              }
+            </div>
+          </p-card>
         }
       </div>
-    </p-card>
+
+      <!-- Sidebar Column -->
+      <div class="sidebar-column">
+        
+        <!-- Artifacts Hub -->
+        <p-card styleClass="report-card artifacts-hub">
+          <div class="card-header">
+            <h3><i class="pi pi-box"></i> Artifacts Hub</h3>
+            <span class="badge" *ngIf="artifacts().length > 0">{{ artifacts().length }}</span>
+          </div>
+          
+          @if (artifacts().length > 0) {
+            <div class="artifact-items">
+              @for (artifact of artifacts(); track artifact.id) {
+                <div class="artifact-box" (click)="downloadArtifact(artifact)">
+                  <div class="artifact-icon" [class]="artifact.artifactType">
+                    <i class="pi" [ngClass]="{'pi-file-pdf': artifact.artifactType === 'pdf', 'pi-file': artifact.artifactType === 'html'}"></i>
+                  </div>
+                  <div class="artifact-details">
+                    <span class="name">{{ artifact.fileName }}</span>
+                    <span class="size">{{ artifact.fileSizeBytes ? (artifact.fileSizeBytes / 1024 | number:'1.0-1') + ' KB' : '--' }}</span>
+                  </div>
+                  <div class="artifact-link">
+                    <i class="pi pi-download"></i>
+                  </div>
+                </div>
+              }
+            </div>
+          } @else {
+            <div class="empty-artifacts">
+              <i class="pi pi-cloud-download"></i>
+              <p>No artifacts available for this run</p>
+            </div>
+          }
+        </p-card>
+
+        <!-- Execution Environment -->
+        <p-card styleClass="report-card env-details">
+          <div class="card-header">
+            <h3><i class="pi pi-server"></i> Environment</h3>
+          </div>
+          <div class="env-info">
+            <div class="info-row">
+              <span class="key">Source</span>
+              <span class="val">{{ getRunMetadataValue('executionSource') }}</span>
+            </div>
+            <div class="info-row">
+              <span class="key">Branch</span>
+              <span class="val">{{ getRunMetadataValue('gitBranch') }}</span>
+            </div>
+            <div class="info-row">
+              <span class="key">Repository</span>
+              <span class="val">{{ getRunMetadataValue('gitRepoUrl') }}</span>
+            </div>
+            <div class="info-row">
+              <span class="key">Workspace</span>
+              <span class="val">{{ getRunMetadataValue('workspacePath') }}</span>
+            </div>
+            <div class="info-row">
+              <span class="key">Reports</span>
+              <span class="val">{{ getRunMetadataValue('reportsDirectory') }}</span>
+            </div>
+          </div>
+        </p-card>
+
+      </div>
+    </div>
+
+    <!-- Logs Deep-Dive -->
+    <div class="logs-section">
+      <p-card styleClass="report-card logs-card">
+        <p-tabs [scrollable]="true">
+          <p-tablist>
+              <p-tab value="0">Detailed Logs</p-tab>
+              <p-tab value="1" *ngIf="liveLogs().length > 0">Live Output</p-tab>
+          </p-tablist>
+          <p-tabpanels>
+              <p-tabpanel value="0">
+                <div class="log-container">
+                  @for (log of logs(); track $index) {
+                    <div class="log-row" [class]="log.level.toLowerCase()">
+                      <span class="log-time">{{ log.timestamp | date:'HH:mm:ss' }}</span>
+                      <span class="log-level">{{ log.level || 'INFO' }}</span>
+                      <span class="log-msg">{{ log.message }}</span>
+                    </div>
+                  }
+                </div>
+              </p-tabpanel>
+              <p-tabpanel value="1">
+                <div class="log-container console">
+                  @for (log of liveLogs(); track $index) {
+                    <div class="log-row">{{ log }}</div>
+                  }
+                </div>
+              </p-tabpanel>
+          </p-tabpanels>
+        </p-tabs>
+      </p-card>
+    </div>
+
   }
 </div>

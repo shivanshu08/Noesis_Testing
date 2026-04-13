@@ -155,6 +155,7 @@ CREATE TABLE IF NOT EXISTS execution_runs (
     duration_ms BIGINT DEFAULT NULL,
     environment VARCHAR(50) DEFAULT 'local',
     config_xml TEXT DEFAULT NULL,
+    run_metadata JSONB DEFAULT NULL,
     triggered_by INT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
     started_at TIMESTAMP DEFAULT NULL,
     completed_at TIMESTAMP DEFAULT NULL,

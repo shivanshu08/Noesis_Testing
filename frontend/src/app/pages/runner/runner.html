@@ -234,6 +234,84 @@
             }
           }
         </div>
+
+        @if (!running() && currentRunId() && runStatus()) {
+          <div class="execution-summary-card">
+            <div class="summary-head">
+              <h4>Execution Summary</h4>
+              <p-tag [value]="runStatus() | uppercase" [severity]="getRunStatusSeverity(runStatus())" />
+            </div>
+
+            <div class="summary-grid">
+              <div class="summary-item">
+                <span class="summary-label">Run ID</span>
+                <strong class="summary-value">#{{ currentRunId() }}</strong>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">Started</span>
+                <strong class="summary-value">{{ latestRunDetails()?.startedAt ? (latestRunDetails()?.startedAt | date:'medium') : '-' }}</strong>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">Completed</span>
+                <strong class="summary-value">{{ latestRunDetails()?.completedAt ? (latestRunDetails()?.completedAt | date:'medium') : '-' }}</strong>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">Source</span>
+                <strong class="summary-value">{{ getRunMetadataValue('executionSource') }}</strong>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">Git Branch</span>
+                <strong class="summary-value">{{ getRunMetadataValue('gitBranch') }}</strong>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">Artifacts</span>
+                <strong class="summary-value">{{ artifacts().length }}</strong>
+              </div>
+            </div>
+
+            <div class="run-meta-lines">
+              <div class="meta-line"><span>Repository:</span> {{ getRunMetadataValue('gitRepoUrl') }}</div>
+              <div class="meta-line"><span>Workspace:</span> {{ getRunMetadataValue('workspacePath') }}</div>
+              <div class="meta-line"><span>Maven:</span> {{ getRunMetadataValue('mavenCommand') }}</div>
+              <div class="meta-line"><span>Reports:</span> {{ getRunMetadataValue('reportsDirectory') }}</div>
+            </div>
+
+            <div class="artifact-head">
+              <div class="artifact-title">
+                <h4>Generated Reports</h4>
+                <span class="artifact-count">{{ getArtifactsByType('html').length }} HTML • {{ getArtifactsByType('pdf').length }} PDF</span>
+              </div>
+              @if (artifacts().length > 0) {
+                <p-button
+                  label="Download All"
+                  icon="pi pi-download"
+                  size="small"
+                  severity="secondary"
+                  (onClick)="downloadAllArtifacts()"
+                />
+              }
+            </div>
+
+            @if (artifacts().length === 0) {
+              <div class="no-artifacts">No HTML/PDF artifact was captured for this run.</div>
+            } @else {
+              <div class="artifact-list">
+                @for (artifact of artifacts(); track artifact.id) {
+                  <button type="button" class="artifact-row" (click)="downloadArtifact(artifact)">
+                    <div class="artifact-left">
+                      <i class="pi" [class.pi-file-pdf]="artifact.artifactType === 'pdf'" [class.pi-file]="artifact.artifactType !== 'pdf'"></i>
+                      <div>
+                        <div class="artifact-name">{{ artifact.fileName }}</div>
+                        <div class="artifact-meta">{{ artifact.artifactType | uppercase }} • {{ formatBytes(artifact.fileSizeBytes) }}</div>
+                      </div>
+                    </div>
+                    <i class="pi pi-download"></i>
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        }
       </p-card>
 
     </div>

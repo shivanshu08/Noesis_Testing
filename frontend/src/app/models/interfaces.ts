@@ -94,6 +94,29 @@ export interface ExecutionRun {
   durationMs?: number;
   environment: string;
   configXml?: string;
+  runMetadata?: {
+    executionSource?: 'git' | 'local';
+    gitRepoUrl?: string | null;
+    gitBranch?: string | null;
+    workspacePath?: string;
+    suiteFilePath?: string;
+    suiteFileName?: string;
+    mavenCommand?: string;
+    reportsDirectory?: string;
+    certificateHardeningStatus?: string;
+    certificateHardeningMessage?: string;
+    startedAt?: string;
+    completedAt?: string;
+    finalStatus?: string;
+    exitCode?: number | null;
+    resultSummary?: {
+      passed: number;
+      failed: number;
+      errors: number;
+      skipped: number;
+    };
+    artifactCount?: number;
+  };
   triggeredBy?: string;
   startedAt?: string;
   completedAt?: string;

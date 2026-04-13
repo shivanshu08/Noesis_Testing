@@ -136,6 +136,7 @@ async function executeScheduledRun(schedule: ScheduledRunRow): Promise<void> {
     xml += `<suite name="${escapeXml(runName)}" parallel="false">\n`;
     xml += `  <listeners>\n`;
     xml += `    <listener class-name="org.example.utility.CustomHtmlReporter"/>\n`;
+    xml += `    <listener class-name="org.example.utility.PreExecutionReviewListener"/>\n`;
     xml += `    <listener class-name="org.example.utility.ExecutionOrderListener"/>\n`;
     xml += `  </listeners>\n`;
     xml += `  <test name="Scheduled Test">\n`;

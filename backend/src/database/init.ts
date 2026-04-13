@@ -68,6 +68,13 @@ async function initDatabase() {
       // Ignore migration failures if schema is incompatible in older databases
     }
 
+    // Ensure execution_runs supports run metadata payload (command, repo, artifacts)
+    try {
+      await pool.query('ALTER TABLE execution_runs ADD COLUMN IF NOT EXISTS run_metadata JSONB');
+    } catch {
+      // Ignore migration failures
+    }
+
     // Create admin user with proper bcrypt hash
     const salt = await bcrypt.genSalt(12);
     const adminHash = await bcrypt.hash('admin123', salt);

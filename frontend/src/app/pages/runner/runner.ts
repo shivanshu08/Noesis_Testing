@@ -1,5 +1,6 @@
-import { Component, OnInit, OnDestroy, signal, ViewChild, ElementRef, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, ViewChild, ElementRef, HostListener, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { CardModule } from 'primeng/card';
 import { ButtonModule } from 'primeng/button';
@@ -18,7 +19,7 @@ import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { DatePickerModule } from 'primeng/datepicker';
 import { ScriptService } from '../../services/script.service';
 import { ExecutionService } from '../../services/execution.service';
-import { Script, ScriptCategory, ScheduledRun, ExecutionArtifact } from '../../models/interfaces';
+import { Script, ScriptCategory, ScheduledRun, ExecutionArtifact, ExecutionRun } from '../../models/interfaces';
 import { AuthService } from '../../services/auth.service';
 import { MessageService } from 'primeng/api';
 import { Subscription } from 'rxjs';
@@ -47,6 +48,7 @@ interface CronPreset {
   styleUrl: './runner.scss',
 })
 export class Runner implements OnInit, OnDestroy {
+  private router = inject(Router);
   @ViewChild('logContainer') logContainer!: ElementRef;
 
   scripts = signal<SelectableScript[]>([]);
@@ -58,6 +60,7 @@ export class Runner implements OnInit, OnDestroy {
   runStatus = signal<string>('');
   schedules = signal<ScheduledRun[]>([]);
   artifacts = signal<ExecutionArtifact[]>([]);
+  latestRunDetails = signal<ExecutionRun | null>(null);
 
   selectedCategory: number | null = null;
   searchTerm = '';
@@ -252,6 +255,7 @@ export class Runner implements OnInit, OnDestroy {
     this.executionProgress.set(0);
     this.currentExecutingScript.set('');
     this.artifacts.set([]);
+    this.latestRunDetails.set(null);
 
     this.messageService.add({ severity: 'info', summary: 'Execution Started', detail: `Running ${scriptIds.length} script(s)...` });
 
@@ -316,10 +320,14 @@ export class Runner implements OnInit, OnDestroy {
               } else {
                 this.executionService.getArtifacts(res.runId).subscribe(data => this.artifacts.set(data));
               }
+
+              this.loadLatestRunDetails(res.runId);
             } else if (status === 'error') {
               this.messageService.add({ severity: 'error', summary: 'Execution Failed', detail: 'An error occurred during execution' });
+              this.loadLatestRunDetails(res.runId);
             } else if (status === 'stopped') {
               this.messageService.add({ severity: 'warn', summary: 'Execution Stopped', detail: 'The execution was manually stopped' });
+              this.loadLatestRunDetails(res.runId);
             }
           }
         }, 500);
@@ -363,13 +371,14 @@ export class Runner implements OnInit, OnDestroy {
     this.currentRunId.set(null);
     this.elapsedSeconds = 0;
     this.artifacts.set([]);
+    this.latestRunDetails.set(null);
   }
 
   // ---- Artifacts & Completion ----
   
   viewRunDetails() {
     if (this.currentRunId()) {
-      window.open(`/run/${this.currentRunId()}`, '_blank');
+      this.router.navigate(['/run', this.currentRunId()]);
     }
   }
 
@@ -383,8 +392,7 @@ export class Runner implements OnInit, OnDestroy {
   }
   
   downloadArtifact(artifact: ExecutionArtifact) {
-    const url = this.executionService.getArtifactDownloadUrl(artifact.id);
-    window.open(url, '_blank');
+    this.executionService.downloadArtifactBlob(artifact.id, artifact.fileName);
   }
   
   downloadAllArtifacts() {
@@ -393,6 +401,47 @@ export class Runner implements OnInit, OnDestroy {
         this.downloadArtifact(artifact);
       }, index * 500); // Stagger downloads slightly
     });
+  }
+
+  getRunStatusSeverity(status: string): 'success' | 'danger' | 'warn' | 'info' | 'secondary' | 'contrast' {
+    switch ((status || '').toLowerCase()) {
+      case 'passed':
+      case 'completed':
+        return 'success';
+      case 'failed':
+      case 'error':
+        return 'danger';
+      case 'running':
+        return 'warn';
+      case 'stopped':
+        return 'secondary';
+      default:
+        return 'info';
+    }
+  }
+
+  getRunMetadataValue(field: keyof NonNullable<ExecutionRun['runMetadata']>): string {
+    const metadata = this.latestRunDetails()?.runMetadata;
+    const value = metadata?.[field];
+    if (value === null || value === undefined || value === '') {
+      return '-';
+    }
+
+    return String(value);
+  }
+
+  getArtifactsByType(type: string): ExecutionArtifact[] {
+    const expected = (type || '').trim().toLowerCase();
+    return this.artifacts().filter((artifact) => String(artifact.artifactType || '').toLowerCase() === expected);
+  }
+
+  formatBytes(value?: number): string {
+    if (!value || value <= 0) return '-';
+    if (value < 1024) return `${value} B`;
+    const kb = value / 1024;
+    if (kb < 1024) return `${kb.toFixed(1)} KB`;
+    const mb = kb / 1024;
+    return `${mb.toFixed(2)} MB`;
   }
 
   // ---- Timer ----
@@ -580,6 +629,12 @@ export class Runner implements OnInit, OnDestroy {
   private scrollToBottom() {
     const el = this.logContainer?.nativeElement;
     if (el) el.scrollTop = el.scrollHeight;
+  }
+
+  private loadLatestRunDetails(runId: number): void {
+    this.executionService.getRunDetails(runId).subscribe({
+      next: (details) => this.latestRunDetails.set(details),
+    });
   }
 
   getCategoryName(catId: number): string {

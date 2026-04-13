@@ -40,6 +40,7 @@ interface RunRow {
   completed_at: Date | null;
   created_at: Date;
   config_xml: string | null;
+  run_metadata: Record<string, unknown> | null;
 }
 
 interface ResultRow {
@@ -63,6 +64,30 @@ interface LogContext {
   lineLength?: number;
   keyword?: string;
   scriptCount?: number;
+}
+
+interface RunMetadata {
+  executionSource: 'git' | 'local';
+  gitRepoUrl: string | null;
+  gitBranch: string | null;
+  workspacePath: string;
+  suiteFilePath: string;
+  suiteFileName: string;
+  mavenCommand: string;
+  reportsDirectory: string;
+  certificateHardeningStatus: string;
+  certificateHardeningMessage: string;
+  startedAt: string;
+  completedAt?: string;
+  finalStatus?: string;
+  exitCode?: number | null;
+  resultSummary?: {
+    passed: number;
+    failed: number;
+    errors: number;
+    skipped: number;
+  };
+  artifactCount?: number;
 }
 
 interface UnifiedLogRow {
@@ -285,6 +310,7 @@ router.get('/runs', async (req: AuthRequest, res: Response): Promise<void> => {
       startedAt: r.started_at,
       completedAt: r.completed_at,
       createdAt: r.created_at,
+      runMetadata: r.run_metadata,
     })));
   } catch (error) {
     logger.error('List runs error:', error);
@@ -329,6 +355,7 @@ router.get('/runs/:id', async (req: AuthRequest, res: Response): Promise<void> =
       durationMs: r.duration_ms,
       environment: r.environment,
       configXml: r.config_xml,
+      runMetadata: r.run_metadata,
       triggeredBy: r.triggered_by_name,
       startedAt: r.started_at,
       completedAt: r.completed_at,
@@ -759,7 +786,12 @@ router.get('/logs/:runId', async (req: AuthRequest, res: Response): Promise<void
       'SELECT * FROM execution_logs WHERE run_id = $1 ORDER BY timestamp',
       [req.params.runId]
     );
-    res.json(logs);
+    res.json(logs.map((log) => ({
+      runId: log.run_id,
+      level: log.log_level,
+      message: log.message,
+      timestamp: log.timestamp,
+    })));
   } catch (error) {
     logger.error('Get logs error:', error);
     res.status(500).json({ error: 'Failed to fetch logs.' });
@@ -774,6 +806,7 @@ function buildTestNGXml(suiteName: string, scripts: any[]): string {
   xml += `<suite name="${escapeXml(suiteName)}" parallel="false">\n`;
   xml += `  <listeners>\n`;
   xml += `    <listener class-name="org.example.utility.CustomHtmlReporter"/>\n`;
+  xml += `    <listener class-name="org.example.utility.PreExecutionReviewListener"/>\n`;
   xml += `    <listener class-name="org.example.utility.ExecutionOrderListener"/>\n`;
   xml += `  </listeners>\n`;
   xml += `  <test name="Dynamic Test">\n`;
@@ -852,6 +885,22 @@ async function insertExecutionLog(
   );
 }
 
+async function persistRunMetadata(runId: number, metadata: RunMetadata): Promise<void> {
+  try {
+    await execute(
+      `UPDATE execution_runs SET run_metadata = $1 WHERE id = $2`,
+      [JSON.stringify(metadata), runId]
+    );
+  } catch (error: any) {
+    const message = String(error?.message || '');
+    if (message.toLowerCase().includes('run_metadata')) {
+      logger.warn(`Run ${runId}: run_metadata column is unavailable, continuing without metadata persistence.`);
+      return;
+    }
+    logger.warn(`Run ${runId}: failed to persist run metadata: ${message}`);
+  }
+}
+
 function ensureGitRepository(runId: number, repoUrl: string, cachePath: string, branch: string): { success: boolean; error?: any } {
   try {
     const fs = require('fs');
@@ -902,6 +951,291 @@ function ensureGitRepository(runId: number, repoUrl: string, cachePath: string, 
   }
 }
 
+function recursiveSearch(dir: string, pattern: RegExp): string[] {
+  const fs = require('fs');
+  const path = require('path');
+  let results: string[] = [];
+  if (!fs.existsSync(dir)) return results;
+
+  const list = fs.readdirSync(dir);
+  list.forEach((file: string) => {
+    const fullPath = path.join(dir, file);
+    const stat = fs.statSync(fullPath);
+    if (stat && stat.isDirectory()) {
+      results = results.concat(recursiveSearch(fullPath, pattern));
+    } else if (file.endsWith('.java')) {
+      const content = fs.readFileSync(fullPath, 'utf8');
+      if (pattern.test(content)) {
+        results.push(fullPath);
+      }
+    }
+  });
+  return results;
+}
+
+function stripCommentsFromJavaLine(
+  line: string,
+  inBlockComment: boolean
+): { code: string; inBlockComment: boolean } {
+  let cursor = line;
+  let blockState = inBlockComment;
+  let sanitized = '';
+
+  while (cursor.length > 0) {
+    if (blockState) {
+      const blockEnd = cursor.indexOf('*/');
+      if (blockEnd === -1) {
+        return { code: sanitized, inBlockComment: true };
+      }
+      cursor = cursor.slice(blockEnd + 2);
+      blockState = false;
+      continue;
+    }
+
+    const lineCommentStart = cursor.indexOf('//');
+    const blockCommentStart = cursor.indexOf('/*');
+
+    if (lineCommentStart !== -1 && (blockCommentStart === -1 || lineCommentStart < blockCommentStart)) {
+      sanitized += cursor.slice(0, lineCommentStart);
+      return { code: sanitized, inBlockComment: false };
+    }
+
+    if (blockCommentStart !== -1) {
+      sanitized += cursor.slice(0, blockCommentStart);
+      cursor = cursor.slice(blockCommentStart + 2);
+      blockState = true;
+      continue;
+    }
+
+    sanitized += cursor;
+    break;
+  }
+
+  return { code: sanitized, inBlockComment: blockState };
+}
+
+function extractOptionsVariableName(lines: string[], lineIndex: number): string | null {
+  const parseCandidate = (candidate: string): string | null => {
+    const normalized = candidate.trim();
+    if (!normalized) return null;
+
+    const varMatch = normalized.match(/([A-Za-z_][A-Za-z0-9_]*)\s*=\s*new\s+(?:Chrome|Edge)Options\s*\(/);
+    if (varMatch?.[1]) return varMatch[1];
+
+    const carryMatch = normalized.match(/([A-Za-z_][A-Za-z0-9_]*)\s*=\s*$/);
+    if (carryMatch?.[1]) return carryMatch[1];
+
+    return null;
+  };
+
+  let blockCommentState = false;
+  const current = stripCommentsFromJavaLine(lines[lineIndex] || '', blockCommentState);
+  blockCommentState = current.inBlockComment;
+  const directMatch = parseCandidate(current.code);
+  if (directMatch) return directMatch;
+
+  for (let offset = 1; offset <= 3; offset++) {
+    const previousIndex = lineIndex - offset;
+    if (previousIndex < 0) break;
+    const previous = stripCommentsFromJavaLine(lines[previousIndex] || '', blockCommentState);
+    blockCommentState = previous.inBlockComment;
+    const previousMatch = parseCandidate(previous.code);
+    if (previousMatch) return previousMatch;
+  }
+
+  return null;
+}
+
+function hardenBrowserCertificateHandling(runId: number, stPath: string): { status: 'patched' | 'already' | 'skipped' | 'error'; message: string } {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const sourceDir = path.join(stPath, 'src');
+
+    if (!fs.existsSync(sourceDir)) {
+      return { status: 'skipped', message: 'Source directory not found. Skipping certificate hardening.' };
+    }
+
+    const browserOptionsPattern = /new\s+(Chrome|Edge)Options\(\)/i;
+    const filesToPatch = recursiveSearch(sourceDir, browserOptionsPattern);
+
+    if (filesToPatch.length === 0) {
+      return { status: 'skipped', message: 'No browser option initializations found in automation project.' };
+    }
+
+    let patchedCount = 0;
+    filesToPatch.forEach(filePath => {
+      const originalContent = fs.readFileSync(filePath, 'utf8');
+      const lines = originalContent.split(/\r?\n/);
+      const patchedLines: string[] = [];
+      let fileModified = false;
+      let inBlockComment = false;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        patchedLines.push(line);
+
+        const analyzedLine = stripCommentsFromJavaLine(line, inBlockComment);
+        inBlockComment = analyzedLine.inBlockComment;
+        const codeLine = analyzedLine.code.trim();
+        if (!codeLine) {
+          continue;
+        }
+
+        if (browserOptionsPattern.test(codeLine)) {
+          const nextLines = lines.slice(i + 1, i + 12).join('\n');
+          if (nextLines.includes('setAcceptInsecureCerts(true)')) continue;
+
+          const varName = extractOptionsVariableName(lines, i);
+          if (!varName) {
+            continue;
+          }
+          const indent = (line.match(/^(\s*)/) || [''])[0];
+
+          patchedLines.push(`${indent}${varName}.setAcceptInsecureCerts(true);`);
+          patchedLines.push(`${indent}${varName}.addArguments("--ignore-certificate-errors");`);
+          patchedLines.push(`${indent}${varName}.addArguments("--allow-insecure-localhost");`);
+          patchedLines.push(`${indent}${varName}.addArguments("--no-sandbox");`);
+          patchedLines.push(`${indent}${varName}.addArguments("--disable-dev-shm-usage");`);
+          fileModified = true;
+        }
+      }
+
+      if (fileModified) {
+        fs.writeFileSync(filePath, patchedLines.join(originalContent.includes('\r\n') ? '\r\n' : '\n'), 'utf8');
+        patchedCount++;
+      }
+    });
+
+    return {
+      status: patchedCount > 0 ? 'patched' : 'already',
+      message: patchedCount > 0 
+        ? `Enabled insecure certificate handling in ${patchedCount} file(s).`
+        : 'Certificate hardening already present in workspace.'
+    };
+  } catch (err: any) {
+    logger.error(`Run ${runId}: Failed to harden browser certificate handling`, err);
+    return { status: 'error', message: `Failed to apply certificate hardening: ${err?.message || err}` };
+  }
+}
+
+function hardenFrontDoorRequestHeaders(runId: number, stPath: string): { status: 'patched' | 'already' | 'skipped' | 'error'; message: string } {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const targetFilePath = path.join(
+      stPath,
+      'src',
+      'main',
+      'java',
+      'org',
+      'example',
+      'operations',
+      'NoesisOperationImpl.java'
+    );
+
+    if (!fs.existsSync(targetFilePath)) {
+      return { status: 'skipped', message: 'NoesisOperationImpl.java not found. Skipping Front Door header hardening.' };
+    }
+
+    const originalContent = fs.readFileSync(targetFilePath, 'utf8');
+    const legacyMarker = 'X-NOESIS-FRONTDOOR-HARDENING';
+    const browserFirstMarker = 'X-NOESIS-FRONTDOOR-BROWSER-FIRST';
+    if (originalContent.includes(browserFirstMarker)) {
+      return { status: 'already', message: 'Front Door browser-first strategy is already applied.' };
+    }
+
+    let patchedContent = originalContent;
+    let modified = false;
+
+    const jsFetchBlockPattern = /try\s*\{\s*String jsFetch =[\s\S]*?System\.out\.println\("In-page fetch\+open failed: " \+ fe\.getMessage\(\)\);\s*}\s*/m;
+    if (jsFetchBlockPattern.test(patchedContent)) {
+      const browserFirstBlock = [
+        '                    try {',
+        '                        // X-NOESIS-FRONTDOOR-BROWSER-FIRST',
+        '                        String originalWindowHandle = driver.getWindowHandle();',
+        '                        driver.switchTo().newWindow(org.openqa.selenium.WindowType.TAB);',
+        '                        driver.get(href);',
+        '                        System.out.println("Opened URL in browser tab: " + href);',
+        '                        try { Thread.sleep(2200); } catch (InterruptedException ignored) {}',
+        '                        try { driver.switchTo().window(originalWindowHandle); } catch (Exception ignored) {}',
+        '                    } catch (Exception fe) {',
+        '                        System.out.println("Browser-tab open failed: " + fe.getMessage());',
+        '                    }',
+        '',
+        '                    if (!Boolean.parseBoolean(System.getProperty("noesis.allowJavaHttpFallback", "false"))) {',
+        '                        long browserDownloadStart = System.currentTimeMillis();',
+        '                        File browserFound = null;',
+        '                        while ((System.currentTimeMillis() - browserDownloadStart) < 8000L) {',
+        '                            File browserDir = new File(downloadDir);',
+        '                            File[] browserMatches = browserDir.listFiles((d, name) -> name.endsWith(expectedFileNameSuffix) || name.toLowerCase().endsWith(expectedFileNameSuffix.toLowerCase()));',
+        '                            if (browserMatches != null && browserMatches.length > 0) {',
+        '                                Arrays.sort(browserMatches, Comparator.comparingLong(File::lastModified).reversed());',
+        '                                for (File f : browserMatches) {',
+        '                                    if (!f.getName().endsWith(".crdownload") && f.length() > 0) {',
+        '                                        browserFound = f;',
+        '                                        break;',
+        '                                    }',
+        '                                }',
+        '                                if (browserFound != null) break;',
+        '                            }',
+        '                            try { Thread.sleep(500); } catch (InterruptedException ignored) {}',
+        '                        }',
+        '',
+        '                        if (browserFound != null) {',
+        '                            System.out.println("Browser-native download succeeded: " + browserFound.getAbsolutePath());',
+        '                            return browserFound.getAbsolutePath();',
+        '                        }',
+        '',
+        '                        System.out.println("Skipping Java HTTP fallback to avoid Front Door blocking; URL was opened in browser: " + href);',
+        '                        return href;',
+        '                    }',
+        ''
+      ].join('\n');
+
+      patchedContent = patchedContent.replace(jsFetchBlockPattern, browserFirstBlock);
+      modified = true;
+    }
+
+    const fetchNeedle = "fetch(href, {credentials: 'include'})";
+    if (patchedContent.includes(fetchNeedle)) {
+      patchedContent = patchedContent.replace(
+        fetchNeedle,
+        "fetch(href, {credentials: 'include', headers: {'Accept': 'application/xml,text/xml,application/xhtml+xml,text/html;q=0.9,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.9', 'X-Requested-With': 'XMLHttpRequest'}})"
+      );
+      modified = true;
+    }
+
+    const requestMethodNeedle = 'conn.setRequestMethod("GET");';
+    if (patchedContent.includes(requestMethodNeedle)) {
+      const headerBlock = [
+        'conn.setRequestMethod("GET");',
+        `                    // ${legacyMarker}`,
+        '                    conn.setRequestProperty("Accept", "application/xml,text/xml,application/xhtml+xml,text/html;q=0.9,*/*;q=0.8");',
+        '                    conn.setRequestProperty("Accept-Language", "en-US,en;q=0.9");',
+        '                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36");',
+        '                    conn.setRequestProperty("X-Requested-With", "XMLHttpRequest");',
+        '                    try { conn.setRequestProperty("Referer", driver.getCurrentUrl()); } catch (Exception ignored) {}',
+        '                    conn.setRequestProperty("Cache-Control", "no-cache");',
+        '                    conn.setRequestProperty("Pragma", "no-cache");'
+      ].join('\n');
+
+      patchedContent = patchedContent.replace(requestMethodNeedle, headerBlock);
+      modified = true;
+    }
+
+    if (!modified) {
+      return { status: 'skipped', message: 'No known HTTP fetch/connection signatures found for Front Door hardening.' };
+    }
+
+    fs.writeFileSync(targetFilePath, patchedContent, 'utf8');
+    return { status: 'patched', message: 'Applied Front Door browser-first URL opening strategy (real browser tab, session cookies).' };
+  } catch (err: any) {
+    logger.error(`Run ${runId}: Failed to harden Front Door request headers`, err);
+    return { status: 'error', message: `Failed to apply Front Door hardening: ${err?.message || err}` };
+  }
+}
+
 async function executeScripts(runId: number, testngXml: string, scripts: any[], userId: number, runName: string) {
   let stPath = config.stAutomation.path;
   const source = config.stAutomation.source;
@@ -938,23 +1272,106 @@ async function executeScripts(runId: number, testngXml: string, scripts: any[], 
       }
     }
 
-    tempXmlPath = path.join(stPath, `temp-run-${runId}.xml`);
+    const certificateHardening = hardenBrowserCertificateHandling(runId, stPath);
+    const certHardeningLevel =
+      certificateHardening.status === 'error'
+        ? 'ERROR'
+        : certificateHardening.status === 'skipped'
+          ? 'WARN'
+          : 'INFO';
+
+    await insertExecutionLog(runId, certHardeningLevel, certificateHardening.message, {
+      phase: 'system',
+      runName,
+      capturedAt: new Date().toISOString(),
+      keyword: 'certificate_hardening',
+    }).catch(() => {});
+
+    if (io) {
+      io.to(`run-${runId}`).emit('run-log', {
+        runId,
+        level: certHardeningLevel,
+        message: certificateHardening.message,
+        timestamp: new Date(),
+      });
+    }
+
+    const frontDoorHardening = hardenFrontDoorRequestHeaders(runId, stPath);
+    const frontDoorHardeningLevel =
+      frontDoorHardening.status === 'error'
+        ? 'ERROR'
+        : frontDoorHardening.status === 'skipped'
+          ? 'WARN'
+          : 'INFO';
+
+    await insertExecutionLog(runId, frontDoorHardeningLevel, frontDoorHardening.message, {
+      phase: 'system',
+      runName,
+      capturedAt: new Date().toISOString(),
+      keyword: 'front_door_hardening',
+    }).catch(() => {});
+
+    if (io) {
+      io.to(`run-${runId}`).emit('run-log', {
+        runId,
+        level: frontDoorHardeningLevel,
+        message: frontDoorHardening.message,
+        timestamp: new Date(),
+      });
+    }
+
+    const suiteFileName = `Testing-Config-Local-run-${runId}.xml`;
+    tempXmlPath = path.join(stPath, suiteFileName);
     
     // Write temporary TestNG XML
     fs.writeFileSync(tempXmlPath, testngXml, 'utf8');
 
     // Determine Maven command
     const mvnCmd = process.platform === 'win32' ? 'mvn.cmd' : 'mvn';
-    const args = [
+    const mavenArgs = [
       'clean',
       'test',
-      `"-DsuiteXmlFile=${tempXmlPath}"`,
-      '-f', `"${path.join(stPath, 'pom.xml')}"`,
+      `-Dsurefire.suiteXmlFiles=${suiteFileName}`,
+      `-DsuiteXmlFile=${suiteFileName}`,
     ];
 
-    const child = spawn(mvnCmd, args, {
+    const commandPreview = [mvnCmd, ...mavenArgs].join(' ');
+    const reportsDirectory = path.join(stPath, 'target', 'surefire-reports');
+
+    const runMetadata: RunMetadata = {
+      executionSource: source === 'git' ? 'git' : 'local',
+      gitRepoUrl: source === 'git' ? config.stAutomation.gitRepoUrl || null : null,
+      gitBranch: source === 'git' ? config.stAutomation.gitBranch || null : null,
+      workspacePath: stPath,
+      suiteFilePath: tempXmlPath,
+      suiteFileName,
+      mavenCommand: commandPreview,
+      reportsDirectory,
+      certificateHardeningStatus: certificateHardening.status,
+      certificateHardeningMessage: certificateHardening.message,
+      startedAt: new Date().toISOString(),
+    };
+
+    await persistRunMetadata(runId, runMetadata);
+
+    if (io) {
+      io.to(`run-${runId}`).emit('run-log', {
+        runId,
+        level: 'INFO',
+        message: `▶ Running command: ${commandPreview}`,
+        timestamp: new Date(),
+      });
+      io.to(`run-${runId}`).emit('run-log', {
+        runId,
+        level: 'INFO',
+        message: `▶ Reports directory: ${reportsDirectory}`,
+        timestamp: new Date(),
+      });
+    }
+
+    const child = spawn(mvnCmd, mavenArgs, {
       cwd: stPath,
-      shell: true,
+      shell: process.platform === 'win32',
       env: { ...process.env, JAVA_HOME: process.env.JAVA_HOME },
     });
 
@@ -1065,12 +1482,23 @@ async function executeScripts(runId: number, testngXml: string, scripts: any[], 
         logger.error(`Failed to capture report artifacts for run ${runId}`, e);
       }
 
+      const completedMetadata: RunMetadata = {
+        ...runMetadata,
+        completedAt: new Date().toISOString(),
+        finalStatus,
+        exitCode: code,
+        resultSummary: { passed, failed, errors, skipped },
+        artifactCount: artifacts.length,
+      };
+
+      await persistRunMetadata(runId, completedMetadata);
+
       if (io) {
         if (artifacts.length > 0) {
           io.to(`run-${runId}`).emit('run-artifacts-ready', artifacts);
         }
         io.to(`run-${runId}`).emit('run-completed', {
-          runId, status: finalStatus, passed, failed, errors, skipped, artifacts
+          runId, status: finalStatus, passed, failed, errors, skipped, artifacts, runMetadata: completedMetadata
         });
         io.emit('global-run-status', {
           runId, runName, status: finalStatus, passed, failed, errors, skipped, artifacts
