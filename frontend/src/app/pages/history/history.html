@@ -2,104 +2,315 @@
   <div class="page-header">
     <div>
       <h1>Execution History</h1>
-      <p class="subtitle">Browse past test execution results</p>
+      <p class="subtitle">Professional run timeline with smart filters, execution source visibility, and quality insights.</p>
     </div>
-    <div class="header-actions" style="display: flex; gap: 12px;">
-      <p-button label="Export CSV" icon="pi pi-file-excel" severity="secondary" (onClick)="exportCSV()" />
-      <p-select
-        [options]="statusOptions"
-        [(ngModel)]="statusFilter"
-        optionLabel="label"
-        optionValue="value"
-        placeholder="All Statuses"
-        [showClear]="true"
-        (onChange)="onStatusChange()"
-        [style]="{ minWidth: '180px' }"
+
+    <div class="header-actions">
+      <span class="last-refresh" *ngIf="lastRefreshedAt()">
+        <i class="pi pi-clock"></i>
+        Updated {{ formatRelativeDate(lastRefreshedAt()) }}
+      </span>
+
+      <p-button
+        icon="pi pi-sync"
+        severity="secondary"
+        [text]="true"
+        [loading]="loading()"
+        pTooltip="Refresh history"
+        tooltipPosition="bottom"
+        (onClick)="loadRuns()"
+      />
+
+      <p-button
+        label="Export CSV"
+        icon="pi pi-file-excel"
+        severity="secondary"
+        [disabled]="filteredRuns().length === 0"
+        (onClick)="exportCSV()"
       />
     </div>
   </div>
 
-  <!-- Summary Stats -->
   <div class="history-stats-grid">
-    <div class="history-stat-card">
+    <button type="button" class="history-stat-card clickable" (click)="applyStatusShortcut(null)">
       <div class="hstat-icon total"><i class="pi pi-play-circle"></i></div>
       <div class="hstat-info">
         <span class="hstat-value">{{ totalRunsCount() }}</span>
         <span class="hstat-label">Total Runs</span>
       </div>
-    </div>
+    </button>
+
+    <button type="button" class="history-stat-card clickable" (click)="applyStatusShortcut('running')">
+      <div class="hstat-icon active"><i class="pi pi-spin pi-spinner"></i></div>
+      <div class="hstat-info">
+        <span class="hstat-value">{{ runningCount() }}</span>
+        <span class="hstat-label">Running / Queued</span>
+      </div>
+    </button>
+
     <div class="history-stat-card">
       <div class="hstat-icon pass"><i class="pi pi-check-circle"></i></div>
       <div class="hstat-info">
         <span class="hstat-value">{{ overallPassRate() }}%</span>
-        <span class="hstat-label">Pass Rate</span>
+        <span class="hstat-label">Overall Pass Rate</span>
       </div>
     </div>
+
+    <button type="button" class="history-stat-card clickable" (click)="applyIssueShortcut()">
+      <div class="hstat-icon issue"><i class="pi pi-exclamation-triangle"></i></div>
+      <div class="hstat-info">
+        <span class="hstat-value">{{ issueCount() }}</span>
+        <span class="hstat-label">Issue Runs</span>
+      </div>
+    </button>
+
     <div class="history-stat-card">
       <div class="hstat-icon duration"><i class="pi pi-stopwatch"></i></div>
       <div class="hstat-info">
         <span class="hstat-value">{{ avgDuration() }}</span>
-        <span class="hstat-label">Avg Duration</span>
+        <span class="hstat-label">Average Duration</span>
       </div>
     </div>
+
     <div class="history-stat-card">
       <div class="hstat-icon recent"><i class="pi pi-calendar"></i></div>
       <div class="hstat-info">
         <span class="hstat-value date">{{ lastRunDate() }}</span>
-        <span class="hstat-label">Last Run</span>
+        <span class="hstat-label">Most Recent Run</span>
       </div>
     </div>
   </div>
 
+  <div class="status-strip" *ngIf="statusInsights().length > 0">
+    <button
+      type="button"
+      class="status-pill"
+      *ngFor="let insight of statusInsights(); trackBy: trackByStatus"
+      [class.active]="isStatusInsightActive(insight)"
+      (click)="applyStatusShortcut(insight.status)"
+    >
+      <i [class]="insight.icon"></i>
+      <span>{{ insight.label }}</span>
+      <strong>{{ insight.count }}</strong>
+    </button>
+  </div>
+
+  <p-card styleClass="filters-card">
+    <div class="filters-inline-row">
+      <p-iconfield styleClass="search-field compact-control">
+        <p-inputicon styleClass="pi pi-search" />
+          <input
+            pInputText
+            type="text"
+            placeholder="Search"
+            [(ngModel)]="searchTerm"
+            (ngModelChange)="onFilterChange()"
+          />
+      </p-iconfield>
+
+      <p-select
+        styleClass="compact-control compact-select"
+        [options]="statusOptions"
+        [(ngModel)]="statusFilter"
+        optionLabel="label"
+        optionValue="value"
+        appendTo="body"
+        placeholder="Status"
+        (onChange)="onFilterChange()"
+      />
+
+      <p-select
+        styleClass="compact-control compact-select"
+        [options]="environmentOptions()"
+        [(ngModel)]="environmentFilter"
+        optionLabel="label"
+        optionValue="value"
+        appendTo="body"
+        placeholder="Environment"
+        (onChange)="onFilterChange()"
+      />
+
+      <p-select
+        styleClass="compact-control compact-select"
+        [options]="timeRangeOptions"
+        [(ngModel)]="timeRange"
+        optionLabel="label"
+        optionValue="value"
+        appendTo="body"
+        placeholder="Time Range"
+        (onChange)="onFilterChange()"
+      />
+
+      <p-select
+        styleClass="compact-control compact-select"
+        [options]="sortOptions"
+        [(ngModel)]="sortBy"
+        optionLabel="label"
+        optionValue="value"
+        appendTo="body"
+        placeholder="Sort"
+        (onChange)="onFilterChange()"
+      />
+
+      <label class="toggle-item compact-toggle">
+        <span>Failures only</span>
+        <p-toggleSwitch [(ngModel)]="failuresOnly" (ngModelChange)="onFilterChange()" />
+      </label>
+
+      <label class="toggle-item compact-toggle">
+        <span>With artifacts only</span>
+        <p-toggleSwitch [(ngModel)]="artifactsOnly" (ngModelChange)="onFilterChange()" />
+      </label>
+
+      <p-button
+        styleClass="compact-clear-btn"
+        label="Clear Filters"
+        icon="pi pi-filter-slash"
+        severity="secondary"
+        [text]="true"
+        [disabled]="!hasActiveFilters()"
+        (onClick)="clearFilters()"
+      />
+    </div>
+
+    <div class="active-filters" *ngIf="hasActiveFilters()">
+      <span class="active-filters-label">Active Filters</span>
+      <span class="filter-chip" *ngFor="let chip of activeFilterChips()">
+        <span>{{ chip.label }}: {{ chip.value }}</span>
+        <button type="button" (click)="removeFilter(chip.key)">
+          <i class="pi pi-times"></i>
+        </button>
+      </span>
+    </div>
+
+  </p-card>
+
+  <div class="filter-insights">
+    <span><strong>{{ totalRecords() }}</strong> visible of <strong>{{ totalRunsCount() }}</strong> runs</span>
+    <span>Filtered pass rate <strong>{{ filteredPassRate() }}%</strong></span>
+    <span>Filtered average duration <strong>{{ filteredAvgDuration() }}</strong></span>
+    <span>Top environment <strong>{{ topEnvironmentLabel() }}</strong></span>
+  </div>
+
   <p-card styleClass="history-card">
+    <div class="table-topbar">
+      <div>
+        <h3>Run Timeline</h3>
+        <p>Includes execution source and artifact coverage without changing run detail rendering behavior.</p>
+      </div>
+      <p-button
+        label="Issues Only"
+        icon="pi pi-exclamation-circle"
+        severity="secondary"
+        [text]="true"
+        (onClick)="applyIssueShortcut()"
+      />
+    </div>
+
     <p-table
-      [value]="runs()"
+      [value]="filteredRuns()"
       [loading]="loading()"
       [paginator]="true"
       [rows]="rows"
       [totalRecords]="totalRecords()"
-      [lazy]="true"
-      (onLazyLoad)="onPageChange($event)"
       [rowsPerPageOptions]="[10, 20, 30, 40, 50]"
+      (onPage)="onPageChange($event)"
       responsiveLayout="scroll"
-      styleClass="p-datatable-sm"
+      styleClass="p-datatable-sm history-datatable"
+      [rowTrackBy]="trackByRunId"
     >
       <ng-template #header>
         <tr>
-          <th style="width: 80px">Run #</th>
-          <th>Name</th>
-          <th>Status</th>
-          <th>Total</th>
-          <th>Passed</th>
-          <th>Failed</th>
-          <th>Duration</th>
-          <th>Started</th>
-          <th>Triggered By</th>
-          <th style="width: 70px"></th>
+          <th class="col-run">Run</th>
+          <th class="col-status">Status</th>
+          <th class="col-env">Environment</th>
+          <th class="col-results">Results</th>
+          <th class="col-duration">Duration</th>
+          <th class="col-started">Started</th>
+          <th class="col-user">Triggered By</th>
+          <th class="col-source">Source</th>
+          <th class="col-actions"></th>
         </tr>
       </ng-template>
+
       <ng-template #body let-run>
-        <tr>
-          <td><code>#{{ run.id }}</code></td>
-          <td class="run-name">{{ run.runName || 'Manual Run' }}</td>
-          <td><p-tag [value]="run.status | titlecase" [severity]="getStatusSeverity(run.status)" /></td>
-          <td>{{ run.totalScripts || '-' }}</td>
-          <td class="passed-count">{{ run.passedCount || 0 }}</td>
-          <td class="failed-count">{{ run.failedCount || 0 }}</td>
-          <td>{{ formatDuration(run.durationMs ? run.durationMs / 1000 : null) }}</td>
-          <td>{{ formatDate(run.startedAt) }}</td>
-          <td>{{ run.triggeredBy || '-' }}</td>
-          <td>
-            <p-button icon="pi pi-eye" [rounded]="true" [text]="true" size="small" [routerLink]="'/run/' + run.id" pTooltip="View Details" />
+        <tr [class.row-attention]="isAttentionRun(run)" [class.row-active]="isActiveRun(run)">
+          <td class="col-run">
+            <div class="run-cell">
+              <code>#{{ run.id }}</code>
+              <div class="run-meta">
+                <span class="run-name">{{ run.runName || 'Manual Run' }}</span>
+                <span class="run-subtitle">{{ (run.runType || 'manual') | titlecase }} · {{ formatRelativeDate(getRunDate(run)) }}</span>
+              </div>
+            </div>
+          </td>
+
+          <td class="col-status">
+            <p-tag [value]="run.status | titlecase" [severity]="getStatusSeverity(run.status)" />
+          </td>
+
+          <td class="col-env">
+            <span class="environment-pill">{{ formatEnvironment(run.environment) }}</span>
+          </td>
+
+          <td class="col-results">
+            <div class="result-counts">
+              <span class="pass"><i class="pi pi-check-circle"></i>{{ run.passedCount || 0 }}</span>
+              <span class="fail"><i class="pi pi-times-circle"></i>{{ getFailureCount(run) }}</span>
+            </div>
+          </td>
+
+          <td class="col-duration">
+            {{ formatDuration(run.durationMs ? run.durationMs / 1000 : null) }}
+          </td>
+
+          <td class="col-started">
+            <div class="started-cell">
+              <span>{{ formatDate(getRunDate(run)) }}</span>
+              <small>{{ formatRelativeDate(getRunDate(run)) }}</small>
+            </div>
+          </td>
+
+          <td class="col-user">{{ run.triggeredBy || 'System' }}</td>
+
+          <td class="col-source">
+            <div class="source-cell">
+              <span class="source-badge" [ngClass]="getExecutionSourceClass(run)">
+                <i [class]="getExecutionSourceIcon(run)"></i>
+                {{ getExecutionSourceLabel(run) }}
+              </span>
+
+              <span class="artifact-badge" *ngIf="hasArtifacts(run)">
+                <i class="pi pi-paperclip"></i>
+                {{ getArtifactCount(run) }} artifact{{ getArtifactCount(run) === 1 ? '' : 's' }}
+              </span>
+            </div>
+          </td>
+
+          <td class="col-actions">
+            <p-button
+              icon="pi pi-eye"
+              [rounded]="true"
+              [text]="true"
+              size="small"
+              [routerLink]="'/run/' + run.id"
+              pTooltip="View Details"
+              tooltipPosition="left"
+            />
           </td>
         </tr>
       </ng-template>
+
       <ng-template #emptymessage>
         <tr>
-          <td colspan="10" class="empty-row">
+          <td colspan="9" class="empty-row">
             <div class="empty-state">
               <i class="pi pi-history"></i>
-              <p>No execution history yet</p>
+              <h3>No matching history found</h3>
+              <p>
+                {{ hasActiveFilters() ? 'Try clearing one or more filters to broaden results.' : 'No execution runs yet. Start a run to populate this timeline.' }}
+              </p>
+              <p-button *ngIf="hasActiveFilters()" label="Clear Filters" [text]="true" icon="pi pi-filter-slash" (onClick)="clearFilters()" />
             </div>
           </td>
         </tr>
