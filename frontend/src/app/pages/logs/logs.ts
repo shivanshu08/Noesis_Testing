@@ -15,12 +15,11 @@ import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
-import { ToastModule } from 'primeng/toast';
-import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { DialogModule } from 'primeng/dialog';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { AuthService } from '../../services/auth.service';
 import { ExecutionService } from '../../services/execution.service';
+import { AlertOverlayComponent } from '../../components/alert-overlay/alert-overlay';
 
 interface GlobalLog {
   id: number;
@@ -145,10 +144,9 @@ const DEFAULT_LOGS_LOCALE: LogsLocaleResolved = {
     TooltipModule,
     IconFieldModule,
     InputIconModule,
-    ToastModule,
-    ConfirmDialogModule,
     DialogModule,
     ToggleSwitchModule,
+    AlertOverlayComponent,
   ],
   providers: [MessageService, ConfirmationService],
   templateUrl: './logs.html',
@@ -534,10 +532,14 @@ export class LogsPage implements OnInit, OnDestroy {
     this.confirmationService.confirm({
       message: 'Delete this log entry permanently?',
       header: 'Delete Log Entry',
-      icon: 'pi pi-exclamation-triangle',
+      icon: 'pi pi-trash',
       acceptLabel: 'Delete',
       rejectLabel: 'Cancel',
-      acceptButtonStyleClass: 'p-button-danger',
+      acceptIcon: 'pi pi-trash',
+      rejectIcon: 'pi pi-times',
+      defaultFocus: 'reject',
+      acceptButtonStyleClass: 'p-button-sm p-button-danger',
+      rejectButtonStyleClass: 'p-button-sm p-button-text p-button-secondary',
       accept: () => {
         this.executionService
           .deleteGlobalLog(log.id)
@@ -819,10 +821,14 @@ export class LogsPage implements OnInit, OnDestroy {
     this.confirmationService.confirm({
       message,
       header: 'Confirm Deletion',
-      icon: 'pi pi-exclamation-triangle',
+      icon: 'pi pi-trash',
       acceptLabel: 'Delete',
       rejectLabel: 'Cancel',
-      acceptButtonStyleClass: 'p-button-danger',
+      acceptIcon: 'pi pi-trash',
+      rejectIcon: 'pi pi-times',
+      defaultFocus: 'reject',
+      acceptButtonStyleClass: 'p-button-sm p-button-danger',
+      rejectButtonStyleClass: 'p-button-sm p-button-text p-button-secondary',
       accept: () => {
         this.executionService
           .deleteGlobalLogs(ids)

@@ -12,11 +12,11 @@ import { DialogModule } from 'primeng/dialog';
 import { InputTextModule } from 'primeng/inputtext';
 import { PasswordModule } from 'primeng/password';
 import { DividerModule } from 'primeng/divider';
-import { ToastModule } from 'primeng/toast';
 import { FileUploadModule } from 'primeng/fileupload';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { MessageService } from 'primeng/api';
+import { AlertOverlayComponent } from '../../components/alert-overlay/alert-overlay';
 import { AuthService } from '../../services/auth.service';
 import { ThemeService } from '../../services/theme.service';
 import { ExecutionService } from '../../services/execution.service';
@@ -25,7 +25,7 @@ import { NotificationService } from '../../services/notification.service';
 @Component({
   selector: 'app-main-layout',
   standalone: true,
-  imports: [CommonModule, RouterModule, RouterOutlet, FormsModule, ButtonModule, TooltipModule, AvatarModule, MenuModule, RippleModule, DialogModule, InputTextModule, PasswordModule, DividerModule, ToastModule, FileUploadModule, IconFieldModule, InputIconModule],
+  imports: [CommonModule, RouterModule, RouterOutlet, FormsModule, ButtonModule, TooltipModule, AvatarModule, MenuModule, RippleModule, DialogModule, InputTextModule, PasswordModule, DividerModule, FileUploadModule, IconFieldModule, InputIconModule, AlertOverlayComponent],
   providers: [MessageService],
   templateUrl: './main-layout.html',
   styleUrl: './main-layout.scss',

@@ -13,13 +13,13 @@ import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { DialogModule } from 'primeng/dialog';
 import { ProgressBarModule } from 'primeng/progressbar';
-import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
 import { forkJoin, of, catchError, map } from 'rxjs';
 import { ScriptService } from '../../services/script.service';
 import { Script, ScriptCategory } from '../../models/interfaces';
 import { AuthService } from '../../services/auth.service';
 import { RouterModule, Router } from '@angular/router';
+import { AlertOverlayComponent } from '../../components/alert-overlay/alert-overlay';
 
 @Component({
   selector: 'app-scripts',
@@ -28,7 +28,7 @@ import { RouterModule, Router } from '@angular/router';
     CommonModule, FormsModule, TableModule, CardModule, ButtonModule,
     InputTextModule, SelectModule, TagModule, ToggleSwitchModule,
     TooltipModule, IconFieldModule, InputIconModule,
-    RouterModule, DialogModule, ProgressBarModule, ToastModule
+    RouterModule, DialogModule, ProgressBarModule, AlertOverlayComponent
   ],
   providers: [MessageService],
   templateUrl: './scripts.html',

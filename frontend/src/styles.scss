@@ -47,33 +47,64 @@ a {
 .alert-dialog-content {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 8px 0;
+  gap: 10px;
+  padding: 4px 0;
 }
 
 .alert-dialog-content i {
-  font-size: 1.25rem;
-  margin-top: 2px;
+  font-size: 1.08rem;
+  width: auto;
+  height: auto;
+  background: none;
+  margin-top: 1px;
+  color: #475467;
+}
+
+.alert-dialog-content.delete-confirm i {
+  font-size: 1.14rem;
 }
 
 .alert-dialog-content p {
   margin: 0;
   line-height: 1.5;
+  font-size: 0.86rem;
+  font-weight: 500;
   color: var(--text-color);
 }
 
-.alert-dialog-content.success i { color: #10b981; }
-.alert-dialog-content.info i { color: var(--noesis-primary); }
-.alert-dialog-content.warn i { color: #f59e0b; }
-.alert-dialog-content.error i { color: #ef4444; }
-
 .safe-alert-dialog.p-dialog {
   margin-top: 0.75rem;
+  width: min(420px, 92vw) !important;
 }
 
 .safe-alert-dialog .p-dialog-content {
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
+}
+
+.safe-alert-dialog .p-dialog-header .p-dialog-title {
+  font-size: 0.92rem;
+}
+
+.safe-alert-dialog .p-dialog-footer .p-button {
+  min-height: 2rem;
+  border-radius: 7px;
+  font-size: 0.8rem;
+  padding: 0.35rem 0.78rem;
+}
+
+.noesis-confirm-trash-icon {
+  font-size: 1.16rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+  color: #475467;
+}
+
+.noesis-confirm-trash-icon-delete {
+  font-size: 1.24rem;
 }
 
 // Scrollbar styling
@@ -219,109 +250,125 @@ a {
 .font-semibold { font-weight: 600; }
 .text-secondary { color: var(--noesis-text-secondary); }
 .text-sm { font-size: 0.85rem; }
-// Global Professional Confirmation Dialog Overrides
-::ng-deep .p-confirm-dialog {
+// Global Compact Confirmation Dialog Overrides (PrimeNG v21)
+::ng-deep .p-confirmdialog {
   .p-dialog {
-    border-radius: 12px !important;
+    width: min(420px, 92vw) !important;
+    border-radius: 10px !important;
     background: var(--noesis-surface) !important;
     border: 1px solid var(--noesis-border) !important;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.14) !important;
     overflow: hidden;
-    min-width: 450px;
-  }
-
-  + .p-component-overlay {
-    backdrop-filter: blur(4px);
-    background-color: rgba(0, 0, 0, 0.4);
   }
 
   .p-dialog-header {
     background: transparent !important;
-    padding: 1.5rem 1.5rem 0.5rem !important;
     border: none !important;
-    
+    padding: 0.75rem 0.95rem 0.2rem !important;
+
     .p-dialog-title {
-      display: none; // Rely on icon and message for clean look
+      font-size: 0.9rem !important;
+      font-weight: 700 !important;
+      color: var(--noesis-text) !important;
+      letter-spacing: 0.01em;
     }
 
-    .p-dialog-header-icons {
-      .p-dialog-header-close {
-        color: var(--noesis-text-secondary);
-        transition: color 0.2s;
-        &:hover { color: var(--noesis-text); background: rgba(0,0,0,0.05); }
-      }
+    .p-dialog-close-button {
+      width: 1.8rem !important;
+      height: 1.8rem !important;
+      border-radius: 50% !important;
+      color: var(--noesis-text-secondary) !important;
     }
   }
 
   .p-dialog-content {
     background: transparent !important;
-    padding: 1rem 2rem 2.5rem !important; // Increased breadth (side and bottom padding)
+    padding: 0.55rem 0.95rem 0.8rem !important;
     display: flex !important;
-    align-items: center !important;
-    gap: 28px !important; // More space between icon and text
+    align-items: flex-start !important;
+    gap: 0.65rem !important;
 
-    .p-confirm-dialog-icon {
-      font-size: 1.5rem !important;
-      color: var(--noesis-warning) !important;
-      margin: 0 !important;
-      width: 48px !important;
-      height: 48px !important;
-      min-width: 48px !important;
-      border: 2px solid var(--noesis-warning) !important;
-      border-radius: 50% !important;
-      display: flex !important;
+      .p-confirmdialog-icon {
+      width: auto !important;
+      height: auto !important;
+      min-width: 1.12rem !important;
+      display: inline-flex !important;
       align-items: center !important;
       justify-content: center !important;
-
-      &.pi-exclamation-triangle { color: var(--noesis-danger) !important; border-color: var(--noesis-danger) !important; }
-      &.pi-question-circle { color: var(--noesis-info) !important; border-color: var(--noesis-info) !important; }
+      border: none !important;
+      background: transparent !important;
+      color: #475467 !important;
+      font-size: 1.06rem !important;
+      margin: 0 !important;
     }
 
-    .p-confirm-dialog-message {
-      font-size: 1.1rem !important;
-      font-weight: 600 !important;
-      color: var(--noesis-text) !important;
+    .p-confirmdialog-message {
       margin: 0 !important;
-      line-height: 1.4 !important;
+      color: var(--noesis-text) !important;
+      font-size: 0.86rem !important;
+      line-height: 1.45 !important;
+      font-weight: 500 !important;
     }
   }
 
   .p-dialog-footer {
     background: transparent !important;
-    padding: 1rem 1.5rem 1.5rem !important;
     border: none !important;
+    padding: 0.45rem 0.95rem 0.95rem !important;
     display: flex !important;
     justify-content: flex-end !important;
-    gap: 12px !important;
+    gap: 0.5rem !important;
 
-    button {
+    .p-button {
       margin: 0 !important;
-      border-radius: 8px !important;
+      border-radius: 7px !important;
+      font-size: 0.79rem !important;
       font-weight: 600 !important;
-      padding: 0.6rem 1.25rem !important;
+      min-height: 2rem !important;
+      padding: 0.36rem 0.78rem !important;
       border: 1px solid var(--noesis-border) !important;
+      box-shadow: none !important;
 
-      &.p-confirm-dialog-reject {
-        background: transparent !important;
+      .p-button-icon {
+        font-size: 0.74rem !important;
+      }
+    }
+
+    .p-confirmdialog-reject-button {
+      color: var(--noesis-text-secondary) !important;
+      background: transparent !important;
+
+      &:hover {
         color: var(--noesis-text) !important;
-        &:hover { background: rgba(0,0,0,0.03) !important; }
+        background: color-mix(in srgb, var(--noesis-primary) 8%, transparent) !important;
+      }
+    }
+
+    .p-confirmdialog-accept-button {
+      background: var(--noesis-primary) !important;
+      border-color: var(--noesis-primary) !important;
+      color: #fff !important;
+
+      &:hover {
+        background: var(--noesis-primary-dark) !important;
+        border-color: var(--noesis-primary-dark) !important;
       }
 
-      &.p-confirm-dialog-accept {
-        background: var(--noesis-primary) !important;
-        border-color: var(--noesis-primary) !important;
-        color: white !important;
-        &:hover { background: var(--noesis-primary-dark) !important; }
-        
-        // Handle Delete/Danger variants
-        &.p-button-danger {
-            background: var(--noesis-danger) !important;
-            border-color: var(--noesis-danger) !important;
-            &:hover { background: #dc2626 !important; }
+      &.p-button-danger {
+        background: var(--noesis-danger) !important;
+        border-color: var(--noesis-danger) !important;
+
+        &:hover {
+          background: #dc2626 !important;
+          border-color: #dc2626 !important;
         }
       }
     }
   }
+}
+
+::ng-deep .p-component-overlay {
+  backdrop-filter: blur(3px);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -372,51 +419,73 @@ a {
   color: var(--noesis-primary) !important;
 }
 
-// Global Professional Toast Overrides
+// Global Compact Toast Overrides
 ::ng-deep .p-toast {
+  &.noesis-toast-alert {
+    width: min(22rem, calc(100vw - 1.5rem)) !important;
+  }
+
   .p-toast-message {
     background: var(--noesis-surface) !important;
     border: 1px solid var(--noesis-border) !important;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
-    border-radius: 10px !important;
-    
+    border-radius: 9px !important;
+    box-shadow: 0 10px 18px rgba(15, 23, 42, 0.12) !important;
+
     .p-toast-message-content {
-      padding: 1rem !important;
+      padding: 0.62rem 0.72rem !important;
       display: flex !important;
-      align-items: center !important;
-      gap: 12px !important;
+      align-items: flex-start !important;
+      gap: 0.55rem !important;
 
       .p-toast-message-icon {
-        font-size: 1.25rem !important;
-        margin: 0 !important;
+        font-size: 1.02rem !important;
+        width: auto !important;
+        height: auto !important;
+        margin-top: 0.02rem !important;
+        background: none !important;
+        -webkit-mask: none !important;
+        mask: none !important;
+        color: #475467 !important;
       }
 
       .p-toast-message-text {
         margin: 0 !important;
+        flex: 1;
 
         .p-toast-summary {
-          font-weight: 700 !important;
+          margin: 0 0 0.1rem !important;
           color: var(--noesis-text) !important;
-          margin-bottom: 2px !important;
+          font-weight: 700 !important;
+          font-size: 0.81rem !important;
+          line-height: 1.3 !important;
         }
 
         .p-toast-detail {
+          margin: 0 !important;
           color: var(--noesis-text-secondary) !important;
-          font-size: 0.9rem !important;
+          font-size: 0.77rem !important;
+          line-height: 1.35 !important;
         }
       }
 
-      .p-toast-icon-close {
+      .p-toast-close-button {
+        width: 1.4rem !important;
+        height: 1.4rem !important;
+        min-width: 1.4rem !important;
+        border-radius: 50% !important;
+        margin-left: 0.25rem !important;
         color: var(--noesis-text-secondary) !important;
-        position: static !important;
-        margin-left: auto !important;
+      }
+
+      .p-toast-close-icon {
+        font-size: 0.69rem !important;
       }
     }
 
-    &.p-toast-message-success { border-left: 4px solid var(--noesis-success) !important; .p-toast-message-icon { color: var(--noesis-success); } }
-    &.p-toast-message-info { border-left: 4px solid var(--noesis-info) !important; .p-toast-message-icon { color: var(--noesis-info); } }
-    &.p-toast-message-warn { border-left: 4px solid var(--noesis-warning) !important; .p-toast-message-icon { color: var(--noesis-warning); } }
-    &.p-toast-message-error { border-left: 4px solid var(--noesis-danger) !important; .p-toast-message-icon { color: var(--noesis-danger); } }
+    &.p-toast-message-success { border-left: 3px solid var(--noesis-success) !important; }
+    &.p-toast-message-info { border-left: 3px solid var(--noesis-info) !important; }
+    &.p-toast-message-warn { border-left: 3px solid var(--noesis-warning) !important; }
+    &.p-toast-message-error { border-left: 3px solid var(--noesis-danger) !important; }
   }
 }
 

@@ -15,15 +15,15 @@ import { AvatarModule } from 'primeng/avatar';
 import { InputGroupModule } from 'primeng/inputgroup';
 import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import { MessageService, ConfirmationService } from 'primeng/api';
-import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { FileUploadModule } from 'primeng/fileupload';
 import { TooltipModule } from 'primeng/tooltip';
+import { AlertOverlayComponent } from '../../components/alert-overlay/alert-overlay';
 import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-users',
   standalone: true,
-  imports: [CommonModule, FormsModule, TableModule, CardModule, ButtonModule, DialogModule, InputTextModule, PasswordModule, SelectModule, TagModule, CheckboxModule, ConfirmDialogModule, AvatarModule, InputGroupModule, InputGroupAddonModule, FileUploadModule, TooltipModule],
+  imports: [CommonModule, FormsModule, TableModule, CardModule, ButtonModule, DialogModule, InputTextModule, PasswordModule, SelectModule, TagModule, CheckboxModule, AvatarModule, InputGroupModule, InputGroupAddonModule, FileUploadModule, TooltipModule, AlertOverlayComponent],
   providers: [ConfirmationService],
   templateUrl: './users.html',
   styleUrls: ['./users.scss']
@@ -149,7 +149,14 @@ export class Users implements OnInit {
     this.confirmationService.confirm({
       message: 'Are you sure you want to delete ' + user.username + '?',
       header: 'Confirm',
-      icon: 'pi pi-exclamation-triangle',
+      icon: 'pi pi-trash',
+      acceptLabel: 'Delete',
+      rejectLabel: 'Cancel',
+      acceptIcon: 'pi pi-trash',
+      rejectIcon: 'pi pi-times',
+      defaultFocus: 'reject',
+      acceptButtonStyleClass: 'p-button-sm p-button-danger',
+      rejectButtonStyleClass: 'p-button-sm p-button-text p-button-secondary',
       accept: () => {
         this.http.delete(`http://localhost:3000/api/users/${user.id}`, { headers: this.getHeaders() }).subscribe({
           next: () => {

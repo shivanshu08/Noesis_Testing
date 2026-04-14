@@ -271,8 +271,8 @@
   styleClass="safe-alert-dialog"
   [style]="{ width: '430px' }"
 >
-  <div class="alert-dialog-content warn">
-    <i class="pi pi-exclamation-triangle"></i>
+  <div class="alert-dialog-content warn delete-confirm">
+    <i class="pi pi-trash"></i>
     <p>{{ getDeleteDialogMessage() }}</p>
   </div>
   <ng-template #footer>
@@ -339,4 +339,4 @@
   </ng-template>
 </p-dialog>
 
-<p-toast position="bottom-right" />
+<app-alert-overlay [showConfirm]="false" />

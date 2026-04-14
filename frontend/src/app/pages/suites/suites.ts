@@ -10,10 +10,8 @@ import { TextareaModule } from 'primeng/textarea';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
-import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { SelectModule } from 'primeng/select';
-import { ToastModule } from 'primeng/toast';
 import { ChipModule } from 'primeng/chip';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { InputNumberModule } from 'primeng/inputnumber';
@@ -27,6 +25,7 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { ThemeService } from '../../services/theme.service';
 import { Subscription } from 'rxjs';
+import { AlertOverlayComponent } from '../../components/alert-overlay/alert-overlay';
 
 @Component({
   selector: 'app-suites',
@@ -34,8 +33,9 @@ import { Subscription } from 'rxjs';
   imports: [
     CommonModule, FormsModule, CardModule, ButtonModule, TableModule,
     DialogModule, InputTextModule, TextareaModule, MultiSelectModule,
-    TagModule, TooltipModule, ConfirmDialogModule, SelectModule, ToastModule,
-    ChipModule, ToggleSwitchModule, InputNumberModule, IconFieldModule, InputIconModule
+    TagModule, TooltipModule, SelectModule,
+    ChipModule, ToggleSwitchModule, InputNumberModule, IconFieldModule, InputIconModule,
+    AlertOverlayComponent
   ],
   providers: [ConfirmationService, MessageService],
   templateUrl: './suites.html',
@@ -282,10 +282,16 @@ export class Suites implements OnInit, OnDestroy {
     if (!this.auth.isAdmin()) return;
 
     this.confirmService.confirm({
-      message: `Delete suite "${suite.name}"? This cannot be undone.`,
-      header: 'Confirm Delete',
+      message: this.getDeleteSuiteMessage(suite.name),
+      header: 'Delete Suite',
       icon: 'pi pi-trash',
-      acceptButtonStyleClass: 'p-button-danger',
+      acceptLabel: 'Delete',
+      rejectLabel: 'Cancel',
+      acceptIcon: 'pi pi-trash',
+      rejectIcon: 'pi pi-times',
+      defaultFocus: 'reject',
+      acceptButtonStyleClass: 'p-button-sm p-button-danger',
+      rejectButtonStyleClass: 'p-button-sm p-button-text p-button-secondary',
       accept: () => {
         this.suiteService.deleteSuite(suite.id).subscribe({
           next: () => {
@@ -295,6 +301,19 @@ export class Suites implements OnInit, OnDestroy {
         });
       },
     });
+  }
+
+  private getDeleteSuiteMessage(suiteName: string): string {
+    const normalizedName = suiteName.trim();
+    if (!normalizedName) {
+      return 'Delete this suite?';
+    }
+
+    const compactName = normalizedName.length > 36
+      ? `${normalizedName.slice(0, 33)}...`
+      : normalizedName;
+
+    return `Delete "${compactName}"?`;
   }
 
   // Duplicate

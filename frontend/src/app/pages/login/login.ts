@@ -15,8 +15,8 @@ import { CardModule } from 'primeng/card';
 import { DividerModule } from 'primeng/divider';
 import { FloatLabelModule } from 'primeng/floatlabel';
 import { SelectModule } from 'primeng/select';
-import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
+import { AlertOverlayComponent } from '../../components/alert-overlay/alert-overlay';
 import { AuthService } from '../../services/auth.service';
 import { ThemeService } from '../../services/theme.service';
 
@@ -27,7 +27,7 @@ import { ThemeService } from '../../services/theme.service';
     CommonModule, FormsModule, InputTextModule, PasswordModule, ButtonModule,
     MessageModule, CheckboxModule, IconFieldModule, InputIconModule,
     InputGroupModule, InputGroupAddonModule, CardModule, DividerModule,
-    FloatLabelModule, SelectModule, ToastModule
+    FloatLabelModule, SelectModule, AlertOverlayComponent
   ],
   providers: [MessageService],
   templateUrl: './login.html',

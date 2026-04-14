@@ -13,6 +13,7 @@ import { SelectModule } from 'primeng/select';
 import { InputTextModule } from 'primeng/inputtext';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
+import { MessageService } from 'primeng/api';
 import { ExecutionService } from '../../services/execution.service';
 import { ExecutionRun, ExecutionLog, ExecutionArtifact, ExecutionResult } from '../../models/interfaces';
 import { AuthService } from '../../services/auth.service';
@@ -110,6 +111,7 @@ export class RunDetail implements OnInit, OnDestroy {
   constructor(
     private readonly route: ActivatedRoute,
     private readonly executionService: ExecutionService,
+    private readonly messageService: MessageService,
     public auth: AuthService
   ) {}
 
@@ -559,7 +561,11 @@ export class RunDetail implements OnInit, OnDestroy {
       doc.save(`Noesis_Run_Report_${r.id}.pdf`);
     } catch (e: any) {
       console.error(e);
-      alert('Error generating PDF: ' + e.message);
+      this.messageService.add({
+        severity: 'error',
+        summary: 'PDF Export Failed',
+        detail: e?.message ? `Error generating PDF: ${e.message}` : 'Error generating PDF.',
+      });
     }
   }
 

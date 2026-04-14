@@ -11,10 +11,9 @@ import { TooltipModule } from 'primeng/tooltip';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { DatePickerModule } from 'primeng/datepicker';
-import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ConfirmationService } from 'primeng/api';
-import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
+import { AlertOverlayComponent } from '../../components/alert-overlay/alert-overlay';
 
 import { NotificationService, AppNotification } from '../../services/notification.service';
 
@@ -34,8 +33,7 @@ import { NotificationService, AppNotification } from '../../services/notificatio
     IconFieldModule,
     InputIconModule,
     DatePickerModule,
-    ConfirmDialogModule,
-    ToastModule,
+    AlertOverlayComponent,
   ],
   providers: [ConfirmationService, MessageService],
   templateUrl: './notifications.html',
@@ -177,7 +175,14 @@ export class Notifications implements OnInit {
     this.confirmationService.confirm({
       message: `Delete notification: "${notification.summary}"?`,
       header: 'Confirm',
-      icon: 'pi pi-exclamation-triangle',
+      icon: 'pi pi-trash',
+      acceptLabel: 'Delete',
+      rejectLabel: 'Cancel',
+      acceptIcon: 'pi pi-trash',
+      rejectIcon: 'pi pi-times',
+      defaultFocus: 'reject',
+      acceptButtonStyleClass: 'p-button-sm p-button-danger',
+      rejectButtonStyleClass: 'p-button-sm p-button-text p-button-secondary',
       accept: () => {
         this.notificationService.delete(notification.id);
         this.applyFilters();
@@ -205,7 +210,14 @@ export class Notifications implements OnInit {
     this.confirmationService.confirm({
       message: `Delete ${this.selectedNotifications().length} notification(s)?`,
       header: 'Confirm',
-      icon: 'pi pi-exclamation-triangle',
+      icon: 'pi pi-trash',
+      acceptLabel: 'Delete',
+      rejectLabel: 'Cancel',
+      acceptIcon: 'pi pi-trash',
+      rejectIcon: 'pi pi-times',
+      defaultFocus: 'reject',
+      acceptButtonStyleClass: 'p-button-sm p-button-danger',
+      rejectButtonStyleClass: 'p-button-sm p-button-text p-button-secondary',
       accept: () => {
         const ids = this.selectedNotifications().map(n => n.id);
         this.notificationService.deleteMultiple(ids).subscribe({
@@ -286,6 +298,13 @@ export class Notifications implements OnInit {
       message: 'Clear all notifications? This action cannot be undone.',
       header: 'Confirm',
       icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Clear',
+      rejectLabel: 'Cancel',
+      acceptIcon: 'pi pi-trash',
+      rejectIcon: 'pi pi-times',
+      defaultFocus: 'reject',
+      acceptButtonStyleClass: 'p-button-sm p-button-danger',
+      rejectButtonStyleClass: 'p-button-sm p-button-text p-button-secondary',
       reject: () => {},
       accept: () => {
         this.notificationService.clearAll();
