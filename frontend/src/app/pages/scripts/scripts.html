@@ -91,7 +91,15 @@
                 <i class="pi pi-file-edit"></i>
               </div>
               <div class="script-title-row">
-                <span class="script-name">{{ getDisplayScriptName(script) }}</span>
+                <a
+                  class="script-name script-name-link"
+                  [routerLink]="['/scripts', script.id, 'configuration']"
+                  pTooltip="View Script Configuration"
+                  tooltipStyleClass="single-line-tooltip"
+                  (click)="$event.stopPropagation()"
+                >
+                  {{ getDisplayScriptName(script) }}
+                </a>
                 <button
                   *ngIf="auth.canEdit()"
                   type="button"
@@ -153,6 +161,17 @@
               routerLink="/runner" 
               [queryParams]="{ select: script.id }" 
               [disabled]="!script.isActive" 
+            />
+            <p-button 
+              icon="pi pi-cog"
+              [rounded]="true"
+              [text]="true"
+              severity="secondary"
+              size="small"
+              styleClass="history-action-btn"
+              pTooltip="View Script Configuration"
+              tooltipStyleClass="single-line-tooltip"
+              [routerLink]="['/scripts', script.id, 'configuration']"
             />
             <p-button 
               icon="pi pi-history" 

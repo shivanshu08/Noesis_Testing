@@ -75,6 +75,69 @@ async function initDatabase() {
       // Ignore migration failures
     }
 
+    // Ensure script configuration resource snapshots table exists
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS script_configuration_resources (
+          id BIGSERIAL PRIMARY KEY,
+          script_id INT NOT NULL REFERENCES scripts(id) ON DELETE CASCADE,
+          resource_type VARCHAR(40) NOT NULL,
+          reference_value VARCHAR(1000) NOT NULL,
+          resolved_path VARCHAR(1200) DEFAULT NULL,
+          exists_on_disk BOOLEAN NOT NULL DEFAULT FALSE,
+          source_kind VARCHAR(40) NOT NULL DEFAULT 'parser',
+          metadata JSONB DEFAULT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE (script_id, resource_type, reference_value)
+        )
+      `);
+
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_script_config_resources_script ON script_configuration_resources(script_id)');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_script_config_resources_type ON script_configuration_resources(resource_type)');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_script_config_resources_exists ON script_configuration_resources(exists_on_disk)');
+
+      await pool.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1
+            FROM pg_trigger
+            WHERE tgname = 'update_script_configuration_resources_updated_at'
+          ) THEN
+            CREATE TRIGGER update_script_configuration_resources_updated_at
+            BEFORE UPDATE ON script_configuration_resources
+            FOR EACH ROW
+            EXECUTE FUNCTION update_updated_at_column();
+          END IF;
+        END $$;
+      `);
+    } catch {
+      // Ignore migration failures
+    }
+
+    // Ensure script configuration file change audit table exists
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS script_configuration_change_logs (
+          id BIGSERIAL PRIMARY KEY,
+          script_id INT NOT NULL REFERENCES scripts(id) ON DELETE CASCADE,
+          file_path VARCHAR(1400) NOT NULL,
+          file_type VARCHAR(40) NOT NULL,
+          previous_content TEXT DEFAULT NULL,
+          updated_content TEXT DEFAULT NULL,
+          change_summary JSONB DEFAULT NULL,
+          changed_by INT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
+          changed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_script_config_change_logs_script_time ON script_configuration_change_logs(script_id, changed_at DESC)');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_script_config_change_logs_user_time ON script_configuration_change_logs(changed_by, changed_at DESC)');
+    } catch {
+      // Ignore migration failures
+    }
+
     // Create admin user with proper bcrypt hash
     const salt = await bcrypt.genSalt(12);
     const adminHash = await bcrypt.hash('admin123', salt);

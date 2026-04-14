@@ -2,7 +2,13 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, Subject } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { Script, ScriptCategory } from '../models/interfaces';
+import {
+  Script,
+  ScriptCategory,
+  ScriptConfigurationDetail,
+  ScriptConfigurationFileContent,
+  ScriptConfigurationChangeLog,
+} from '../models/interfaces';
 
 @Injectable({ providedIn: 'root' })
 export class ScriptService {
@@ -26,6 +32,62 @@ export class ScriptService {
 
   getScript(id: number): Observable<Script> {
     return this.http.get<Script>(`${this.apiUrl}/${id}`);
+  }
+
+  getScriptConfiguration(id: number): Observable<ScriptConfigurationDetail> {
+    return this.http.get<ScriptConfigurationDetail>(`${this.apiUrl}/${id}/configuration`);
+  }
+
+  getScriptConfigurationFileContent(scriptId: number, filePath: string): Observable<ScriptConfigurationFileContent> {
+    let params = new HttpParams();
+    params = params.set('path', filePath);
+    return this.http.get<ScriptConfigurationFileContent>(`${this.apiUrl}/${scriptId}/configuration/file-content`, { params });
+  }
+
+  updateScriptConfigurationFile(scriptId: number, payload: { path: string; content: string }): Observable<{
+    message: string;
+    changed: boolean;
+    file?: {
+      path: string;
+      fileName: string;
+      fileType: string;
+      fileSizeBytes?: number;
+      lastModifiedAt?: string;
+    };
+    changeSummary?: Record<string, unknown>;
+  }> {
+    return this.http.put<{
+      message: string;
+      changed: boolean;
+      file?: {
+        path: string;
+        fileName: string;
+        fileType: string;
+        fileSizeBytes?: number;
+        lastModifiedAt?: string;
+      };
+      changeSummary?: Record<string, unknown>;
+    }>(`${this.apiUrl}/${scriptId}/configuration/file`, payload);
+  }
+
+  getScriptConfigurationChanges(scriptId: number, limit = 40): Observable<ScriptConfigurationChangeLog[]> {
+    let params = new HttpParams();
+    params = params.set('limit', String(limit));
+    return this.http.get<ScriptConfigurationChangeLog[]>(`${this.apiUrl}/${scriptId}/configuration/changes`, { params });
+  }
+
+  getScriptConfigurationAttachment(
+    scriptId: number,
+    filePath: string,
+    mode: 'open' | 'download'
+  ): Observable<Blob> {
+    let params = new HttpParams();
+    params = params.set('path', filePath);
+    params = params.set('mode', mode);
+    return this.http.get(`${this.apiUrl}/${scriptId}/configuration/attachment`, {
+      params,
+      responseType: 'blob',
+    });
   }
 
   updateScript(id: number, data: Partial<Script>): Observable<any> {

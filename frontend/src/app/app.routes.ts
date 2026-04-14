@@ -14,6 +14,7 @@ export const routes: Routes = [
     children: [
       { path: 'dashboard', loadComponent: () => import('./pages/dashboard/dashboard').then(m => m.Dashboard) },
       { path: 'scripts', loadComponent: () => import('./pages/scripts/scripts').then(m => m.Scripts) },
+      { path: 'scripts/:id/configuration', loadComponent: () => import('./pages/script-configuration/script-configuration').then(m => m.ScriptConfiguration) },
       { path: 'runner', canActivate: [editGuard], loadComponent: () => import('./pages/runner/runner').then(m => m.Runner) },
       { path: 'suites', loadComponent: () => import('./pages/suites/suites').then(m => m.Suites) },
       { path: 'history', loadComponent: () => import('./pages/history/history').then(m => m.History) },

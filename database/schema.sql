@@ -108,6 +108,49 @@ CREATE TRIGGER update_scripts_updated_at BEFORE UPDATE ON scripts
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================
+-- Script Configuration Resource Snapshot
+-- ============================================================
+CREATE TABLE IF NOT EXISTS script_configuration_resources (
+    id BIGSERIAL PRIMARY KEY,
+    script_id INT NOT NULL REFERENCES scripts(id) ON DELETE CASCADE,
+    resource_type VARCHAR(40) NOT NULL,
+    reference_value VARCHAR(1000) NOT NULL,
+    resolved_path VARCHAR(1200) DEFAULT NULL,
+    exists_on_disk BOOLEAN NOT NULL DEFAULT FALSE,
+    source_kind VARCHAR(40) NOT NULL DEFAULT 'parser',
+    metadata JSONB DEFAULT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (script_id, resource_type, reference_value)
+);
+
+CREATE INDEX IF NOT EXISTS idx_script_config_resources_script ON script_configuration_resources(script_id);
+CREATE INDEX IF NOT EXISTS idx_script_config_resources_type ON script_configuration_resources(resource_type);
+CREATE INDEX IF NOT EXISTS idx_script_config_resources_exists ON script_configuration_resources(exists_on_disk);
+
+DROP TRIGGER IF EXISTS update_script_configuration_resources_updated_at ON script_configuration_resources;
+CREATE TRIGGER update_script_configuration_resources_updated_at BEFORE UPDATE ON script_configuration_resources
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================
+-- Script Configuration File Change Audit
+-- ============================================================
+CREATE TABLE IF NOT EXISTS script_configuration_change_logs (
+    id BIGSERIAL PRIMARY KEY,
+    script_id INT NOT NULL REFERENCES scripts(id) ON DELETE CASCADE,
+    file_path VARCHAR(1400) NOT NULL,
+    file_type VARCHAR(40) NOT NULL,
+    previous_content TEXT DEFAULT NULL,
+    updated_content TEXT DEFAULT NULL,
+    change_summary JSONB DEFAULT NULL,
+    changed_by INT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
+    changed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_script_config_change_logs_script_time ON script_configuration_change_logs(script_id, changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_script_config_change_logs_user_time ON script_configuration_change_logs(changed_by, changed_at DESC);
+
+-- ============================================================
 -- Test Suites (grouping of scripts)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS test_suites (

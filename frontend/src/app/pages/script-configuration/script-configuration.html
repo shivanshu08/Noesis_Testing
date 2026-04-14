@@ -1,0 +1,436 @@
+<div class="script-config-page">
+  <div class="topbar">
+    <a routerLink="/scripts" class="back-link">
+      <i class="pi pi-arrow-left"></i>
+      <span>Back to Scripts</span>
+    </a>
+
+    <div class="topbar-actions">
+      <p-button
+        icon="pi pi-sync"
+        label="Refresh"
+        severity="secondary"
+        [text]="true"
+        [loading]="loading()"
+        (onClick)="loadConfiguration(true)"
+      />
+      @if (details(); as vm) {
+        <a pButton [outlined]="true" severity="success" icon="pi pi-play" label="Run Script" routerLink="/runner" [queryParams]="{ select: vm.script.id }"></a>
+      }
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="state-card loading">
+      <i class="pi pi-spin pi-spinner"></i>
+      <h3>Loading script configuration</h3>
+      <p>Collecting Java dependencies, linked resources, and execution intelligence.</p>
+    </div>
+  } @else if (details(); as vm) {
+    <section class="hero-card">
+      <div class="hero-main">
+        <div class="hero-head">
+          <p-tag [value]="vm.script.categoryName" severity="info"></p-tag>
+          <p-tag [value]="vm.script.isActive ? 'Ready to Run' : 'Under Maintenance'" [severity]="vm.script.isActive ? 'success' : 'warn'"></p-tag>
+          <p-tag [value]="'Stability ' + vm.execution.stabilityScore + '%'" [severity]="vm.execution.stabilityScore >= 75 ? 'success' : vm.execution.stabilityScore >= 45 ? 'warn' : 'danger'"></p-tag>
+        </div>
+
+        <h1>{{ vm.script.name }}</h1>
+        <p class="subline">{{ vm.script.className }}</p>
+
+        <div class="meta-grid">
+          <div class="meta-item">
+            <span class="key">Method</span>
+            <span class="val">{{ vm.script.methodName || '-' }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="key">Registered By</span>
+            <span class="val">{{ vm.script.createdBy || 'System' }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="key">Created</span>
+            <span class="val">{{ formatDate(vm.script.createdAt) }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="key">Last Updated</span>
+            <span class="val">{{ formatDate(vm.script.updatedAt || vm.script.createdAt) }}</span>
+          </div>
+          <div class="meta-item wide">
+            <span class="key">Resolved Path</span>
+            <span class="val monospaced">{{ vm.script.resolvedFilePath || vm.script.filePath }}</span>
+          </div>
+          <div class="meta-item actions">
+            <button type="button" class="mini-action" (click)="copyText(vm.script.className)">
+              <i class="pi pi-copy"></i>
+              <span>Copy Class</span>
+            </button>
+            <button type="button" class="mini-action" (click)="copyText(vm.script.resolvedFilePath || vm.script.filePath)">
+              <i class="pi pi-copy"></i>
+              <span>Copy Path</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-kpis">
+        <article class="kpi">
+          <span class="label">Runs</span>
+          <strong class="value">{{ vm.execution.totalRuns }}</strong>
+        </article>
+        <article class="kpi">
+          <span class="label">Pass Rate</span>
+          <strong class="value">{{ vm.execution.passRate }}%</strong>
+        </article>
+        <article class="kpi">
+          <span class="label">Resources</span>
+          <strong class="value">{{ resourceTotal() }}</strong>
+        </article>
+        <article class="kpi">
+          <span class="label">Executors</span>
+          <strong class="value">{{ vm.execution.uniqueExecutors }}</strong>
+        </article>
+      </div>
+    </section>
+
+    <div class="content-grid">
+      <p-card styleClass="content-card full-width-card">
+        <div class="card-head">
+          <h3><i class="pi pi-folder-open"></i> Resource Map</h3>
+          <span>{{ resourceTotal() }} linked resources</span>
+        </div>
+
+        <div class="resource-grid">
+          <div class="resource-block">
+            <h4>Core Configuration</h4>
+            @if (vm.resources.javaConfigs.length === 0) {
+              <p class="empty-text">No core configuration files detected for this script.</p>
+            } @else {
+              @for (resource of vm.resources.javaConfigs; track trackResource($index, resource)) {
+                <div class="resource-item">
+                  <div class="resource-main">
+                    <small class="resource-logical-name">{{ getResourceLogicalName(resource) }}</small>
+                    <span class="resource-name">{{ getResourceDisplayName(resource) }}</span>
+                    <small class="resource-path">{{ getResourceDisplayPath(resource) }}</small>
+                  </div>
+                  <div class="resource-tags">
+                    <p-tag [value]="getResourceKindLabel(resource)" severity="secondary"></p-tag>
+                    <p-tag [value]="resource.existsOnDisk ? 'Available' : 'Reference'" [severity]="resource.existsOnDisk ? 'success' : 'secondary'"></p-tag>
+                  </div>
+                </div>
+              }
+            }
+          </div>
+
+          <div class="resource-block">
+            <h4>Attachments</h4>
+            @if (vm.resources.attachments.length === 0) {
+              <p class="empty-text">No attachment files detected for this script.</p>
+            } @else {
+              @for (resource of vm.resources.attachments; track trackResource($index, resource)) {
+                <div class="resource-item">
+                  <div class="resource-main">
+                    <span class="resource-name">{{ getResourceDisplayName(resource) }}</span>
+                  </div>
+                  <div class="resource-actions">
+                    <p-tag [value]="getResourceKindLabel(resource)" severity="secondary"></p-tag>
+                    <p-button
+                      label="Open"
+                      icon="pi pi-external-link"
+                      size="small"
+                      severity="secondary"
+                      [outlined]="true"
+                      [disabled]="!resource.existsOnDisk || attachmentActionLoading()"
+                      (onClick)="openAttachment(resource)"
+                    />
+                    <p-button
+                      label="Download"
+                      icon="pi pi-download"
+                      size="small"
+                      severity="primary"
+                      [outlined]="true"
+                      [disabled]="!resource.existsOnDisk || attachmentActionLoading()"
+                      (onClick)="downloadAttachment(resource)"
+                    />
+                  </div>
+                </div>
+              }
+              @if (attachmentStatusMessage()) {
+                <p class="attachment-status">{{ attachmentStatusMessage() }}</p>
+              }
+            }
+          </div>
+        </div>
+      </p-card>
+
+      <p-card styleClass="content-card full-width-card">
+        <div class="card-head">
+          <h3><i class="pi pi-file-edit"></i> Configuration Editor</h3>
+          <span>{{ editableFiles().length }} editable files</span>
+        </div>
+
+        @if (editableFiles().length === 0) {
+          <div class="table-empty">No editable `.java` or `.json` configuration files are linked to this script.</div>
+        } @else {
+          <div class="editor-toolbar">
+            <label for="config-editor-file-select">Editable File</label>
+            <p-select
+              id="config-editor-file-select"
+              styleClass="editor-file-select"
+              [options]="editableFileOptions()"
+              optionLabel="label"
+              optionValue="path"
+              placeholder="Select configuration file"
+              appendTo="body"
+              [ngModel]="selectedEditablePath()"
+              (ngModelChange)="onEditableFileChange($event)"
+            />
+
+            <div class="editor-actions">
+              <p-button
+                label="Revert"
+                icon="pi pi-undo"
+                severity="secondary"
+                [outlined]="true"
+                [disabled]="!hasUnsavedEditorChanges() || editorLoading() || editorSaving()"
+                (onClick)="resetEditorContent()"
+              />
+              <p-button
+                label="Save Changes"
+                icon="pi pi-save"
+                severity="primary"
+                [loading]="editorSaving()"
+                [disabled]="!hasUnsavedEditorChanges() || editorLoading() || editorSaving()"
+                (onClick)="saveSelectedFile()"
+              />
+            </div>
+          </div>
+
+          @if (editorStatusMessage()) {
+            <p class="editor-status">{{ editorStatusMessage() }}</p>
+          }
+
+          <p class="editor-hint">Click inside the editor area to open full-screen editing mode.</p>
+          <textarea
+            class="editor-textarea editor-preview-textarea"
+            [ngModel]="editorContent()"
+            (ngModelChange)="editorContent.set($event)"
+            [disabled]="editorLoading() || editorSaving()"
+            (click)="openEditorFullscreen()"
+            spellcheck="false"
+          ></textarea>
+        }
+      </p-card>
+
+      <p-card styleClass="content-card full-width-card">
+        <div class="card-head">
+          <h3><i class="pi pi-history"></i> Execution Timeline</h3>
+          <span>{{ vm.execution.recentRuns.length }} recent runs</span>
+        </div>
+
+        <div class="timeline-summary">
+          <div class="metric">
+            <span>Passed</span>
+            <strong>{{ vm.execution.passedRuns }}</strong>
+          </div>
+          <div class="metric">
+            <span>Failed</span>
+            <strong>{{ vm.execution.failedRuns + vm.execution.errorRuns }}</strong>
+          </div>
+          <div class="metric">
+            <span>Skipped</span>
+            <strong>{{ vm.execution.skippedRuns }}</strong>
+          </div>
+          <div class="metric">
+            <span>Avg Duration</span>
+            <strong>{{ formatDuration(vm.execution.averageScriptDurationMs) }}</strong>
+          </div>
+        </div>
+        <p-progressBar [value]="vm.execution.passRate" [showValue]="false" styleClass="pass-rate-bar"></p-progressBar>
+
+        <p-table [value]="vm.execution.recentRuns" styleClass="p-datatable-sm">
+          <ng-template #header>
+            <tr>
+              <th>Run</th>
+              <th>Script Status</th>
+              <th>Run Status</th>
+              <th>Triggered By</th>
+              <th>Environment</th>
+              <th>Started</th>
+              <th>Completed</th>
+              <th>Duration</th>
+              <th></th>
+            </tr>
+          </ng-template>
+          <ng-template #body let-run>
+            <tr>
+              <td>
+                <div class="run-name">{{ run.runName || ('Run #' + run.runId) }}</div>
+                <small>Run #{{ run.runId }}</small>
+              </td>
+              <td>
+                <p-tag [value]="run.scriptStatus | titlecase" [severity]="getStatusSeverity(run.scriptStatus)"></p-tag>
+              </td>
+              <td>
+                <p-tag [value]="run.runStatus | titlecase" [severity]="getStatusSeverity(run.runStatus)"></p-tag>
+              </td>
+              <td>{{ run.triggeredBy || 'System' }}</td>
+              <td>{{ run.environment || '-' }}</td>
+              <td>{{ formatDate(run.startedAt) }}</td>
+              <td>{{ formatDate(run.completedAt) }}</td>
+              <td>{{ runDuration(run) }}</td>
+              <td>
+                <a pButton [text]="true" icon="pi pi-external-link" [routerLink]="['/run', run.runId]"></a>
+              </td>
+            </tr>
+          </ng-template>
+          <ng-template #emptymessage>
+            <tr>
+              <td colspan="9">
+                <div class="table-empty">No execution runs available for this script yet.</div>
+              </td>
+            </tr>
+          </ng-template>
+        </p-table>
+      </p-card>
+
+      <p-card styleClass="content-card full-width-card">
+        <div class="card-head">
+          <h3><i class="pi pi-clock"></i> Configuration Change Log</h3>
+          <span>{{ changeHistory().length }} updates</span>
+        </div>
+
+        <div class="change-log-shell">
+          <div class="change-log-list">
+            @if (changeHistoryLoading()) {
+              <div class="table-empty">Loading configuration change history...</div>
+            } @else if (changeHistory().length === 0) {
+              <div class="table-empty">No saved configuration edits yet.</div>
+            } @else {
+              @for (change of changeHistory(); track trackChangeLog($index, change)) {
+                <button
+                  type="button"
+                  class="change-log-item"
+                  [class.active]="selectedChangeLogId() === change.id"
+                  (click)="selectChange(change)"
+                >
+                  <div class="change-log-item-head">
+                    <strong>{{ change.fileName }}</strong>
+                    <p-tag [value]="(change.fileType || '-').toUpperCase()" severity="secondary"></p-tag>
+                  </div>
+                  <span class="change-log-meta">{{ formatDate(change.changedAt) }}</span>
+                  <span class="change-log-meta">By {{ change.changedBy || 'System' }}</span>
+                  <span class="change-log-meta">{{ getChangedLines(change) }} line(s) changed</span>
+                </button>
+              }
+            }
+          </div>
+
+          <div class="change-log-detail">
+            @if (selectedChangeLog(); as selectedChange) {
+              <div class="change-preview-card">
+                <div class="change-preview-head">
+                  <h4>{{ selectedChange.fileName }}</h4>
+                  <span>{{ formatDate(selectedChange.changedAt) }} by {{ selectedChange.changedBy || 'System' }}</span>
+                </div>
+
+                <div class="change-preview-metrics">
+                  <div class="metric-chip">
+                    <label>Changed Lines</label>
+                    <strong>{{ getChangedLines(selectedChange) }}</strong>
+                  </div>
+                  <div class="metric-chip">
+                    <label>Before Lines</label>
+                    <strong>{{ getBeforeLineCount(selectedChange) }}</strong>
+                  </div>
+                  <div class="metric-chip">
+                    <label>After Lines</label>
+                    <strong>{{ getAfterLineCount(selectedChange) }}</strong>
+                  </div>
+                </div>
+
+                @if (getChangePreview(selectedChange).length === 0) {
+                  <p class="empty-text">No line-level preview is available for this update.</p>
+                } @else {
+                  <div class="change-preview-list">
+                    @for (entry of getChangePreview(selectedChange); track $index) {
+                      <article class="change-preview-item">
+                        <header>Line {{ entry.line }}</header>
+                        <div class="change-preview-columns">
+                          <section class="before">
+                            <label>Before</label>
+                            <pre>{{ formatChangeValue(entry.before) }}</pre>
+                          </section>
+                          <section class="after">
+                            <label>After</label>
+                            <pre>{{ formatChangeValue(entry.after) }}</pre>
+                          </section>
+                        </div>
+                      </article>
+                    }
+                  </div>
+                }
+              </div>
+            } @else {
+              <div class="table-empty">Select a change entry to view details.</div>
+            }
+          </div>
+        </div>
+      </p-card>
+    </div>
+
+    @if (editorFullscreen()) {
+      <div class="editor-fullscreen-backdrop" (click)="closeEditorFullscreen()"></div>
+      <section class="editor-fullscreen-panel" role="dialog" aria-modal="true" aria-label="Full-screen configuration editor">
+        <header class="editor-fullscreen-head">
+          <div class="editor-fullscreen-meta">
+            <h4>{{ getSelectedEditableFileLabel() }}</h4>
+            <small>{{ selectedEditablePath() }}</small>
+          </div>
+          <div class="editor-fullscreen-actions">
+            <p-button
+              label="Revert"
+              icon="pi pi-undo"
+              severity="secondary"
+              [outlined]="true"
+              [disabled]="!hasUnsavedEditorChanges() || editorLoading() || editorSaving()"
+              (onClick)="resetEditorContent()"
+            />
+            <p-button
+              label="Save Changes"
+              icon="pi pi-save"
+              severity="primary"
+              [loading]="editorSaving()"
+              [disabled]="!hasUnsavedEditorChanges() || editorLoading() || editorSaving()"
+              (onClick)="saveSelectedFile()"
+            />
+            <p-button
+              label="Close"
+              icon="pi pi-times"
+              severity="secondary"
+              [outlined]="true"
+              (onClick)="closeEditorFullscreen()"
+            />
+          </div>
+        </header>
+
+        <textarea
+          class="editor-fullscreen-textarea"
+          [ngModel]="editorContent()"
+          (ngModelChange)="editorContent.set($event)"
+          [disabled]="editorLoading() || editorSaving()"
+          spellcheck="false"
+        ></textarea>
+      </section>
+    }
+  } @else {
+    <div class="state-card empty">
+      <i class="pi pi-file-excel"></i>
+      <h3>Script configuration not available</h3>
+      <p>The selected script could not be loaded or no longer exists.</p>
+      @if (loadError()) {
+        <p class="error-detail">{{ loadError() }}</p>
+      }
+      <a pButton routerLink="/scripts" label="Back to Scripts" icon="pi pi-arrow-left"></a>
+    </div>
+  }
+</div>

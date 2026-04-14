@@ -1393,7 +1393,7 @@ async function insertExecutionLog(
   );
 }
 
-async function persistRunMetadata(runId: number, metadata: Record<string, unknown>): Promise<void> {
+async function persistRunMetadata(runId: number, metadata: Record<string, unknown> | RunMetadata): Promise<void> {
   try {
     await execute(
       `UPDATE execution_runs SET run_metadata = $1 WHERE id = $2`,

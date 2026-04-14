@@ -55,6 +55,133 @@ export interface ScriptCategory {
   scriptCount: number;
 }
 
+export interface ScriptConfigurationResource {
+  type: 'java_config' | 'json' | 'attachment' | 'data_file' | string;
+  reference: string;
+  resolvedPath?: string | null;
+  existsOnDisk: boolean;
+  sourceKind?: 'parser' | 'persisted' | string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ScriptConfigurationRun {
+  runId: number;
+  runName: string;
+  runStatus: string;
+  scriptStatus: string;
+  environment: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  runDurationMs?: number | null;
+  scriptDurationMs?: number | null;
+  triggeredBy?: string | null;
+}
+
+export interface ScriptConfigurationEditableFile {
+  path: string;
+  fileType: 'java' | 'json' | string;
+  reference: string;
+  sourceType: 'java_config' | 'json' | 'attachment' | 'data_file' | string;
+  existsOnDisk: boolean;
+  fileSizeBytes?: number | null;
+  lastModifiedAt?: string | null;
+}
+
+export interface ScriptConfigurationFileContent {
+  path: string;
+  fileName: string;
+  fileType: 'java' | 'json' | string;
+  reference?: string;
+  fileSizeBytes?: number | null;
+  lastModifiedAt?: string | null;
+  content: string;
+}
+
+export interface ScriptConfigurationChangeLog {
+  id: number;
+  scriptId: number;
+  filePath: string;
+  fileName: string;
+  fileType: string;
+  changedBy: string;
+  changedAt: string;
+  changeSummary?: {
+    changedLines?: number;
+    beforeLineCount?: number;
+    afterLineCount?: number;
+    preview?: Array<{ line: number; before: string; after: string }>;
+  } | Record<string, unknown>;
+}
+
+export interface ScriptConfigurationDetail {
+  script: {
+    id: number;
+    name: string;
+    className: string;
+    methodName?: string | null;
+    categoryId: number;
+    categoryName: string;
+    categoryIcon: string;
+    categoryColor: string;
+    description?: string | null;
+    filePath: string;
+    resolvedFilePath?: string | null;
+    configFile?: string | null;
+    isActive: boolean;
+    tags?: string[];
+    createdAt: string;
+    updatedAt?: string | null;
+    createdBy?: string | null;
+  };
+  java: {
+    packageName?: string | null;
+    imports: string[];
+    annotations: string[];
+    methods: string[];
+    previewLines: string[];
+    lineCount: number;
+    fileSizeBytes?: number;
+    lastModifiedAt?: string | null;
+    sourceAvailable: boolean;
+    sourceReadError?: string | null;
+  };
+  resources: {
+    javaConfigs: ScriptConfigurationResource[];
+    jsonFiles: ScriptConfigurationResource[];
+    attachments: ScriptConfigurationResource[];
+    dataFiles: ScriptConfigurationResource[];
+  };
+  editableFiles?: ScriptConfigurationEditableFile[];
+  execution: {
+    totalRuns: number;
+    passedRuns: number;
+    failedRuns: number;
+    errorRuns: number;
+    skippedRuns: number;
+    passRate: number;
+    stabilityScore: number;
+    uniqueExecutors: number;
+    averageScriptDurationMs?: number | null;
+    lastRun?: ScriptConfigurationRun | null;
+    recentRuns: ScriptConfigurationRun[];
+  };
+  recentFileChanges?: ScriptConfigurationChangeLog[];
+  artifacts: Array<{
+    id: number;
+    runId: number;
+    artifactType: string;
+    fileName: string;
+    storedPath?: string | null;
+    fileSizeBytes?: number | null;
+    mimeType?: string | null;
+    createdAt?: string | null;
+    runName?: string | null;
+    runStatus?: string | null;
+    runStartedAt?: string | null;
+  }>;
+  generatedAt?: string;
+}
+
 export interface TestSuite {
   id: number;
   name: string;

@@ -93,6 +93,17 @@
         color: var(--text-color);
       }
 
+      .script-name-link {
+        text-decoration: none;
+        border-bottom: 1px dashed transparent;
+        transition: all 0.18s ease;
+
+        &:hover {
+          color: var(--noesis-primary);
+          border-bottom-color: color-mix(in srgb, var(--noesis-primary) 50%, transparent);
+        }
+      }
+
       .rename-script-btn {
         border: 1px solid color-mix(in srgb, var(--surface-border) 85%, transparent);
         background: var(--surface-card);
