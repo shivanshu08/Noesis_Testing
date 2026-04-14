@@ -235,6 +235,26 @@ export interface SuiteScript {
   executionOrder: number;
 }
 
+export interface SuiteAuditLog {
+  id: number;
+  timestamp: string;
+  action: string;
+  severity: string;
+  status: string;
+  message: string;
+  actor: string;
+  userId?: number | null;
+  suiteId?: number | null;
+  suiteName?: string | null;
+  operation?: string | null;
+  changedParts?: string[];
+  requestId?: string | null;
+  httpMethod?: string | null;
+  httpPath?: string | null;
+  httpStatus?: number | null;
+  metadata?: Record<string, unknown>;
+}
+
 export interface ExecutionRun {
   id: number;
   runName: string;

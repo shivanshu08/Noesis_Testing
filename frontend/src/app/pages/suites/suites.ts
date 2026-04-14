@@ -20,7 +20,7 @@ import { InputIconModule } from 'primeng/inputicon';
 import { SuiteService } from '../../services/suite.service';
 import { ScriptService } from '../../services/script.service';
 import { ExecutionService } from '../../services/execution.service';
-import { TestSuite, Script } from '../../models/interfaces';
+import { TestSuite, Script, SuiteAuditLog } from '../../models/interfaces';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { ThemeService } from '../../services/theme.service';
@@ -45,11 +45,18 @@ export class Suites implements OnInit, OnDestroy {
   suites = signal<TestSuite[]>([]);
   allScripts = signal<Script[]>([]);
   loading = signal(true);
+  suiteAuditLoading = signal(false);
+  suiteAuditFeed = signal<SuiteAuditLog[]>([]);
+  recentSuiteAudit = signal<SuiteAuditLog[]>([]);
 
   // Search & filter
   searchTerm = '';
   filterMode: string | null = null;
   sortField: string = 'name';
+  auditSuiteFilterId: number | null = null;
+  auditActionFilter: string | null = null;
+  auditDaysFilter = 60;
+  auditSearchTerm = '';
 
   filterModeOptions = [
     { label: 'All', value: null },
@@ -62,6 +69,21 @@ export class Suites implements OnInit, OnDestroy {
     { label: 'Scripts Count', value: 'scripts' },
     { label: 'Date Created', value: 'date' },
     { label: 'Last Run', value: 'lastRun' },
+  ];
+
+  auditActionOptions = [
+    { label: 'All Actions', value: null },
+    { label: 'Created', value: 'SUITES_CREATE' },
+    { label: 'Updated', value: 'SUITES_UPDATE' },
+    { label: 'Deleted', value: 'SUITES_DELETE' },
+  ];
+
+  auditDaysOptions = [
+    { label: 'Last 7 days', value: 7 },
+    { label: 'Last 30 days', value: 30 },
+    { label: 'Last 60 days', value: 60 },
+    { label: 'Last 90 days', value: 90 },
+    { label: 'Last 180 days', value: 180 },
   ];
 
   // Computed filtered/sorted
@@ -112,14 +134,52 @@ export class Suites implements OnInit, OnDestroy {
     const sorted = [...this.suites()].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return sorted.length > 0 ? this.timeAgo(sorted[0].createdAt) : 'N/A';
   });
+  filteredSuiteAuditFeed = computed(() => {
+    const search = this.auditSearchTerm.trim().toLowerCase();
+    if (!search) return this.suiteAuditFeed();
+
+    return this.suiteAuditFeed().filter((log) => {
+      const joinedChangedParts = (log.changedParts || []).join(' ').toLowerCase();
+      const combined = [
+        log.message,
+        log.actor,
+        log.suiteName || '',
+        log.action || '',
+        log.httpPath || '',
+        log.requestId || '',
+        joinedChangedParts,
+      ].join(' ').toLowerCase();
+      return combined.includes(search);
+    });
+  });
+  auditFeedCreatedCount = computed(() => this.filteredSuiteAuditFeed().filter((log) => log.action === 'SUITES_CREATE').length);
+  auditFeedUpdatedCount = computed(() => this.filteredSuiteAuditFeed().filter((log) => log.action === 'SUITES_UPDATE').length);
+  auditFeedDeletedCount = computed(() => this.filteredSuiteAuditFeed().filter((log) => log.action === 'SUITES_DELETE').length);
+  auditSuiteOptions = computed(() => ([
+    { label: 'All Suites', value: null },
+    ...this.suites().map((suite) => ({ label: suite.name, value: suite.id })),
+  ]));
+  latestAuditBySuite = computed(() => {
+    const latestBySuite = new Map<number, SuiteAuditLog>();
+    for (const log of this.recentSuiteAudit()) {
+      const suiteId = Number(log.suiteId);
+      if (!Number.isFinite(suiteId) || suiteId <= 0) continue;
+      if (!latestBySuite.has(suiteId)) {
+        latestBySuite.set(suiteId, log);
+      }
+    }
+    return latestBySuite;
+  });
 
   // Expand
   expandedSuiteIds = new Set<number>();
+  expandedSuiteLoadingIds = new Set<number>();
 
   // Dialog
   dialogVisible = false;
   editing = false;
   editId: number | null = null;
+  suiteAuditVisible = false;
   form = {
     name: '',
     description: '',
@@ -146,14 +206,16 @@ export class Suites implements OnInit, OnDestroy {
     private router: Router,
     public auth: AuthService,
     public themeService: ThemeService
-  ) {}
+  ) { }
 
   ngOnInit() {
     this.loadSuites();
     this.loadAllScripts();
+    this.loadRecentSuiteAudit(true);
     this.scriptRegistrySubscription = this.scriptService.scriptRegistryUpdated$.subscribe(() => {
       this.loadSuites();
       this.loadAllScripts();
+      this.loadRecentSuiteAudit(true);
     });
   }
 
@@ -165,8 +227,17 @@ export class Suites implements OnInit, OnDestroy {
     this.loading.set(true);
     this.suiteService.getSuites().subscribe({
       next: (data) => {
+        const availableIds = new Set(data.map((suite) => suite.id));
+        this.expandedSuiteIds = new Set(
+          Array.from(this.expandedSuiteIds).filter((suiteId) => availableIds.has(suiteId))
+        );
+        this.expandedSuiteLoadingIds = new Set(
+          Array.from(this.expandedSuiteLoadingIds).filter((suiteId) => availableIds.has(suiteId))
+        );
         this.suites.set(data);
         this.loading.set(false);
+        this.preloadExpandedSuiteScripts();
+        this.loadRecentSuiteAudit(true);
       },
       error: () => this.loading.set(false),
     });
@@ -176,23 +247,22 @@ export class Suites implements OnInit, OnDestroy {
   toggleExpand(suite: TestSuite) {
     if (this.expandedSuiteIds.has(suite.id)) {
       this.expandedSuiteIds.delete(suite.id);
+      this.expandedSuiteLoadingIds.delete(suite.id);
     } else {
       this.expandedSuiteIds.add(suite.id);
-      // Load full suite details if scripts not loaded
-      if (!suite.scripts || suite.scripts.length === 0) {
-        this.suiteService.getSuite(suite.id).subscribe({
-          next: (full) => {
-            this.suites.update(suites =>
-              suites.map(s => s.id === suite.id ? { ...s, scripts: full.scripts } : s)
-            );
-          }
-        });
+      if ((suite.scriptCount || 0) > 0 && (!suite.scripts || suite.scripts.length === 0)) {
+        this.loadSuiteScripts(suite.id);
       }
     }
   }
 
   isExpanded(suite: TestSuite): boolean {
     return this.expandedSuiteIds.has(suite.id);
+  }
+
+  isExpandedSuiteScriptsLoading(suite: TestSuite): boolean {
+    if ((suite.scriptCount || 0) === 0) return false;
+    return this.expandedSuiteLoadingIds.has(suite.id);
   }
 
   // View detail
@@ -263,7 +333,10 @@ export class Suites implements OnInit, OnDestroy {
           this.loadSuites();
           this.messageService.add({ severity: 'success', summary: 'Updated', detail: `Suite "${this.form.name}" updated.` });
         },
-        error: () => this.messageService.add({ severity: 'error', summary: 'Error', detail: 'Failed to update suite.' }),
+        error: (err) => {
+          const msg = err?.error?.error || err?.error?.message || err?.message || 'Failed to update suite.';
+          this.messageService.add({ severity: 'error', summary: 'Error', detail: msg });
+        },
       });
     } else {
       this.suiteService.createSuite(payload).subscribe({
@@ -272,7 +345,10 @@ export class Suites implements OnInit, OnDestroy {
           this.loadSuites();
           this.messageService.add({ severity: 'success', summary: 'Created', detail: `Suite "${this.form.name}" created.` });
         },
-        error: () => this.messageService.add({ severity: 'error', summary: 'Error', detail: 'Failed to create suite.' }),
+        error: (err) => {
+          const msg = err?.error?.error || err?.error?.message || err?.message || 'Failed to create suite.';
+          this.messageService.add({ severity: 'error', summary: 'Error', detail: msg });
+        },
       });
     }
   }
@@ -317,7 +393,8 @@ export class Suites implements OnInit, OnDestroy {
   }
 
   // Duplicate
-  duplicateSuite(suite: TestSuite) {
+  duplicateSuite(suite: TestSuite, event?: Event) {
+    event?.stopPropagation();
     if (!this.auth.canEdit()) return;
 
     this.suiteService.duplicateSuite(suite.id).subscribe({
@@ -325,7 +402,10 @@ export class Suites implements OnInit, OnDestroy {
         this.loadSuites();
         this.messageService.add({ severity: 'success', summary: 'Duplicated', detail: `Created "${res.name}".` });
       },
-      error: () => this.messageService.add({ severity: 'error', summary: 'Error', detail: 'Failed to duplicate suite.' }),
+      error: (err) => {
+        const msg = err?.error?.error || err?.message || 'Failed to duplicate suite.';
+        this.messageService.add({ severity: 'error', summary: 'Error', detail: msg });
+      }
     });
   }
 
@@ -418,9 +498,180 @@ export class Suites implements OnInit, OnDestroy {
     this.suites.update(s => [...s]);
   }
 
+  getLatestSuiteAudit(suite: TestSuite): SuiteAuditLog | null {
+    return this.latestAuditBySuite().get(suite.id) || null;
+  }
+
+  getSuiteAuditActionLabel(action: string | undefined): string {
+    if (action === 'SUITES_CREATE') return 'Created';
+    if (action === 'SUITES_UPDATE') return 'Updated';
+    if (action === 'SUITES_DELETE') return 'Deleted';
+    return 'Activity';
+  }
+
+  getSuiteAuditSeverity(action: string | undefined): 'success' | 'info' | 'danger' | 'secondary' {
+    if (action === 'SUITES_CREATE') return 'success';
+    if (action === 'SUITES_UPDATE') return 'info';
+    if (action === 'SUITES_DELETE') return 'danger';
+    return 'secondary';
+  }
+
+  getSuiteAuditActor(log: SuiteAuditLog): string {
+    const actor = String(log.actor || '').trim();
+    if (actor) return actor;
+    if (Number.isFinite(Number(log.userId)) && Number(log.userId) > 0) {
+      return `User ${Math.trunc(Number(log.userId))}`;
+    }
+    return 'Unknown user';
+  }
+
+  getSuiteAuditTitle(log: SuiteAuditLog): string {
+    const suiteName = String(log.suiteName || '').trim();
+    if (suiteName) return suiteName;
+    if (Number.isFinite(Number(log.suiteId)) && Number(log.suiteId) > 0) {
+      return `Suite #${Math.trunc(Number(log.suiteId))}`;
+    }
+    return 'Suite activity';
+  }
+
+  getSuiteAuditSummary(log: SuiteAuditLog): string {
+    if (log.changedParts && log.changedParts.length > 0) {
+      return `Changed: ${log.changedParts.join(', ')}`;
+    }
+    if (log.operation) {
+      return `Operation: ${log.operation}`;
+    }
+    if (Number.isFinite(Number(log.httpStatus)) && Number(log.httpStatus) > 0) {
+      return `HTTP ${Math.trunc(Number(log.httpStatus))}`;
+    }
+    return 'No additional details';
+  }
+
+  formatSuiteAuditMeta(log: SuiteAuditLog): string {
+    const parts: string[] = [];
+    if (log.httpMethod) parts.push(log.httpMethod.toUpperCase());
+    if (log.httpPath) parts.push(log.httpPath);
+    if (log.requestId) parts.push(`#${log.requestId.substring(0, 10)}`);
+    return parts.join(' • ');
+  }
+
   private loadAllScripts() {
     this.scriptService.getScripts().subscribe({
       next: (data) => this.allScripts.set(data),
+    });
+  }
+
+  private loadRecentSuiteAudit(silent = false) {
+    this.suiteService.getSuiteAuditLogs({ limit: 160, days: 30 }).subscribe({
+      next: (feed) => {
+        this.recentSuiteAudit.set(feed || []);
+      },
+      error: () => {
+        if (!silent) {
+          this.messageService.add({ severity: 'error', summary: 'Error', detail: 'Failed to load recent suite activity.' });
+        }
+      }
+    });
+  }
+
+  private loadSuiteAuditFeed(showToast = true) {
+    this.suiteAuditLoading.set(true);
+    this.suiteService.getSuiteAuditLogs({
+      suiteId: this.auditSuiteFilterId ?? undefined,
+      action: this.auditActionFilter || undefined,
+      limit: 300,
+      days: this.auditDaysFilter,
+    }).subscribe({
+      next: (feed) => {
+        this.suiteAuditFeed.set(feed || []);
+        this.suiteAuditLoading.set(false);
+        if (showToast) {
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Activity refreshed',
+            detail: `${(feed || []).length} suite activity records loaded.`,
+          });
+        }
+      },
+      error: () => {
+        this.suiteAuditLoading.set(false);
+        this.messageService.add({ severity: 'error', summary: 'Error', detail: 'Failed to load suite activity feed.' });
+      }
+    });
+  }
+
+  private preloadExpandedSuiteScripts() {
+    const suitesById = new Map(this.suites().map((suite) => [suite.id, suite]));
+    for (const suiteId of this.expandedSuiteIds) {
+      const suite = suitesById.get(suiteId);
+      if (!suite || (suite.scriptCount || 0) === 0) {
+        this.expandedSuiteLoadingIds.delete(suiteId);
+        continue;
+      }
+
+      if (!suite.scripts || suite.scripts.length === 0) {
+        this.loadSuiteScripts(suiteId);
+      }
+    }
+  }
+
+  private loadSuiteScripts(suiteId: number) {
+    if (this.expandedSuiteLoadingIds.has(suiteId)) return;
+
+    this.expandedSuiteLoadingIds.add(suiteId);
+    this.suiteService.getSuite(suiteId).subscribe({
+      next: (full) => {
+        this.suites.update((suites) =>
+          suites.map((suite) => suite.id === suiteId ? { ...suite, scripts: full.scripts || [] } : suite)
+        );
+        this.expandedSuiteLoadingIds.delete(suiteId);
+      },
+      error: () => {
+        this.expandedSuiteLoadingIds.delete(suiteId);
+        this.messageService.add({ severity: 'error', summary: 'Error', detail: 'Failed to load suite scripts.' });
+      }
+    });
+  }
+
+  openSuiteAudit(suite?: TestSuite, event?: Event) {
+    event?.stopPropagation();
+    this.auditSuiteFilterId = suite?.id ?? null;
+    this.auditSearchTerm = '';
+    this.suiteAuditVisible = true;
+    this.loadSuiteAuditFeed(false);
+  }
+
+  refreshSuiteAuditFeed() {
+    this.loadSuiteAuditFeed();
+    this.loadRecentSuiteAudit(true);
+  }
+
+  applySuiteAuditFilters() {
+    this.loadSuiteAuditFeed(false);
+  }
+
+  clearSuiteAuditFilters() {
+    this.auditSuiteFilterId = null;
+    this.auditActionFilter = null;
+    this.auditDaysFilter = 60;
+    this.auditSearchTerm = '';
+    this.loadSuiteAuditFeed(false);
+  }
+
+  copySuiteAuditLog(log: SuiteAuditLog) {
+    const payload = JSON.stringify(log, null, 2);
+    navigator.clipboard.writeText(payload).then(() => {
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Copied',
+        detail: 'Suite activity JSON copied.',
+      });
+    }).catch(() => {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Copy failed',
+        detail: 'Unable to copy suite activity JSON.',
+      });
     });
   }
 

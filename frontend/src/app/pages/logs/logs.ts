@@ -108,6 +108,9 @@ const DEFAULT_LOGS_LOCALE: LogsLocaleResolved = {
       AUTH_CHANGE_PASSWORD: 'Change Password',
       EXECUTION_START: 'Execution Started',
       EXECUTION_STOP: 'Execution Stopped',
+      SUITES_CREATE: 'Suite Created',
+      SUITES_UPDATE: 'Suite Updated',
+      SUITES_DELETE: 'Suite Deleted',
       SCRIPT_IMPORT: 'Script Imported',
       SCRIPT_IMPORT_DUPLICATE: 'Duplicate Script Import',
       SCRIPT_IMPORT_REJECTED: 'Script Import Rejected',
@@ -804,6 +807,83 @@ export class LogsPage implements OnInit, OnDestroy {
     const raw = String(log.runStatus || log.status || '').trim();
     if (!raw) return '-';
     return this.toTitleWords(raw.replace(/[_-]+/g, ' '));
+  }
+
+  getActionLabelForLog(log: GlobalLog): string {
+    return this.getActionLabel(log.action || null);
+  }
+
+  getActorLabel(log: GlobalLog): string {
+    const username = String(log.context?.['username'] || '').trim();
+    if (username) return username;
+
+    const userIdRaw = log.context?.['userId'];
+    const userId = typeof userIdRaw === 'number' ? userIdRaw : Number(userIdRaw);
+    if (Number.isFinite(userId) && userId > 0) {
+      return `User ${Math.trunc(userId)}`;
+    }
+
+    return '-';
+  }
+
+  getHttpMethodLabel(log: GlobalLog): string {
+    const raw = String(log.context?.['httpMethod'] || '').trim();
+    return raw ? raw.toUpperCase() : '-';
+  }
+
+  getHttpPathLabel(log: GlobalLog): string {
+    const raw = String(log.context?.['httpPath'] || '').trim();
+    return raw || '-';
+  }
+
+  getRequestIdLabel(log: GlobalLog): string {
+    const raw = String(log.context?.['requestId'] || '').trim();
+    return raw || '-';
+  }
+
+  getAuditSummary(log: GlobalLog): string {
+    const metadata = this.getAuditMetadata(log);
+    if (!metadata) return '-';
+
+    const changedPartsRaw = metadata['changedParts'];
+    if (Array.isArray(changedPartsRaw)) {
+      const changedParts = changedPartsRaw
+        .map((part) => String(part || '').trim())
+        .filter(Boolean);
+      if (changedParts.length > 0) {
+        return `Changed: ${changedParts.join(', ')}`;
+      }
+    }
+
+    const operation = String(metadata['operation'] || '').trim();
+    if (operation) {
+      return `Operation: ${operation}`;
+    }
+
+    const scriptCount = Number(metadata['scriptCount']);
+    if (Number.isFinite(scriptCount)) {
+      return `Scripts: ${scriptCount}`;
+    }
+
+    return '-';
+  }
+
+  getAuditMetadataJson(log: GlobalLog): string {
+    const metadata = this.getAuditMetadata(log);
+    if (!metadata) return '-';
+    try {
+      return JSON.stringify(metadata, null, 2);
+    } catch {
+      return '-';
+    }
+  }
+
+  private getAuditMetadata(log: GlobalLog): Record<string, unknown> | null {
+    const metadata = log.context?.['metadata'];
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+      return null;
+    }
+    return metadata as Record<string, unknown>;
   }
 
   hasValue(value: unknown): boolean {

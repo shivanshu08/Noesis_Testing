@@ -36,6 +36,11 @@ async function initDatabase() {
       await pool.query(`ALTER TABLE test_suites ADD CONSTRAINT test_suites_name_key UNIQUE (name)`);
     } catch (e) {}
 
+    // Ensure test_suites includes tags column for older databases
+    try {
+      await pool.query('ALTER TABLE test_suites ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT NULL');
+    } catch (e) {}
+
     // Ensure avatar_url can hold large base64 image strings
     try {
       await pool.query('ALTER TABLE users ALTER COLUMN avatar_url TYPE TEXT');

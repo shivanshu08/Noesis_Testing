@@ -325,10 +325,16 @@
               <div class="expanded-meta-grid">
                 <div class="meta-item"><span class="meta-label">Timestamp</span><span class="meta-val">{{ formatDateTime(log.timestamp) }}</span></div>
                 <div class="meta-item"><span class="meta-label">Severity</span><span class="meta-val">{{ getSeverityLabel(log.severity) }}</span></div>
+                <div class="meta-item" *ngIf="hasValue(getActionLabelForLog(log))"><span class="meta-label">Action</span><span class="meta-val">{{ getActionLabelForLog(log) }}</span></div>
+                <div class="meta-item" *ngIf="hasValue(getActorLabel(log))"><span class="meta-label">Actor</span><span class="meta-val">{{ getActorLabel(log) }}</span></div>
                 <div class="meta-item" *ngIf="hasValue(log.runId)"><span class="meta-label">Run ID</span><span class="meta-val">{{ log.runId }}</span></div>
                 <div class="meta-item"><span class="meta-label">Source</span><span class="meta-val">{{ log.source }}</span></div>
                 <div class="meta-item" *ngIf="hasValue(getScriptNameLabel(log))"><span class="meta-label">Script Name</span><span class="meta-val">{{ getScriptNameLabel(log) }}</span></div>
                 <div class="meta-item" *ngIf="hasValue(getStatusLabel(log))"><span class="meta-label">Status</span><span class="meta-val">{{ getStatusLabel(log) }}</span></div>
+                <div class="meta-item" *ngIf="hasValue(getAuditSummary(log))"><span class="meta-label">Audit</span><span class="meta-val">{{ getAuditSummary(log) }}</span></div>
+                <div class="meta-item" *ngIf="hasValue(getHttpMethodLabel(log))"><span class="meta-label">HTTP Method</span><span class="meta-val">{{ getHttpMethodLabel(log) }}</span></div>
+                <div class="meta-item" *ngIf="hasValue(getHttpPathLabel(log))"><span class="meta-label">HTTP Path</span><span class="meta-val">{{ getHttpPathLabel(log) }}</span></div>
+                <div class="meta-item" *ngIf="hasValue(getRequestIdLabel(log))"><span class="meta-label">Request ID</span><span class="meta-val">{{ getRequestIdLabel(log) }}</span></div>
                 <div class="meta-item" *ngIf="hasValue(log.resultId)"><span class="meta-label">Result ID</span><span class="meta-val">{{ log.resultId }}</span></div>
               </div>
             </div>
@@ -364,10 +370,16 @@
     <div class="details-grid">
       <div><strong>Timestamp:</strong> {{ formatDateTime(log.timestamp) }}</div>
       <div><strong>Severity:</strong> {{ getSeverityLabel(log.severity) }}</div>
+      <div *ngIf="hasValue(getActionLabelForLog(log))"><strong>Action:</strong> {{ getActionLabelForLog(log) }}</div>
+      <div *ngIf="hasValue(getActorLabel(log))"><strong>Actor:</strong> {{ getActorLabel(log) }}</div>
       <div *ngIf="hasValue(log.runId)"><strong>Run ID:</strong> {{ log.runId }}</div>
       <div><strong>Source:</strong> {{ log.source }}</div>
       <div *ngIf="hasValue(getScriptNameLabel(log))"><strong>Script Name:</strong> {{ getScriptNameLabel(log) }}</div>
       <div *ngIf="hasValue(getStatusLabel(log))"><strong>Status:</strong> {{ getStatusLabel(log) }}</div>
+      <div *ngIf="hasValue(getAuditSummary(log))"><strong>Audit:</strong> {{ getAuditSummary(log) }}</div>
+      <div *ngIf="hasValue(getHttpMethodLabel(log))"><strong>HTTP Method:</strong> {{ getHttpMethodLabel(log) }}</div>
+      <div *ngIf="hasValue(getHttpPathLabel(log))"><strong>HTTP Path:</strong> {{ getHttpPathLabel(log) }}</div>
+      <div *ngIf="hasValue(getRequestIdLabel(log))"><strong>Request ID:</strong> {{ getRequestIdLabel(log) }}</div>
       <div *ngIf="hasValue(log.resultId)"><strong>Result ID:</strong> {{ log.resultId }}</div>
     </div>
 
@@ -379,6 +391,11 @@
     <div class="message-panel second">
       <h4>Detailed Description</h4>
       <pre>{{ log.detailedDescription || log.message }}</pre>
+    </div>
+
+    <div class="message-panel second" *ngIf="hasValue(getAuditMetadataJson(log))">
+      <h4>Audit Metadata</h4>
+      <pre>{{ getAuditMetadataJson(log) }}</pre>
     </div>
 
     <div class="dialog-actions">

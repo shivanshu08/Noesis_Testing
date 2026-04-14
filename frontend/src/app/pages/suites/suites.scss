@@ -227,6 +227,41 @@
   }
 }
 
+.summary-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+
+  &.created {
+    background: color-mix(in srgb, var(--noesis-success) 12%, transparent);
+    color: var(--noesis-success);
+    border-color: color-mix(in srgb, var(--noesis-success) 30%, transparent);
+  }
+
+  &.updated {
+    background: color-mix(in srgb, var(--noesis-info) 12%, transparent);
+    color: var(--noesis-info);
+    border-color: color-mix(in srgb, var(--noesis-info) 30%, transparent);
+  }
+
+  &.deleted {
+    background: color-mix(in srgb, var(--noesis-danger) 12%, transparent);
+    color: var(--noesis-danger);
+    border-color: color-mix(in srgb, var(--noesis-danger) 30%, transparent);
+  }
+
+  &.neutral {
+    background: color-mix(in srgb, var(--surface-ground) 70%, transparent);
+    color: var(--text-color-secondary);
+    border-color: color-mix(in srgb, var(--surface-border) 80%, transparent);
+  }
+}
+
 // ── Data Table ────────────────────────────────────────────
 .suites-table-card {
   border-radius: 12px;
@@ -265,10 +300,10 @@
     transition: transform 0.2s;
   }
 
-  .suite-name-info {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
+    .suite-name-info {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
 
     .suite-title {
       font-weight: 600;
@@ -285,6 +320,16 @@
       text-overflow: ellipsis;
       white-space: nowrap;
       max-width: 220px;
+    }
+
+    .suite-audit-snippet {
+      margin-top: 2px;
+      font-size: 0.68rem;
+      color: var(--text-color-secondary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 300px;
     }
   }
 }
@@ -808,6 +853,171 @@
   }
 }
 
+// ── Suite Audit Dialog ───────────────────────────────────
+.suite-audit-summary-strip {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.suite-audit-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+
+  .audit-search-field {
+    flex: 1 1 280px;
+    min-width: 240px;
+
+    ::ng-deep .p-inputtext {
+      width: 100%;
+      height: 36px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      padding: 4px 10px 4px 34px;
+    }
+
+    ::ng-deep .pi-search {
+      font-size: 0.68rem;
+      margin-top: -0.425rem;
+      left: 0.75rem;
+      color: var(--text-color-secondary);
+    }
+  }
+
+  ::ng-deep .audit-select.p-select {
+    width: 170px;
+    min-width: 170px;
+    height: 36px;
+    border-radius: 8px;
+  }
+
+  .audit-toolbar-actions {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+}
+
+.suite-audit-loading,
+.suite-audit-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 160px;
+  color: var(--text-color-secondary);
+  font-size: 0.9rem;
+
+  i {
+    color: var(--noesis-primary);
+  }
+}
+
+.suite-audit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 58vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.suite-audit-item {
+  border: 1px solid color-mix(in srgb, var(--surface-border) 82%, transparent);
+  border-radius: 10px;
+  padding: 12px 12px 10px;
+  background: color-mix(in srgb, var(--surface-ground) 28%, var(--surface-card));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.audit-item-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.audit-item-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  span {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-color);
+  }
+}
+
+.audit-item-time {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+
+  span {
+    font-size: 0.73rem;
+    color: var(--text-color-secondary);
+  }
+}
+
+.audit-item-message {
+  font-size: 0.82rem;
+  color: var(--text-color);
+}
+
+.audit-item-summary {
+  font-size: 0.75rem;
+  color: var(--text-color-secondary);
+}
+
+.audit-item-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.audit-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--noesis-primary) 30%, transparent);
+  background: color-mix(in srgb, var(--noesis-primary) 10%, transparent);
+  color: var(--noesis-primary);
+}
+
+.audit-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+
+  span {
+    font-size: 0.73rem;
+    color: var(--text-color-secondary);
+  }
+
+  strong {
+    color: var(--text-color);
+  }
+}
+
+.audit-item-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 // ── PrimeNG Overrides ─────────────────────────────────────
 :host ::ng-deep {
   .suites-datatable .p-datatable-table-container {
@@ -1000,5 +1210,32 @@
 @media (max-width: 720px) {
   .stats-grid {
     grid-template-columns: 1fr;
+  }
+
+  .suite-audit-toolbar {
+    .audit-search-field {
+      flex-basis: 100%;
+      min-width: 100%;
+    }
+
+    ::ng-deep .audit-select.p-select {
+      width: 100%;
+      min-width: 100%;
+    }
+
+    .audit-toolbar-actions {
+      margin-left: 0;
+      width: 100%;
+      justify-content: flex-end;
+    }
+  }
+
+  .audit-item-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .audit-item-time {
+    align-items: flex-start;
   }
 }

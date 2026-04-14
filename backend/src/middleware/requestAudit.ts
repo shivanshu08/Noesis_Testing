@@ -101,6 +101,11 @@ function shouldSkipAuditPreprocess(req: AuthRequest): boolean {
     return true;
   }
 
+  // Suites mutations include rich audit payloads in suites routes
+  if (path.startsWith('/api/suites') && (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE')) {
+    return true;
+  }
+
   return false;
 }
 

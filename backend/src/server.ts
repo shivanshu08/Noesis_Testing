@@ -20,6 +20,7 @@ import notificationRoutes from './routes/notifications';
 import logsRoutes from './routes/logs';
 import { appLogService } from './services/appLogService';
 import { initScheduler, shutdownScheduler } from './services/schedulerService';
+import { ensureTestSuitesSchema } from './database/schemaMaintenance';
 
 const app = express();
 const httpServer = createServer(app);
@@ -130,6 +131,7 @@ async function start() {
     logger.warn('Database connection failed. Server will start but some features may not work.');
   } else {
     try {
+      await ensureTestSuitesSchema();
       await appLogService.initialize();
       appLogService.logSystemEvent({
         action: 'SYSTEM_DB_READY',
