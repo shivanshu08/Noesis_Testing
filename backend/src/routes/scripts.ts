@@ -1201,6 +1201,192 @@ function collectJsonStringLiterals(value: unknown, sink: Set<string>, depth = 0)
   }
 }
 
+interface JsonStringEntry {
+  value: string;
+  keyPath: string[];
+}
+
+function collectJsonStringEntries(
+  value: unknown,
+  sink: JsonStringEntry[],
+  keyPath: string[] = [],
+  depth = 0
+): void {
+  if (depth > 12 || sink.length > 2400) {
+    return;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed && trimmed.length <= 1400) {
+      sink.push({ value: trimmed, keyPath: [...keyPath] });
+    }
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectJsonStringEntries(item, sink, keyPath, depth + 1);
+      if (sink.length > 2400) break;
+    }
+    return;
+  }
+
+  if (!value || typeof value !== 'object') {
+    return;
+  }
+
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    collectJsonStringEntries(nested, sink, [...keyPath, key], depth + 1);
+    if (sink.length > 2400) break;
+  }
+}
+
+function isDirectoryStyleJsonKey(keyPath: string[]): boolean {
+  if (!keyPath.length) return false;
+  const key = (keyPath[keyPath.length - 1] || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (key.endsWith('path')) return true;
+  return key.includes('filepath')
+    || key.includes('folderpath')
+    || key.includes('directorypath')
+    || key.includes('uploadpath')
+    || key === 'folder'
+    || key === 'directory'
+    || key === 'dir';
+}
+
+function buildReferenceFromAbsolutePath(absolutePath: string, sourceRoots: SyncSourceRoot[]): string {
+  for (const root of sourceRoots) {
+    if (!root.rootPath) continue;
+    if (!isInsideRoot(root.rootPath, absolutePath)) continue;
+    return buildStoredScriptPath(root.rootPath, absolutePath, root.pathPrefix || '');
+  }
+  return normalizeStoredRelativePath(path.basename(absolutePath));
+}
+
+function expandDirectoryResourceCandidates(
+  absoluteDirectoryPath: string,
+  sourceRoots: SyncSourceRoot[],
+  metadata: Record<string, unknown>
+): ScriptResourceCandidate[] {
+  const queue = [absoluteDirectoryPath];
+  const discovered: ScriptResourceCandidate[] = [];
+  let scannedFiles = 0;
+  const maxFiles = 1200;
+
+  while (queue.length > 0 && scannedFiles < maxFiles) {
+    const currentDir = queue.shift();
+    if (!currentDir) continue;
+
+    let entries: fs.Dirent[] = [];
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      const absoluteEntryPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        queue.push(absoluteEntryPath);
+        continue;
+      }
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      scannedFiles += 1;
+      const reference = buildReferenceFromAbsolutePath(absoluteEntryPath, sourceRoots);
+      const fileExtension = path.extname(reference).toLowerCase();
+      if (!fileExtension || fileExtension === '.json' || fileExtension === '.java' || fileExtension === '.class') {
+        continue;
+      }
+
+      discovered.push({
+        type: 'attachment',
+        reference,
+        resolvedPath: formatPathForResponse(absoluteEntryPath),
+        existsOnDisk: true,
+        sourceKind: 'parser',
+        metadata: {
+          ...metadata,
+          detectedFrom: 'primary_script_json_folder',
+        },
+      });
+    }
+  }
+
+  return discovered;
+}
+
+function resolveAttachmentCandidateFromFolderContext(
+  fileReference: string,
+  folderPaths: string[],
+  sourceRoots: SyncSourceRoot[]
+): ScriptResourceCandidate | null {
+  const normalizedReference = normalizeResourceReference(fileReference);
+  if (!normalizedReference) {
+    return null;
+  }
+
+  const baseFileName = path.basename(normalizedReference);
+  const extension = path.extname(baseFileName).toLowerCase();
+  if (!baseFileName || !extension) {
+    return null;
+  }
+  if (extension === '.json' || extension === '.java' || extension === '.class') {
+    return null;
+  }
+
+  for (const folderPath of folderPaths) {
+    const fullReferenceCandidate = path.resolve(folderPath, normalizedReference);
+    if (fs.existsSync(fullReferenceCandidate)) {
+      return {
+        type: 'attachment',
+        reference: buildReferenceFromAbsolutePath(fullReferenceCandidate, sourceRoots),
+        resolvedPath: formatPathForResponse(fullReferenceCandidate),
+        existsOnDisk: true,
+        sourceKind: 'parser',
+        metadata: {
+          detectedFrom: 'primary_script_json_file',
+        },
+      };
+    }
+
+    const directCandidatePath = path.resolve(folderPath, baseFileName);
+    if (fs.existsSync(directCandidatePath)) {
+      return {
+        type: 'attachment',
+        reference: buildReferenceFromAbsolutePath(directCandidatePath, sourceRoots),
+        resolvedPath: formatPathForResponse(directCandidatePath),
+        existsOnDisk: true,
+        sourceKind: 'parser',
+        metadata: {
+          detectedFrom: 'primary_script_json_file',
+        },
+      };
+    }
+
+    const nestedCandidatePath = findFileByNameInRoot(folderPath, baseFileName);
+    if (!nestedCandidatePath) {
+      continue;
+    }
+
+    return {
+      type: 'attachment',
+      reference: buildReferenceFromAbsolutePath(nestedCandidatePath, sourceRoots),
+      resolvedPath: formatPathForResponse(nestedCandidatePath),
+      existsOnDisk: true,
+      sourceKind: 'parser',
+      metadata: {
+        detectedFrom: 'primary_script_json_file',
+      },
+    };
+  }
+
+  return null;
+}
+
 function buildJsonDerivedResourceCandidates(
   resources: ScriptResourceCandidate[],
   context: { sourceRoots: SyncSourceRoot[] }
@@ -1301,6 +1487,40 @@ function dedupeScriptResourceCandidates(resources: ScriptResourceCandidate[]): S
     }
 
     if (!existing.resolvedPath && resource.resolvedPath) {
+      byKey.set(key, resource);
+    }
+  }
+
+  return Array.from(byKey.values()).sort((a, b) => a.reference.localeCompare(b.reference));
+}
+
+function dedupeScriptResourcesByResolvedPath(resources: ScriptResourceCandidate[]): ScriptResourceCandidate[] {
+  const byKey = new Map<string, ScriptResourceCandidate>();
+
+  for (const resource of resources) {
+    const key = resource.resolvedPath
+      ? `path|${normalizeAbsolutePathForCompare(resource.resolvedPath)}`
+      : `ref|${resource.type}|${(resource.reference || '').toLowerCase()}`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, resource);
+      continue;
+    }
+
+    const existingSource = String(existing.metadata?.['detectedFrom'] || '').toLowerCase();
+    const nextSource = String(resource.metadata?.['detectedFrom'] || '').toLowerCase();
+    const existingPriority = existingSource.includes('folder') ? 2 : 1;
+    const nextPriority = nextSource.includes('folder') ? 2 : 1;
+
+    if (resource.existsOnDisk && !existing.existsOnDisk) {
+      byKey.set(key, resource);
+      continue;
+    }
+    if (nextPriority > existingPriority) {
+      byKey.set(key, resource);
+      continue;
+    }
+    if ((resource.reference || '').length > (existing.reference || '').length) {
       byKey.set(key, resource);
     }
   }
@@ -1693,12 +1913,23 @@ function buildFocusedScriptConfigurationResources(params: {
   if (primaryJsonResource?.resolvedPath && primaryJsonResource.existsOnDisk && fs.existsSync(primaryJsonResource.resolvedPath)) {
     try {
       const parsedJson = JSON.parse(fs.readFileSync(primaryJsonResource.resolvedPath, 'utf8'));
-      const literalValues = new Set<string>();
-      collectJsonStringLiterals(parsedJson, literalValues);
+      const jsonStringEntries: JsonStringEntry[] = [];
+      collectJsonStringEntries(parsedJson, jsonStringEntries);
+      const seenEntryKey = new Set<string>();
+      const folderPaths: string[] = [];
+      const explicitFileEntries: Array<{
+        entry: JsonStringEntry;
+        normalizedReference: string;
+      }> = [];
 
-      for (const literal of literalValues) {
-        const resourceType = classifyReferencedResource(literal);
-        if (resourceType !== 'attachment' && resourceType !== 'data_file') {
+      // Phase 1: discover folder context from FilePath/FolderPath-like keys.
+      for (const entry of jsonStringEntries) {
+        const literal = entry.value;
+        const key = `${entry.keyPath.join('.')}\u0000${literal}`;
+        if (seenEntryKey.has(key)) continue;
+        seenEntryKey.add(key);
+
+        if (!isDirectoryStyleJsonKey(entry.keyPath)) {
           continue;
         }
 
@@ -1712,8 +1943,85 @@ function buildFocusedScriptConfigurationResources(params: {
           sourceRoots: params.sourceRoots,
         });
 
-        const candidate: ScriptResourceCandidate = {
-          type: resourceType,
+        if (!resolved.existsOnDisk || !resolved.resolvedPath) {
+          continue;
+        }
+
+        try {
+          const stat = fs.statSync(resolved.resolvedPath);
+          if (!stat.isDirectory()) {
+            continue;
+          }
+
+          const normalizedFolderPath = formatPathForResponse(path.resolve(resolved.resolvedPath));
+          if (normalizedFolderPath && !folderPaths.includes(normalizedFolderPath)) {
+            folderPaths.push(normalizedFolderPath);
+          }
+        } catch {
+          // Ignore invalid folder references.
+        }
+      }
+
+      // Phase 2: collect explicit file references from JSON values.
+      for (const entry of jsonStringEntries) {
+        if (isDirectoryStyleJsonKey(entry.keyPath)) {
+          continue;
+        }
+
+        const normalizedReference = normalizeResourceReference(entry.value);
+        const extension = path.extname(normalizedReference).toLowerCase();
+        if (!normalizedReference || !extension) {
+          continue;
+        }
+        if (extension === '.json' || extension === '.java' || extension === '.class') {
+          continue;
+        }
+
+        explicitFileEntries.push({
+          entry,
+          normalizedReference,
+        });
+      }
+
+      // Prefer explicit file references from JSON. Use discovered folders only to resolve filename-only values.
+      for (const fileEntry of explicitFileEntries) {
+        const { entry, normalizedReference } = fileEntry;
+        const fromFolderContext = resolveAttachmentCandidateFromFolderContext(
+          normalizedReference,
+          folderPaths,
+          params.sourceRoots
+        );
+        if (fromFolderContext) {
+          attachmentResourcesRaw.push({
+            ...fromFolderContext,
+            metadata: {
+              ...toSafeMetadataObject(fromFolderContext.metadata),
+              parentJsonFile: path.basename(primaryJsonResource.resolvedPath),
+              jsonKeyPath: entry.keyPath.join('.'),
+            },
+          });
+          continue;
+        }
+
+        // If the JSON already provides folder context, avoid broad filename search across the repo.
+        if (folderPaths.length > 0 && !normalizedReference.includes('/')) {
+          continue;
+        }
+
+        const resolved = resolveResourceReferencePath(normalizedReference, {
+          scriptAbsolutePath: primaryJsonResource.resolvedPath,
+          sourceRoots: params.sourceRoots,
+        });
+        if (
+          resolved.resolvedPath
+          && primaryJsonResource.resolvedPath
+          && normalizeAbsolutePathForCompare(resolved.resolvedPath) === normalizeAbsolutePathForCompare(primaryJsonResource.resolvedPath)
+        ) {
+          continue;
+        }
+
+        attachmentResourcesRaw.push({
+          type: 'attachment',
           reference: normalizedReference,
           resolvedPath: resolved.resolvedPath,
           existsOnDisk: resolved.existsOnDisk,
@@ -1721,21 +2029,31 @@ function buildFocusedScriptConfigurationResources(params: {
           metadata: {
             detectedFrom: 'primary_script_json',
             parentJsonFile: path.basename(primaryJsonResource.resolvedPath),
+            jsonKeyPath: entry.keyPath.join('.'),
           },
-        };
+        });
+      }
 
-        if (resourceType === 'attachment') {
-          attachmentResourcesRaw.push(candidate);
-        } else {
-          dataFileResourcesRaw.push(candidate);
-        }
+      // Phase 3: always include folder inventory for every folder path mentioned in JSON.
+      for (const folderPath of folderPaths) {
+        const expandedResources = expandDirectoryResourceCandidates(
+          folderPath,
+          params.sourceRoots,
+          {
+            parentJsonFile: path.basename(primaryJsonResource.resolvedPath),
+            detectedFrom: 'primary_script_json_folder_inventory',
+          }
+        );
+        attachmentResourcesRaw.push(...expandedResources);
       }
     } catch {
       // Ignore malformed JSON while building dependency hints.
     }
   }
 
-  const attachmentResources = dedupeScriptResourceCandidates(attachmentResourcesRaw)
+  const attachmentResources = dedupeScriptResourcesByResolvedPath(
+    dedupeScriptResourceCandidates(attachmentResourcesRaw)
+  )
     .filter(resource => resource.existsOnDisk && !!resource.resolvedPath)
     .map(resource => applyLogicalName(resource, 'Attachment'));
   const dataFileResources = dedupeScriptResourceCandidates(dataFileResourcesRaw)
@@ -1973,35 +2291,245 @@ function hashContent(value: string): string {
   return createHash('sha256').update(value || '', 'utf8').digest('hex');
 }
 
-function summarizeTextChange(previousContent: string, nextContent: string): Record<string, unknown> {
-  const beforeLines = previousContent.split(/\r?\n/);
-  const afterLines = nextContent.split(/\r?\n/);
+interface DiffPreviewEntry {
+  line: number;
+  beforeLine: number | null;
+  afterLine: number | null;
+  before: string;
+  after: string;
+  kind: 'modified' | 'added' | 'removed';
+}
+
+function buildApproximateDiffSummary(
+  beforeLines: string[],
+  afterLines: string[],
+  previewLimit: number
+): {
+  changedLines: number;
+  modifiedLines: number;
+  addedLines: number;
+  removedLines: number;
+  preview: DiffPreviewEntry[];
+} {
   const maxLength = Math.max(beforeLines.length, afterLines.length);
-  const changePreview: Array<{ line: number; before: string; after: string }> = [];
-  let changedLines = 0;
+  const preview: DiffPreviewEntry[] = [];
+  let modifiedLines = 0;
+  let addedLines = 0;
+  let removedLines = 0;
 
   for (let index = 0; index < maxLength; index += 1) {
-    const before = beforeLines[index] ?? '';
-    const after = afterLines[index] ?? '';
-    if (before === after) {
+    const before = beforeLines[index];
+    const after = afterLines[index];
+    if ((before ?? '') === (after ?? '')) {
       continue;
     }
 
-    changedLines += 1;
-    if (changePreview.length < 40) {
-      changePreview.push({
-        line: index + 1,
-        before: before.slice(0, 300),
-        after: after.slice(0, 300),
-      });
+    if (before !== undefined && after !== undefined) {
+      modifiedLines += 1;
+      if (preview.length < previewLimit) {
+        preview.push({
+          line: index + 1,
+          beforeLine: index + 1,
+          afterLine: index + 1,
+          before: before.slice(0, 300),
+          after: after.slice(0, 300),
+          kind: 'modified',
+        });
+      }
+      continue;
+    }
+
+    if (before !== undefined) {
+      removedLines += 1;
+      if (preview.length < previewLimit) {
+        preview.push({
+          line: index + 1,
+          beforeLine: index + 1,
+          afterLine: null,
+          before: before.slice(0, 300),
+          after: '',
+          kind: 'removed',
+        });
+      }
+      continue;
+    }
+
+    if (after !== undefined) {
+      addedLines += 1;
+      if (preview.length < previewLimit) {
+        preview.push({
+          line: index + 1,
+          beforeLine: null,
+          afterLine: index + 1,
+          before: '',
+          after: after.slice(0, 300),
+          kind: 'added',
+        });
+      }
     }
   }
 
   return {
+    changedLines: modifiedLines + addedLines + removedLines,
+    modifiedLines,
+    addedLines,
+    removedLines,
+    preview,
+  };
+}
+
+function summarizeTextChange(previousContent: string, nextContent: string): Record<string, unknown> {
+  const beforeLines = previousContent.split(/\r?\n/);
+  const afterLines = nextContent.split(/\r?\n/);
+  const previewLimit = 30;
+  const matrixComplexity = beforeLines.length * afterLines.length;
+
+  let changedLines = 0;
+  let modifiedLines = 0;
+  let addedLines = 0;
+  let removedLines = 0;
+  let changePreview: DiffPreviewEntry[] = [];
+  let isApproximate = false;
+
+  if (matrixComplexity > 1_200_000) {
+    const approximate = buildApproximateDiffSummary(beforeLines, afterLines, previewLimit);
+    changedLines = approximate.changedLines;
+    modifiedLines = approximate.modifiedLines;
+    addedLines = approximate.addedLines;
+    removedLines = approximate.removedLines;
+    changePreview = approximate.preview;
+    isApproximate = true;
+  } else {
+    const rows = beforeLines.length;
+    const cols = afterLines.length;
+    const lcs: Uint32Array[] = Array.from({ length: rows + 1 }, () => new Uint32Array(cols + 1));
+
+    for (let i = 1; i <= rows; i += 1) {
+      for (let j = 1; j <= cols; j += 1) {
+        if (beforeLines[i - 1] === afterLines[j - 1]) {
+          lcs[i][j] = lcs[i - 1][j - 1] + 1;
+        } else {
+          lcs[i][j] = Math.max(lcs[i - 1][j], lcs[i][j - 1]);
+        }
+      }
+    }
+
+    const ops: Array<{ kind: 'equal' | 'add' | 'remove'; value: string }> = [];
+    let i = rows;
+    let j = cols;
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && beforeLines[i - 1] === afterLines[j - 1]) {
+        ops.push({ kind: 'equal', value: beforeLines[i - 1] });
+        i -= 1;
+        j -= 1;
+        continue;
+      }
+
+      if (j > 0 && (i === 0 || lcs[i][j - 1] >= lcs[i - 1][j])) {
+        ops.push({ kind: 'add', value: afterLines[j - 1] });
+        j -= 1;
+      } else if (i > 0) {
+        ops.push({ kind: 'remove', value: beforeLines[i - 1] });
+        i -= 1;
+      }
+    }
+    ops.reverse();
+
+    let beforeLineCursor = 1;
+    let afterLineCursor = 1;
+    let opIndex = 0;
+
+    while (opIndex < ops.length) {
+      const op = ops[opIndex];
+      if (op.kind === 'equal') {
+        beforeLineCursor += 1;
+        afterLineCursor += 1;
+        opIndex += 1;
+        continue;
+      }
+
+      const removedRun: Array<{ value: string; line: number }> = [];
+      const addedRun: Array<{ value: string; line: number }> = [];
+
+      while (opIndex < ops.length && ops[opIndex].kind !== 'equal') {
+        const runOp = ops[opIndex];
+        if (runOp.kind === 'remove') {
+          removedRun.push({ value: runOp.value, line: beforeLineCursor });
+          beforeLineCursor += 1;
+        } else if (runOp.kind === 'add') {
+          addedRun.push({ value: runOp.value, line: afterLineCursor });
+          afterLineCursor += 1;
+        }
+        opIndex += 1;
+      }
+
+      const pairLength = Math.max(removedRun.length, addedRun.length);
+      for (let idx = 0; idx < pairLength; idx += 1) {
+        const removed = removedRun[idx];
+        const added = addedRun[idx];
+
+        if (removed && added) {
+          modifiedLines += 1;
+          if (changePreview.length < previewLimit) {
+            changePreview.push({
+              line: removed.line,
+              beforeLine: removed.line,
+              afterLine: added.line,
+              before: removed.value.slice(0, 300),
+              after: added.value.slice(0, 300),
+              kind: 'modified',
+            });
+          }
+          continue;
+        }
+
+        if (removed) {
+          removedLines += 1;
+          if (changePreview.length < previewLimit) {
+            changePreview.push({
+              line: removed.line,
+              beforeLine: removed.line,
+              afterLine: null,
+              before: removed.value.slice(0, 300),
+              after: '',
+              kind: 'removed',
+            });
+          }
+          continue;
+        }
+
+        if (added) {
+          addedLines += 1;
+          if (changePreview.length < previewLimit) {
+            changePreview.push({
+              line: added.line,
+              beforeLine: null,
+              afterLine: added.line,
+              before: '',
+              after: added.value.slice(0, 300),
+              kind: 'added',
+            });
+          }
+        }
+      }
+    }
+
+    changedLines = modifiedLines + addedLines + removedLines;
+  }
+
+  const primaryChange = changePreview[0] || null;
+
+  return {
     changedLines,
+    modifiedLines,
+    addedLines,
+    removedLines,
     beforeLineCount: beforeLines.length,
     afterLineCount: afterLines.length,
     preview: changePreview,
+    primaryChange,
+    algorithmVersion: 2,
+    isApproximate,
     beforeHash: hashContent(previousContent),
     afterHash: hashContent(nextContent),
   };
@@ -2037,7 +2565,87 @@ async function readScriptConfigChangeHistory(scriptId: number, limit: number): P
       LIMIT $2
     `, [scriptId, limit]);
 
-    return rows.map(row => ({
+    return rows.map(row => {
+      const storedSummary = toSafeMetadataObject(row.change_summary);
+      const hasV2Summary = Number(storedSummary['algorithmVersion'] || 0) >= 2;
+      const resolvedSummary = (
+        !hasV2Summary
+        && typeof row.previous_content === 'string'
+        && typeof row.updated_content === 'string'
+      )
+        ? summarizeTextChange(row.previous_content, row.updated_content)
+        : storedSummary;
+
+      return {
+        id: row.id,
+        scriptId: row.script_id,
+        filePath: row.file_path,
+        fileName: path.basename(row.file_path || ''),
+        fileType: row.file_type,
+        changedBy: row.changed_by_name || 'System',
+        changedAt: row.changed_at,
+        changeSummary: resolvedSummary,
+      };
+    });
+  } catch (error) {
+    if (!isUndefinedTableError(error)) {
+      throw error;
+    }
+    return [];
+  }
+}
+
+async function readScriptConfigChangeDetail(
+  scriptId: number,
+  changeId: number
+): Promise<{
+  id: number;
+  scriptId: number;
+  filePath: string;
+  fileName: string;
+  fileType: string;
+  changedBy: string;
+  changedAt: Date;
+  previousContent: string;
+  updatedContent: string;
+  changeSummary: Record<string, unknown>;
+} | null> {
+  try {
+    const rows = await query<ScriptConfigChangeLogRow>(`
+      SELECT
+        scl.id,
+        scl.script_id,
+        scl.file_path,
+        scl.file_type,
+        scl.previous_content,
+        scl.updated_content,
+        scl.change_summary,
+        scl.changed_by,
+        scl.changed_at,
+        COALESCE(u.full_name, u.username, 'System') AS changed_by_name
+      FROM script_configuration_change_logs scl
+      LEFT JOIN users u ON u.id = scl.changed_by
+      WHERE scl.script_id = $1 AND scl.id = $2
+      LIMIT 1
+    `, [scriptId, changeId]);
+
+    if (rows.length === 0) {
+      return null;
+    }
+
+    const row = rows[0];
+    const previousContent = String(row.previous_content || '');
+    const updatedContent = String(row.updated_content || '');
+    const storedSummary = toSafeMetadataObject(row.change_summary);
+    const hasV2Summary = Number(storedSummary['algorithmVersion'] || 0) >= 2;
+    const resolvedSummary = (
+      !hasV2Summary
+      && (previousContent.length > 0 || updatedContent.length > 0)
+    )
+      ? summarizeTextChange(previousContent, updatedContent)
+      : storedSummary;
+
+    return {
       id: row.id,
       scriptId: row.script_id,
       filePath: row.file_path,
@@ -2045,13 +2653,15 @@ async function readScriptConfigChangeHistory(scriptId: number, limit: number): P
       fileType: row.file_type,
       changedBy: row.changed_by_name || 'System',
       changedAt: row.changed_at,
-      changeSummary: toSafeMetadataObject(row.change_summary),
-    }));
+      previousContent,
+      updatedContent,
+      changeSummary: resolvedSummary,
+    };
   } catch (error) {
     if (!isUndefinedTableError(error)) {
       throw error;
     }
-    return [];
+    return null;
   }
 }
 
@@ -2557,6 +3167,40 @@ router.get('/:id/configuration/changes', async (req: AuthRequest, res: Response)
   } catch (error) {
     logger.error('Get script configuration change history error:', error);
     res.status(500).json({ error: 'Failed to fetch configuration change history.' });
+  }
+});
+
+// GET /api/scripts/:id/configuration/changes/:changeId - Read a single configuration change in detail
+router.get('/:id/configuration/changes/:changeId', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const scriptId = Number(req.params.id);
+    const changeId = Number(req.params.changeId);
+
+    if (!Number.isInteger(scriptId) || scriptId <= 0) {
+      res.status(400).json({ error: 'Invalid script ID.' });
+      return;
+    }
+    if (!Number.isInteger(changeId) || changeId <= 0) {
+      res.status(400).json({ error: 'Invalid change ID.' });
+      return;
+    }
+
+    const script = await getScriptDetailsById(scriptId);
+    if (!script) {
+      res.status(404).json({ error: 'Script not found.' });
+      return;
+    }
+
+    const detail = await readScriptConfigChangeDetail(scriptId, changeId);
+    if (!detail) {
+      res.status(404).json({ error: 'Change log entry not found.' });
+      return;
+    }
+
+    res.json(detail);
+  } catch (error) {
+    logger.error('Get script configuration change detail error:', error);
+    res.status(500).json({ error: 'Failed to fetch configuration change detail.' });
   }
 });
 

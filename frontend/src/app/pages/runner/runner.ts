@@ -114,7 +114,7 @@ export class Runner implements OnInit, OnDestroy {
   environments = [
     { label: 'Local', value: 'local' },
     { label: 'Staging', value: 'staging' },
-    { label: 'Production', value: 'production' },
+    { label: 'Validation', value: 'validation' },
   ];
 
   constructor(

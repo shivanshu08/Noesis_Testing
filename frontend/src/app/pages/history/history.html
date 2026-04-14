@@ -33,7 +33,7 @@
 
   <div class="history-stats-grid">
     <button type="button" class="history-stat-card clickable" (click)="applyStatusShortcut(null)">
-      <div class="hstat-icon total"><i class="pi pi-play-circle"></i></div>
+      <div class="hstat-icon total"><i class="pi pi-bolt"></i></div>
       <div class="hstat-info">
         <span class="hstat-value">{{ totalRunsCount() }}</span>
         <span class="hstat-label">Total Runs</span>
@@ -250,7 +250,7 @@
           </td>
 
           <td class="col-env">
-            <span class="environment-pill">{{ formatEnvironment(run.environment) }}</span>
+            <span class="environment-pill">{{ formatEnvironment(run) }}</span>
           </td>
 
           <td class="col-results">
@@ -318,3 +318,4 @@
     </p-table>
   </p-card>
 </div>
+

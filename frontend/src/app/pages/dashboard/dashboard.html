@@ -5,7 +5,7 @@
       <p class="subtitle">Overview of your ST automation scripts</p>
     </div>
     <div class="header-actions">
-      <p-button *ngIf="auth.canEdit()" label="Run Scripts" icon="pi pi-play" routerLink="/runner" />
+      <p-button *ngIf="auth.canEdit()" label="Run Scripts" icon="pi pi-bolt" routerLink="/runner" />
     </div>
   </div>
 
@@ -23,7 +23,7 @@
 
     <div class="stat-card">
       <div class="stat-icon runs">
-        <i class="pi pi-play-circle"></i>
+        <i class="pi pi-bolt"></i>
       </div>
       <div class="stat-info">
         <span class="stat-value">{{ stats()?.totalRuns || 0 }}</span>
@@ -150,7 +150,7 @@
         <tr>
           <td><span class="run-id">#{{ run.id }}</span></td>
           <td style="font-weight: 500; color: var(--text-color);">{{ run.runName || 'Manual Run' }}</td>
-          <td><span class="env-tag">{{ run.environment || 'local' }}</span></td>
+          <td><span class="env-tag">{{ formatEnvironmentLabel(run) }}</span></td>
           <td><p-tag [value]="run.status | titlecase" [severity]="getStatusSeverity(run.status)" /></td>
           <td><i class="pi pi-clock" style="font-size: 0.8rem; color: var(--text-color-secondary); margin-right: 4px;"></i> {{ formatDuration(run.durationMs ? run.durationMs / 1000 : null) }}</td>
           <td>{{ formatDate(run.startedAt) }}</td>
@@ -172,3 +172,4 @@
     </p-table>
   </p-card>
 </div>
+

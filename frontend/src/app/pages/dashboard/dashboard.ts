@@ -12,6 +12,7 @@ import { ScriptService } from '../../services/script.service';
 import { AuthService } from '../../services/auth.service';
 import { ThemeService } from '../../services/theme.service';
 import { DashboardStats, ExecutionRun } from '../../models/interfaces';
+import { formatExecutionEnvironmentLabel } from '../../utils/execution-environment';
 import { Subscription } from 'rxjs';
 
 @Component({
@@ -296,5 +297,9 @@ export class Dashboard implements OnInit, OnDestroy {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  }
+
+  formatEnvironmentLabel(run: ExecutionRun): string {
+    return formatExecutionEnvironmentLabel(run.runMetadata?.appUrl, run.environment);
   }
 }

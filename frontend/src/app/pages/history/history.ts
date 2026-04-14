@@ -14,6 +14,7 @@ import { InputIconModule } from 'primeng/inputicon';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { ExecutionService } from '../../services/execution.service';
 import { ExecutionRun } from '../../models/interfaces';
+import { formatExecutionEnvironmentLabel, resolveExecutionEnvironmentKey } from '../../utils/execution-environment';
 
 type RunStatus = ExecutionRun['status'];
 type TimeRange = 'all' | '24h' | '7d' | '30d' | '90d';
@@ -333,9 +334,11 @@ export class History implements OnInit {
     return `${secs}s`;
   }
 
-  formatEnvironment(environment: string | undefined | null): string {
-    const normalized = this.normalizeEnvironment(environment);
-    return this.toTitleWords(normalized);
+  formatEnvironment(environmentOrRun: string | ExecutionRun | undefined | null): string {
+    if (environmentOrRun && typeof environmentOrRun === 'object') {
+      return formatExecutionEnvironmentLabel(environmentOrRun.runMetadata?.appUrl, environmentOrRun.environment);
+    }
+    return formatExecutionEnvironmentLabel(null, environmentOrRun);
   }
 
   getExecutionSourceLabel(run: ExecutionRun): string {
@@ -360,7 +363,7 @@ export class History implements OnInit {
     if (source === 'local') {
       return 'pi pi-desktop';
     }
-    return 'pi pi-play-circle';
+    return 'pi pi-bolt';
   }
 
   getExecutionSourceClass(run: ExecutionRun): string {
@@ -424,7 +427,7 @@ export class History implements OnInit {
         run.id,
         this.escapeCsv(run.runName || 'Manual Run'),
         run.status,
-        this.escapeCsv(this.formatEnvironment(run.environment)),
+        this.escapeCsv(this.formatEnvironment(run)),
         this.getTotalScripts(run),
         run.passedCount || 0,
         this.getFailureCountValue(run),
@@ -456,7 +459,7 @@ export class History implements OnInit {
     const filtered = this.allRuns()
       .filter((run) => !query || this.buildSearchBlob(run).includes(query))
       .filter((run) => !this.statusFilter || this.matchesStatusFilter(run, this.statusFilter))
-      .filter((run) => !this.environmentFilter || this.normalizeEnvironment(run.environment) === this.environmentFilter)
+      .filter((run) => !this.environmentFilter || this.resolveEnvironmentKey(run) === this.environmentFilter)
       .filter((run) => !this.failuresOnly || this.isFailureRun(run))
       .filter((run) => !this.artifactsOnly || this.hasArtifacts(run))
       .filter((run) => !threshold || this.getRunTimestamp(run) >= threshold)
@@ -511,7 +514,7 @@ export class History implements OnInit {
 
     const envCounts = new Map<string, number>();
     for (const run of runs) {
-      const key = this.normalizeEnvironment(run.environment);
+      const key = this.resolveEnvironmentKey(run);
       envCounts.set(key, (envCounts.get(key) || 0) + 1);
     }
 
@@ -522,7 +525,7 @@ export class History implements OnInit {
   private buildEnvironmentOptions(runs: ExecutionRun[]): void {
     const counts = new Map<string, number>();
     for (const run of runs) {
-      const key = this.normalizeEnvironment(run.environment);
+      const key = this.resolveEnvironmentKey(run);
       counts.set(key, (counts.get(key) || 0) + 1);
     }
 
@@ -654,7 +657,7 @@ export class History implements OnInit {
       run.runName || 'manual run',
       run.runType || 'manual',
       run.status,
-      run.environment || 'local',
+      this.formatEnvironment(run),
       run.triggeredBy || '',
       run.runMetadata?.executionSource || '',
       run.runMetadata?.gitBranch || '',
@@ -701,8 +704,8 @@ export class History implements OnInit {
     return this.sortOptions.find((item) => item.value === sortBy)?.label || 'Newest First';
   }
 
-  private normalizeEnvironment(environment: string | undefined | null): string {
-    return String(environment || 'local').trim().toLowerCase() || 'local';
+  private resolveEnvironmentKey(run: ExecutionRun): string {
+    return resolveExecutionEnvironmentKey(run.runMetadata?.appUrl, run.environment);
   }
 
   private toTitleWords(value: string): string {
@@ -727,3 +730,4 @@ export class History implements OnInit {
     return `${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}_${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`;
   }
 }
+

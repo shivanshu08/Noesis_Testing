@@ -163,7 +163,7 @@
             </td>
             <td class="col-actions">
               <div class="actions-group">
-                <p-button icon="pi pi-play" [text]="true" styleClass="row-action-btn run-btn" pTooltip="Run Suite" tooltipPosition="bottom" (onClick)="runSuite(suite)" [disabled]="(suite.scriptCount || 0) === 0" />
+                <p-button icon="pi pi-bolt" [text]="true" styleClass="row-action-btn run-btn" pTooltip="Run Suite" tooltipPosition="bottom" (onClick)="runSuite(suite)" [disabled]="(suite.scriptCount || 0) === 0" />
                 <p-button icon="pi pi-eye" [text]="true" styleClass="row-action-btn" pTooltip="View Details" tooltipPosition="bottom" (onClick)="viewDetail(suite)" />
                 @if (auth.canEdit()) {
                   <p-button icon="pi pi-pencil" [text]="true" styleClass="row-action-btn" pTooltip="Edit" tooltipPosition="bottom" (onClick)="openEdit(suite)" />
@@ -382,3 +382,4 @@
 </p-dialog>
 
 <app-alert-overlay />
+

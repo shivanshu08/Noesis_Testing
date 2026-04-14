@@ -15,7 +15,7 @@
         (onClick)="loadConfiguration(true)"
       />
       @if (details(); as vm) {
-        <a pButton [outlined]="true" severity="success" icon="pi pi-play" label="Run Script" routerLink="/runner" [queryParams]="{ select: vm.script.id }"></a>
+        <a pButton [outlined]="true" severity="success" icon="pi pi-bolt" label="Run Script" routerLink="/runner" [queryParams]="{ select: vm.script.id }"></a>
       }
     </div>
   </div>
@@ -101,62 +101,73 @@
 
         <div class="resource-grid">
           <div class="resource-block">
-            <h4>Core Configuration</h4>
-            @if (vm.resources.javaConfigs.length === 0) {
-              <p class="empty-text">No core configuration files detected for this script.</p>
-            } @else {
-              @for (resource of vm.resources.javaConfigs; track trackResource($index, resource)) {
-                <div class="resource-item">
-                  <div class="resource-main">
-                    <small class="resource-logical-name">{{ getResourceLogicalName(resource) }}</small>
-                    <span class="resource-name">{{ getResourceDisplayName(resource) }}</span>
-                    <small class="resource-path">{{ getResourceDisplayPath(resource) }}</small>
+            <div class="resource-block-head">
+              <h4>Core Configuration</h4>
+            </div>
+            <div class="resource-list">
+              @if (vm.resources.javaConfigs.length === 0) {
+                <p class="empty-text">No core configuration files detected for this script.</p>
+              } @else {
+                @for (resource of vm.resources.javaConfigs; track trackResource($index, resource)) {
+                  <div class="resource-item">
+                    <div class="resource-main">
+                      <small class="resource-logical-name">{{ getResourceLogicalName(resource) }}</small>
+                      <span class="resource-name">{{ getResourceDisplayName(resource) }}</span>
+                      <small class="resource-path">{{ getResourceDisplayPath(resource) }}</small>
+                    </div>
+                    <div class="resource-tags">
+                      <p-tag [value]="getResourceKindLabel(resource)" severity="secondary"></p-tag>
+                      <p-tag [value]="resource.existsOnDisk ? 'Available' : 'Reference'" [severity]="resource.existsOnDisk ? 'success' : 'secondary'"></p-tag>
+                    </div>
                   </div>
-                  <div class="resource-tags">
-                    <p-tag [value]="getResourceKindLabel(resource)" severity="secondary"></p-tag>
-                    <p-tag [value]="resource.existsOnDisk ? 'Available' : 'Reference'" [severity]="resource.existsOnDisk ? 'success' : 'secondary'"></p-tag>
-                  </div>
-                </div>
+                }
               }
-            }
+            </div>
           </div>
 
           <div class="resource-block">
-            <h4>Attachments</h4>
-            @if (vm.resources.attachments.length === 0) {
-              <p class="empty-text">No attachment files detected for this script.</p>
-            } @else {
-              @for (resource of vm.resources.attachments; track trackResource($index, resource)) {
-                <div class="resource-item">
-                  <div class="resource-main">
-                    <span class="resource-name">{{ getResourceDisplayName(resource) }}</span>
+            <div class="resource-block-head">
+              <h4>Attachments</h4>
+              <a class="resource-count-link" [routerLink]="['/scripts', vm.script.id, 'configuration', 'attachments']">
+                {{ attachmentResources().length }} files
+              </a>
+            </div>
+            <div class="resource-list">
+              @if (attachmentResources().length === 0) {
+                <p class="empty-text">No attachment files detected for this script.</p>
+              } @else {
+                @for (resource of attachmentResources(); track trackResource($index, resource)) {
+                  <div class="resource-item">
+                    <div class="resource-main">
+                      <span class="resource-name">{{ getResourceDisplayName(resource) }}</span>
+                    </div>
+                    <div class="resource-actions">
+                      <p-tag [value]="getResourceKindLabel(resource)" severity="secondary"></p-tag>
+                      <p-button
+                        label="Open"
+                        icon="pi pi-external-link"
+                        size="small"
+                        severity="secondary"
+                        [outlined]="true"
+                        [disabled]="!resource.existsOnDisk || attachmentActionLoading()"
+                        (onClick)="openAttachment(resource)"
+                      />
+                      <p-button
+                        label="Download"
+                        icon="pi pi-download"
+                        size="small"
+                        severity="primary"
+                        [outlined]="true"
+                        [disabled]="!resource.existsOnDisk || attachmentActionLoading()"
+                        (onClick)="downloadAttachment(resource)"
+                      />
+                    </div>
                   </div>
-                  <div class="resource-actions">
-                    <p-tag [value]="getResourceKindLabel(resource)" severity="secondary"></p-tag>
-                    <p-button
-                      label="Open"
-                      icon="pi pi-external-link"
-                      size="small"
-                      severity="secondary"
-                      [outlined]="true"
-                      [disabled]="!resource.existsOnDisk || attachmentActionLoading()"
-                      (onClick)="openAttachment(resource)"
-                    />
-                    <p-button
-                      label="Download"
-                      icon="pi pi-download"
-                      size="small"
-                      severity="primary"
-                      [outlined]="true"
-                      [disabled]="!resource.existsOnDisk || attachmentActionLoading()"
-                      (onClick)="downloadAttachment(resource)"
-                    />
-                  </div>
-                </div>
+                }
               }
-              @if (attachmentStatusMessage()) {
-                <p class="attachment-status">{{ attachmentStatusMessage() }}</p>
-              }
+            </div>
+            @if (attachmentStatusMessage()) {
+              <p class="attachment-status">{{ attachmentStatusMessage() }}</p>
             }
           </div>
         </div>
@@ -224,7 +235,7 @@
       <p-card styleClass="content-card full-width-card">
         <div class="card-head">
           <h3><i class="pi pi-history"></i> Execution Timeline</h3>
-          <span>{{ vm.execution.recentRuns.length }} recent runs</span>
+          <span>{{ filteredRuns().length }} / {{ vm.execution.recentRuns.length }} runs</span>
         </div>
 
         <div class="timeline-summary">
@@ -247,50 +258,75 @@
         </div>
         <p-progressBar [value]="vm.execution.passRate" [showValue]="false" styleClass="pass-rate-bar"></p-progressBar>
 
-        <p-table [value]="vm.execution.recentRuns" styleClass="p-datatable-sm">
-          <ng-template #header>
-            <tr>
-              <th>Run</th>
-              <th>Script Status</th>
-              <th>Run Status</th>
-              <th>Triggered By</th>
-              <th>Environment</th>
-              <th>Started</th>
-              <th>Completed</th>
-              <th>Duration</th>
-              <th></th>
-            </tr>
-          </ng-template>
-          <ng-template #body let-run>
-            <tr>
-              <td>
-                <div class="run-name">{{ run.runName || ('Run #' + run.runId) }}</div>
-                <small>Run #{{ run.runId }}</small>
-              </td>
-              <td>
-                <p-tag [value]="run.scriptStatus | titlecase" [severity]="getStatusSeverity(run.scriptStatus)"></p-tag>
-              </td>
-              <td>
-                <p-tag [value]="run.runStatus | titlecase" [severity]="getStatusSeverity(run.runStatus)"></p-tag>
-              </td>
-              <td>{{ run.triggeredBy || 'System' }}</td>
-              <td>{{ run.environment || '-' }}</td>
-              <td>{{ formatDate(run.startedAt) }}</td>
-              <td>{{ formatDate(run.completedAt) }}</td>
-              <td>{{ runDuration(run) }}</td>
-              <td>
-                <a pButton [text]="true" icon="pi pi-external-link" [routerLink]="['/run', run.runId]"></a>
-              </td>
-            </tr>
-          </ng-template>
-          <ng-template #emptymessage>
-            <tr>
-              <td colspan="9">
-                <div class="table-empty">No execution runs available for this script yet.</div>
-              </td>
-            </tr>
-          </ng-template>
-        </p-table>
+        <div class="timeline-toolbar">
+          <div class="timeline-filter-group">
+            <button type="button" class="timeline-filter-chip" [class.active]="runStatusFilter() === 'all'" (click)="setRunStatusFilter('all')">
+              All ({{ getRunCountForFilter('all') }})
+            </button>
+            <button type="button" class="timeline-filter-chip" [class.active]="runStatusFilter() === 'failed'" (click)="setRunStatusFilter('failed')">
+              Failed ({{ getRunCountForFilter('failed') }})
+            </button>
+            <button type="button" class="timeline-filter-chip" [class.active]="runStatusFilter() === 'passed'" (click)="setRunStatusFilter('passed')">
+              Passed ({{ getRunCountForFilter('passed') }})
+            </button>
+            <button type="button" class="timeline-filter-chip" [class.active]="runStatusFilter() === 'running'" (click)="setRunStatusFilter('running')">
+              Running ({{ getRunCountForFilter('running') }})
+            </button>
+          </div>
+          <a pButton [outlined]="true" severity="secondary" icon="pi pi-list" label="Open History" routerLink="/history"></a>
+        </div>
+
+        @if (vm.execution.recentRuns.length === 0) {
+          <div class="timeline-empty">
+            <i class="pi pi-history"></i>
+            <h4>No execution runs yet</h4>
+            <p>This script has not been executed yet. Run it once to start tracking timeline metrics.</p>
+            <div class="timeline-empty-actions">
+              <a pButton severity="primary" icon="pi pi-bolt" label="Run Script" routerLink="/runner" [queryParams]="{ select: vm.script.id }"></a>
+              <a pButton [outlined]="true" severity="secondary" icon="pi pi-list" label="Open History" routerLink="/history"></a>
+            </div>
+          </div>
+        } @else if (filteredRuns().length === 0) {
+          <div class="timeline-empty">
+            <i class="pi pi-filter"></i>
+            <h4>No runs for this filter</h4>
+            <p>Try another filter to see timeline records.</p>
+          </div>
+        } @else {
+          <p-table [value]="filteredRuns()" styleClass="p-datatable-sm">
+            <ng-template #header>
+              <tr>
+                <th>Run</th>
+                <th>Status</th>
+                <th>Triggered By</th>
+                <th>Environment</th>
+                <th>Started</th>
+                <th>Completed</th>
+                <th>Duration</th>
+                <th>Details</th>
+              </tr>
+            </ng-template>
+            <ng-template #body let-run>
+              <tr>
+                <td>
+                  <div class="run-name">{{ run.runName || ('Run #' + run.runId) }}</div>
+                  <small>Run #{{ run.runId }}</small>
+                </td>
+                <td>
+                  <p-tag [value]="(run.scriptStatus || run.runStatus) | titlecase" [severity]="getStatusSeverity(run.scriptStatus || run.runStatus)"></p-tag>
+                </td>
+                <td>{{ run.triggeredBy || 'System' }}</td>
+                <td>{{ formatRunEnvironment(run) }}</td>
+                <td>{{ formatDate(run.startedAt) }}</td>
+                <td>{{ formatDate(run.completedAt) }}</td>
+                <td>{{ runDuration(run) }}</td>
+                <td>
+                  <a pButton [text]="true" icon="pi pi-external-link" [routerLink]="['/run', run.runId]"></a>
+                </td>
+              </tr>
+            </ng-template>
+          </p-table>
+        }
       </p-card>
 
       <p-card styleClass="content-card full-width-card">
@@ -307,8 +343,7 @@
               <div class="table-empty">No saved configuration edits yet.</div>
             } @else {
               @for (change of changeHistory(); track trackChangeLog($index, change)) {
-                <button
-                  type="button"
+                <article
                   class="change-log-item"
                   [class.active]="selectedChangeLogId() === change.id"
                   (click)="selectChange(change)"
@@ -319,8 +354,13 @@
                   </div>
                   <span class="change-log-meta">{{ formatDate(change.changedAt) }}</span>
                   <span class="change-log-meta">By {{ change.changedBy || 'System' }}</span>
-                  <span class="change-log-meta">{{ getChangedLines(change) }} line(s) changed</span>
-                </button>
+                  <span class="change-log-meta">
+                    {{ getModifiedLineCount(change) }} modified, {{ getAddedLineCount(change) }} added, {{ getRemovedLineCount(change) }} removed
+                  </span>
+                  <button type="button" class="compare-link" (click)="openCompareDialog(change); $event.stopPropagation();">
+                    Compare
+                  </button>
+                </article>
               }
             }
           </div>
@@ -335,40 +375,43 @@
 
                 <div class="change-preview-metrics">
                   <div class="metric-chip">
-                    <label>Changed Lines</label>
-                    <strong>{{ getChangedLines(selectedChange) }}</strong>
+                    <label>Modified</label>
+                    <strong>{{ getModifiedLineCount(selectedChange) }}</strong>
                   </div>
                   <div class="metric-chip">
-                    <label>Before Lines</label>
-                    <strong>{{ getBeforeLineCount(selectedChange) }}</strong>
+                    <label>Added</label>
+                    <strong>{{ getAddedLineCount(selectedChange) }}</strong>
                   </div>
                   <div class="metric-chip">
-                    <label>After Lines</label>
-                    <strong>{{ getAfterLineCount(selectedChange) }}</strong>
+                    <label>Removed</label>
+                    <strong>{{ getRemovedLineCount(selectedChange) }}</strong>
                   </div>
                 </div>
 
-                @if (getChangePreview(selectedChange).length === 0) {
-                  <p class="empty-text">No line-level preview is available for this update.</p>
-                } @else {
-                  <div class="change-preview-list">
-                    @for (entry of getChangePreview(selectedChange); track $index) {
-                      <article class="change-preview-item">
-                        <header>Line {{ entry.line }}</header>
-                        <div class="change-preview-columns">
-                          <section class="before">
-                            <label>Before</label>
-                            <pre>{{ formatChangeValue(entry.before) }}</pre>
-                          </section>
-                          <section class="after">
-                            <label>After</label>
-                            <pre>{{ formatChangeValue(entry.after) }}</pre>
-                          </section>
-                        </div>
-                      </article>
-                    }
+                @if (getPrimaryChange(selectedChange); as primaryChange) {
+                  <div class="change-primary-values">
+                    <section class="before">
+                      <label>Previous Value</label>
+                      <pre>{{ formatChangeValue(primaryChange.before) }}</pre>
+                    </section>
+                    <section class="after">
+                      <label>Current Value</label>
+                      <pre>{{ formatChangeValue(primaryChange.after) }}</pre>
+                    </section>
                   </div>
+                } @else {
+                  <p class="empty-text">No value-level preview is available for this update.</p>
                 }
+
+                <div class="change-detail-actions">
+                  <p-button
+                    label="Compare Full Content"
+                    icon="pi pi-clone"
+                    severity="secondary"
+                    [outlined]="true"
+                    (onClick)="openCompareDialog(selectedChange)"
+                  />
+                </div>
               </div>
             } @else {
               <div class="table-empty">Select a change entry to view details.</div>
@@ -422,6 +465,67 @@
         ></textarea>
       </section>
     }
+
+    <p-dialog
+      header="Compare Configuration Changes"
+      [modal]="true"
+      [draggable]="false"
+      [resizable]="false"
+      [style]="{ width: '92vw', maxWidth: '1400px' }"
+      [visible]="compareDialogVisible()"
+      (visibleChange)="compareDialogVisible.set($event)"
+      (onHide)="closeCompareDialog()"
+    >
+      @if (compareDialogLoading()) {
+        <div class="compare-state">Loading comparison...</div>
+      } @else if (compareDialogError()) {
+        <div class="compare-state error">{{ compareDialogError() }}</div>
+      } @else if (compareDetail(); as detail) {
+        <div class="compare-head">
+          <strong>{{ detail.fileName }}</strong>
+          <span>{{ formatDate(detail.changedAt) }} by {{ detail.changedBy || 'System' }}</span>
+        </div>
+        <div class="compare-legend">
+          <span class="legend-item modified">Modified</span>
+          <span class="legend-item added">Added</span>
+          <span class="legend-item removed">Removed</span>
+        </div>
+        <div class="compare-grid">
+          <section>
+            <h5>Previous</h5>
+            <div class="compare-code-block">
+              @for (line of comparePreviousLines(); track trackCompareLine($index, line)) {
+                <div
+                  class="compare-line"
+                  [class.modified]="line.state === 'modified'"
+                  [class.removed]="line.state === 'removed'"
+                >
+                  <span class="line-number">{{ line.lineNumber }}</span>
+                  <code>{{ line.text || ' ' }}</code>
+                </div>
+              }
+            </div>
+          </section>
+          <section>
+            <h5>Current</h5>
+            <div class="compare-code-block">
+              @for (line of compareCurrentLines(); track trackCompareLine($index, line)) {
+                <div
+                  class="compare-line"
+                  [class.modified]="line.state === 'modified'"
+                  [class.added]="line.state === 'added'"
+                >
+                  <span class="line-number">{{ line.lineNumber }}</span>
+                  <code>{{ line.text || ' ' }}</code>
+                </div>
+              }
+            </div>
+          </section>
+        </div>
+      } @else {
+        <div class="compare-state">Select a change entry to compare.</div>
+      }
+    </p-dialog>
   } @else {
     <div class="state-card empty">
       <i class="pi pi-file-excel"></i>
@@ -434,3 +538,4 @@
     </div>
   }
 </div>
+

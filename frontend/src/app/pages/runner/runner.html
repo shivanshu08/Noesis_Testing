@@ -29,7 +29,7 @@
         />
         <p-button
           label="Run Selected ({{ selectedCount }})"
-          icon="pi pi-play"
+          icon="pi pi-bolt"
           [disabled]="selectedCount === 0"
           (onClick)="runSelected()"
           pTooltip="Ctrl+Enter"
@@ -128,7 +128,7 @@
                 <div class="script-actions" style="display: flex; gap: 8px; align-items: center;">
                   <p-tag [value]="getCategoryName(script.categoryId)" size="small" severity="secondary" />
                   <p-button
-                    icon="pi pi-play"
+                    icon="pi pi-bolt"
                     [text]="true"
                     severity="success"
                     size="small"
@@ -215,7 +215,7 @@
             <p-progressBar [value]="executionProgress()" [showValue]="false" [style]="{ height: '6px' }" />
             @if (currentExecutingScript()) {
               <div class="current-script-label">
-                <i class="pi pi-play"></i> {{ currentExecutingScript() }}
+                <i class="pi pi-bolt"></i> {{ currentExecutingScript() }}
               </div>
             }
           </div>
@@ -331,7 +331,7 @@
 >
   <div class="confirm-body">
     <div class="confirm-icon-wrap">
-      <i class="pi pi-play-circle"></i>
+      <i class="pi pi-bolt"></i>
     </div>
     <p class="confirm-title">Ready to execute?</p>
 
@@ -367,7 +367,7 @@
   <ng-template #footer>
     <div class="confirm-footer">
       <p-button label="Cancel" [text]="true" severity="secondary" (onClick)="cancelRunConfirm()" />
-      <p-button label="Run Now" icon="pi pi-play" (onClick)="confirmAndRun()" id="btn-confirm-run" />
+      <p-button label="Run Now" icon="pi pi-bolt" (onClick)="confirmAndRun()" id="btn-confirm-run" />
     </div>
   </ng-template>
 </p-dialog>
@@ -515,7 +515,7 @@
               </div>
               <div class="schedule-actions" style="display: flex; gap: 0.5rem;">
                 <p-button
-                  [icon]="schedule.isActive ? 'pi pi-pause' : 'pi pi-play'"
+                  [icon]="schedule.isActive ? 'pi pi-pause' : 'pi pi-bolt'"
                   [text]="true"
                   size="small"
                   [severity]="schedule.isActive ? 'warn' : 'success'"
@@ -552,3 +552,4 @@
     }
   </div>
 </p-dialog>
+

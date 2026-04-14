@@ -9,15 +9,24 @@ import { SelectModule } from 'primeng/select';
 import { TagModule } from 'primeng/tag';
 import { TableModule } from 'primeng/table';
 import { ProgressBarModule } from 'primeng/progressbar';
+import { DialogModule } from 'primeng/dialog';
 import {
   ScriptConfigurationDetail,
   ScriptConfigurationEditableFile,
   ScriptConfigurationChangeLog,
+  ScriptConfigurationChangeLogDetail,
   ScriptConfigurationFileContent,
   ScriptConfigurationResource,
   ScriptConfigurationRun,
 } from '../../models/interfaces';
+import { formatExecutionEnvironmentLabel } from '../../utils/execution-environment';
 import { ScriptService } from '../../services/script.service';
+
+interface CompareLineView {
+  lineNumber: number;
+  text: string;
+  state: 'unchanged' | 'modified' | 'added' | 'removed';
+}
 
 @Component({
   selector: 'app-script-configuration',
@@ -32,6 +41,7 @@ import { ScriptService } from '../../services/script.service';
     TagModule,
     TableModule,
     ProgressBarModule,
+    DialogModule,
   ],
   templateUrl: './script-configuration.html',
   styleUrl: './script-configuration.scss',
@@ -50,16 +60,31 @@ export class ScriptConfiguration implements OnInit, OnDestroy {
   readonly changeHistory = signal<ScriptConfigurationChangeLog[]>([]);
   readonly changeHistoryLoading = signal(false);
   readonly selectedChangeLogId = signal<number | null>(null);
+  readonly compareDialogVisible = signal(false);
+  readonly compareDialogLoading = signal(false);
+  readonly compareDialogError = signal('');
+  readonly compareDetail = signal<ScriptConfigurationChangeLogDetail | null>(null);
   readonly editorFullscreen = signal(false);
   readonly attachmentStatusMessage = signal('');
   readonly attachmentActionLoading = signal(false);
+  readonly runStatusFilter = signal<'all' | 'passed' | 'failed' | 'running' | 'queued' | 'skipped'>('all');
 
   scriptId = 0;
+  private bodyOverflowBeforeFullscreen = '';
+  private htmlOverflowBeforeFullscreen = '';
 
   readonly resourceTotal = computed(() => {
     const detail = this.details();
     if (!detail) return 0;
-    return detail.resources.javaConfigs.length + detail.resources.attachments.length;
+    return detail.resources.javaConfigs.length + this.attachmentResources().length;
+  });
+  readonly attachmentResources = computed(() => {
+    const detail = this.details();
+    if (!detail) return [] as ScriptConfigurationResource[];
+    return (detail.resources.attachments || []).filter(resource => {
+      const sourceValue = String(resource.resolvedPath || resource.reference || '').trim().toLowerCase();
+      return !!sourceValue && !sourceValue.endsWith('.json');
+    });
   });
   readonly hasUnsavedEditorChanges = computed(() =>
     this.editorContent() !== this.originalEditorContent()
@@ -83,6 +108,22 @@ export class ScriptConfiguration implements OnInit, OnDestroy {
 
     return rows.find(row => row.id === selectedId) || rows[0];
   });
+  readonly filteredRuns = computed(() => {
+    const detail = this.details();
+    if (!detail) {
+      return [] as ScriptConfigurationRun[];
+    }
+
+    const runs = detail.execution.recentRuns || [];
+    const filter = this.runStatusFilter();
+    if (filter === 'all') {
+      return runs;
+    }
+
+    return runs.filter(run => this.matchesRunFilter(run, filter));
+  });
+  readonly comparePreviousLines = computed(() => this.buildCompareLines('previous'));
+  readonly compareCurrentLines = computed(() => this.buildCompareLines('current'));
 
   constructor(
     private readonly route: ActivatedRoute,
@@ -99,7 +140,7 @@ export class ScriptConfiguration implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.editorFullscreen.set(false);
+    this.closeEditorFullscreen();
   }
 
   loadConfiguration(showLoader = false): void {
@@ -238,6 +279,45 @@ export class ScriptConfiguration implements OnInit, OnDestroy {
     return this.formatDuration(run.scriptDurationMs ?? run.runDurationMs ?? null);
   }
 
+  formatRunEnvironment(run: ScriptConfigurationRun): string {
+    return formatExecutionEnvironmentLabel(null, run.environment);
+  }
+
+  setRunStatusFilter(filter: 'all' | 'passed' | 'failed' | 'running' | 'queued' | 'skipped'): void {
+    this.runStatusFilter.set(filter);
+  }
+
+  getRunCountForFilter(filter: 'all' | 'passed' | 'failed' | 'running' | 'queued' | 'skipped'): number {
+    const detail = this.details();
+    if (!detail) return 0;
+    const runs = detail.execution.recentRuns || [];
+    if (filter === 'all') {
+      return runs.length;
+    }
+    return runs.filter(run => this.matchesRunFilter(run, filter)).length;
+  }
+
+  private matchesRunFilter(
+    run: ScriptConfigurationRun,
+    filter: 'all' | 'passed' | 'failed' | 'running' | 'queued' | 'skipped'
+  ): boolean {
+    const scriptStatus = String(run.scriptStatus || '').toLowerCase();
+    const runStatus = String(run.runStatus || '').toLowerCase();
+
+    if (filter === 'failed') {
+      return scriptStatus === 'failed'
+        || scriptStatus === 'error'
+        || runStatus === 'failed'
+        || runStatus === 'error';
+    }
+
+    if (filter === 'passed') {
+      return scriptStatus === 'passed' || runStatus === 'passed';
+    }
+
+    return scriptStatus === filter || runStatus === filter;
+  }
+
   onEditableFileChange(path: string): void {
     if (!path) return;
     this.selectedEditablePath.set(path);
@@ -301,10 +381,12 @@ export class ScriptConfiguration implements OnInit, OnDestroy {
       return;
     }
     this.editorFullscreen.set(true);
+    this.lockPageScrollForEditor(true);
   }
 
   closeEditorFullscreen(): void {
     this.editorFullscreen.set(false);
+    this.lockPageScrollForEditor(false);
   }
 
   @HostListener('document:keydown.escape')
@@ -351,16 +433,170 @@ export class ScriptConfiguration implements OnInit, OnDestroy {
     return Number(summary?.changedLines || 0);
   }
 
-  getChangePreview(change: ScriptConfigurationChangeLog): Array<{ line: number; before: string; after: string }> {
+  getChangePreview(change: ScriptConfigurationChangeLog): Array<{
+    line: number;
+    before: string;
+    after: string;
+    kind?: string;
+    beforeLine?: number | null;
+    afterLine?: number | null;
+  }> {
     const summary = change.changeSummary as {
-      preview?: Array<{ line: number; before: string; after: string }>;
+      preview?: Array<{
+        line: number;
+        before: string;
+        after: string;
+        beforeLine?: number | null;
+        afterLine?: number | null;
+        kind?: 'modified' | 'added' | 'removed' | string;
+      }>;
     } | undefined;
 
-    return Array.isArray(summary?.preview) ? summary.preview : [];
+    return Array.isArray(summary?.preview)
+      ? summary.preview.map(entry => ({
+        line: Number(entry.line || entry.beforeLine || entry.afterLine || 0),
+        before: String(entry.before || ''),
+        after: String(entry.after || ''),
+        kind: String(entry.kind || (entry.before && entry.after ? 'modified' : entry.before ? 'removed' : 'added')),
+        beforeLine: entry.beforeLine ?? null,
+        afterLine: entry.afterLine ?? null,
+      }))
+      : [];
   }
 
   selectChange(change: ScriptConfigurationChangeLog): void {
     this.selectedChangeLogId.set(change.id);
+  }
+
+  openCompareDialog(change: ScriptConfigurationChangeLog): void {
+    if (!change?.id || this.compareDialogLoading()) {
+      return;
+    }
+
+    this.compareDialogVisible.set(true);
+    this.compareDialogLoading.set(true);
+    this.compareDialogError.set('');
+    this.compareDetail.set(null);
+
+    this.scriptService.getScriptConfigurationChangeDetail(this.scriptId, change.id).subscribe({
+      next: (detail) => {
+        this.compareDetail.set(detail);
+        this.compareDialogLoading.set(false);
+      },
+      error: (error: HttpErrorResponse) => {
+        this.compareDialogLoading.set(false);
+        this.compareDialogError.set(this.buildLoadErrorMessage(error));
+      },
+    });
+  }
+
+  closeCompareDialog(): void {
+    this.compareDialogVisible.set(false);
+    this.compareDialogLoading.set(false);
+    this.compareDialogError.set('');
+    this.compareDetail.set(null);
+  }
+
+  getModifiedLineCount(change: ScriptConfigurationChangeLog): number {
+    const summary = change.changeSummary as { modifiedLines?: number; changedLines?: number } | undefined;
+    const modified = Number(summary?.modifiedLines || 0);
+    return modified > 0 ? modified : Number(summary?.changedLines || 0);
+  }
+
+  getAddedLineCount(change: ScriptConfigurationChangeLog): number {
+    const summary = change.changeSummary as { addedLines?: number } | undefined;
+    return Number(summary?.addedLines || 0);
+  }
+
+  getRemovedLineCount(change: ScriptConfigurationChangeLog): number {
+    const summary = change.changeSummary as { removedLines?: number } | undefined;
+    return Number(summary?.removedLines || 0);
+  }
+
+  getPrimaryChange(change: ScriptConfigurationChangeLog): {
+    line: number;
+    before: string;
+    after: string;
+    kind: string;
+  } | null {
+    const preview = this.getChangePreview(change);
+    if (preview.length === 0) {
+      return null;
+    }
+    const first = preview[0] as {
+      line: number;
+      before: string;
+      after: string;
+      kind?: string;
+    };
+    return {
+      line: Number(first.line || 0),
+      before: String(first.before || ''),
+      after: String(first.after || ''),
+      kind: String(first.kind || 'modified'),
+    };
+  }
+
+  getChangeKindLabel(kind: string): string {
+    const normalized = String(kind || '').toLowerCase();
+    if (normalized === 'added') return 'Added';
+    if (normalized === 'removed') return 'Removed';
+    return 'Modified';
+  }
+
+  trackCompareLine(_: number, line: CompareLineView): string {
+    return `${line.lineNumber}:${line.state}:${line.text.length}`;
+  }
+
+  private buildCompareLines(side: 'previous' | 'current'): CompareLineView[] {
+    const detail = this.compareDetail();
+    if (!detail) {
+      return [];
+    }
+
+    const source = side === 'previous' ? detail.previousContent : detail.updatedContent;
+    const rawLines = String(source || '').split(/\r?\n/);
+    const lines = rawLines.length > 0 ? rawLines : [''];
+
+    const summary = detail.changeSummary as {
+      preview?: Array<{
+        kind?: string;
+        beforeLine?: number | null;
+        afterLine?: number | null;
+      }>;
+    } | undefined;
+    const preview = Array.isArray(summary?.preview) ? summary.preview : [];
+    const stateMap = new Map<number, CompareLineView['state']>();
+
+    for (const entry of preview) {
+      const kind = String(entry.kind || '').toLowerCase();
+      const beforeLine = Number(entry.beforeLine || 0);
+      const afterLine = Number(entry.afterLine || 0);
+
+      if (side === 'previous') {
+        if (kind === 'modified' && beforeLine > 0) {
+          stateMap.set(beforeLine, 'modified');
+        } else if (kind === 'removed' && beforeLine > 0) {
+          stateMap.set(beforeLine, 'removed');
+        }
+        continue;
+      }
+
+      if (kind === 'modified' && afterLine > 0) {
+        stateMap.set(afterLine, 'modified');
+      } else if (kind === 'added' && afterLine > 0) {
+        stateMap.set(afterLine, 'added');
+      }
+    }
+
+    return lines.map((lineText, index) => {
+      const lineNumber = index + 1;
+      return {
+        lineNumber,
+        text: lineText,
+        state: stateMap.get(lineNumber) || 'unchanged',
+      };
+    });
   }
 
   formatChangeValue(value: string | null | undefined): string {
@@ -476,6 +712,7 @@ export class ScriptConfiguration implements OnInit, OnDestroy {
     const sourceValue = String(resource.resolvedPath || resource.reference || '').trim().toLowerCase();
     if (sourceValue.endsWith('.java')) return 'JAVA';
     if (sourceValue.endsWith('.json')) return 'JSON';
+    if (sourceValue.endsWith('.xml')) return 'XML';
     if (sourceValue.endsWith('.pdf')) return 'PDF';
     if (sourceValue.endsWith('.png') || sourceValue.endsWith('.jpg') || sourceValue.endsWith('.jpeg')) return 'IMAGE';
     if (sourceValue.endsWith('.xlsx') || sourceValue.endsWith('.xls')) return 'EXCEL';
@@ -495,5 +732,28 @@ export class ScriptConfiguration implements OnInit, OnDestroy {
   getAfterLineCount(change: ScriptConfigurationChangeLog): number {
     const summary = change.changeSummary as { afterLineCount?: number } | undefined;
     return Number(summary?.afterLineCount || 0);
+  }
+
+  private lockPageScrollForEditor(lock: boolean): void {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    const body = document.body;
+    const html = document.documentElement;
+    if (!body || !html) {
+      return;
+    }
+
+    if (lock) {
+      this.bodyOverflowBeforeFullscreen = body.style.overflow;
+      this.htmlOverflowBeforeFullscreen = html.style.overflow;
+      body.style.overflow = 'hidden';
+      html.style.overflow = 'hidden';
+      return;
+    }
+
+    body.style.overflow = this.bodyOverflowBeforeFullscreen;
+    html.style.overflow = this.htmlOverflowBeforeFullscreen;
   }
 }

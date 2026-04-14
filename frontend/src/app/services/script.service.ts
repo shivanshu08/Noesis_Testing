@@ -8,6 +8,7 @@ import {
   ScriptConfigurationDetail,
   ScriptConfigurationFileContent,
   ScriptConfigurationChangeLog,
+  ScriptConfigurationChangeLogDetail,
 } from '../models/interfaces';
 
 @Injectable({ providedIn: 'root' })
@@ -74,6 +75,10 @@ export class ScriptService {
     let params = new HttpParams();
     params = params.set('limit', String(limit));
     return this.http.get<ScriptConfigurationChangeLog[]>(`${this.apiUrl}/${scriptId}/configuration/changes`, { params });
+  }
+
+  getScriptConfigurationChangeDetail(scriptId: number, changeId: number): Observable<ScriptConfigurationChangeLogDetail> {
+    return this.http.get<ScriptConfigurationChangeLogDetail>(`${this.apiUrl}/${scriptId}/configuration/changes/${changeId}`);
   }
 
   getScriptConfigurationAttachment(

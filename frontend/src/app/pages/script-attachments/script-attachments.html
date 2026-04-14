@@ -1,0 +1,86 @@
+<div class="script-attachments-page">
+  <div class="topbar">
+    <a [routerLink]="['/scripts', scriptId, 'configuration']" class="back-link">
+      <i class="pi pi-arrow-left"></i>
+      <span>Back to Configuration</span>
+    </a>
+
+    <div class="topbar-actions">
+      <p-button
+        icon="pi pi-sync"
+        label="Refresh"
+        severity="secondary"
+        [text]="true"
+        [loading]="loading()"
+        (onClick)="loadConfiguration(true)"
+      />
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="state-card loading">
+      <i class="pi pi-spin pi-spinner"></i>
+      <h3>Loading attachments</h3>
+      <p>Collecting all attachment files from script dependency folders and references.</p>
+    </div>
+  } @else if (details(); as vm) {
+    <p-card styleClass="content-card full-width-card">
+      <div class="card-head">
+        <h3><i class="pi pi-paperclip"></i> Attachments</h3>
+        <span>{{ attachments().length }} files</span>
+      </div>
+
+      @if (attachments().length === 0) {
+        <div class="table-empty">No attachment files detected for this script.</div>
+      } @else {
+        <div class="attachment-list">
+          @for (resource of attachments(); track trackResource($index, resource)) {
+            <div class="attachment-item">
+              <div class="attachment-main">
+                <strong>{{ getResourceDisplayName(resource) }}</strong>
+                <small>{{ getResourceDisplayPath(resource) }}</small>
+              </div>
+              <div class="attachment-actions">
+                <p-tag [value]="getResourceKindLabel(resource)" severity="secondary"></p-tag>
+                <p-tag [value]="resource.existsOnDisk ? 'Available' : 'Missing'" [severity]="resource.existsOnDisk ? 'success' : 'danger'"></p-tag>
+                <p-button
+                  label="Open"
+                  icon="pi pi-external-link"
+                  size="small"
+                  severity="secondary"
+                  [outlined]="true"
+                  [disabled]="!resource.existsOnDisk || attachmentActionLoading()"
+                  (onClick)="openAttachment(resource)"
+                />
+                <p-button
+                  label="Download"
+                  icon="pi pi-download"
+                  size="small"
+                  severity="primary"
+                  [outlined]="true"
+                  [disabled]="!resource.existsOnDisk || attachmentActionLoading()"
+                  (onClick)="downloadAttachment(resource)"
+                />
+              </div>
+            </div>
+          }
+        </div>
+
+        @if (attachmentStatusMessage()) {
+          <p class="attachment-status">{{ attachmentStatusMessage() }}</p>
+        }
+      }
+    </p-card>
+  } @else {
+    <div class="state-card empty">
+      <i class="pi pi-paperclip"></i>
+      <h3>Attachments not available</h3>
+      <p>The selected script could not be loaded or no longer exists.</p>
+      @if (loadError()) {
+        <p class="error-detail">{{ loadError() }}</p>
+      }
+      <a pButton [routerLink]="['/scripts', scriptId, 'configuration']" label="Back to Configuration" icon="pi pi-arrow-left"></a>
+    </div>
+  }
+</div>
+

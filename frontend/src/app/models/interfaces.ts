@@ -107,10 +107,35 @@ export interface ScriptConfigurationChangeLog {
   changedAt: string;
   changeSummary?: {
     changedLines?: number;
+    modifiedLines?: number;
+    addedLines?: number;
+    removedLines?: number;
     beforeLineCount?: number;
     afterLineCount?: number;
-    preview?: Array<{ line: number; before: string; after: string }>;
+    algorithmVersion?: number;
+    isApproximate?: boolean;
+    primaryChange?: {
+      line?: number;
+      beforeLine?: number | null;
+      afterLine?: number | null;
+      before?: string;
+      after?: string;
+      kind?: 'modified' | 'added' | 'removed' | string;
+    };
+    preview?: Array<{
+      line: number;
+      before: string;
+      after: string;
+      beforeLine?: number | null;
+      afterLine?: number | null;
+      kind?: 'modified' | 'added' | 'removed' | string;
+    }>;
   } | Record<string, unknown>;
+}
+
+export interface ScriptConfigurationChangeLogDetail extends ScriptConfigurationChangeLog {
+  previousContent: string;
+  updatedContent: string;
 }
 
 export interface ScriptConfigurationDetail {

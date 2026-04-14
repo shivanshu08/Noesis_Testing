@@ -51,7 +51,7 @@
     </div>
     <div class="action-buttons">
       <p-button label="Clear Selection" [text]="true" severity="secondary" size="small" (onClick)="selectedScripts.set([])" />
-      <p-button label="Run Selected" icon="pi pi-play" severity="success" size="small" (onClick)="runSelectedScripts()" />
+      <p-button label="Run Selected" icon="pi pi-bolt" severity="success" size="small" (onClick)="runSelectedScripts()" />
       <p-button *ngIf="auth.canEdit()" label="Remove Selected" icon="pi pi-trash" severity="danger" size="small" (onClick)="promptDeleteSelected()" />
     </div>
   </div>
@@ -149,7 +149,7 @@
           </td>
           <td style="text-align: center;">
             <p-button 
-              icon="pi pi-play" 
+              icon="pi pi-bolt" 
               [label]="'Run'"
               [rounded]="true" 
               [outlined]="true"
@@ -359,3 +359,4 @@
 </p-dialog>
 
 <app-alert-overlay [showConfirm]="false" />
+

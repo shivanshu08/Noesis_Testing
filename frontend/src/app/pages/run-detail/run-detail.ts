@@ -17,6 +17,7 @@ import { MessageService } from 'primeng/api';
 import { ExecutionService } from '../../services/execution.service';
 import { ExecutionRun, ExecutionLog, ExecutionArtifact, ExecutionResult } from '../../models/interfaces';
 import { AuthService } from '../../services/auth.service';
+import { inferEnvironmentFromUrl } from '../../utils/execution-environment';
 import { environment } from '../../../environments/environment';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -763,14 +764,4 @@ export class RunDetail implements OnInit, OnDestroy {
     const p = (value: number): string => String(value).padStart(2, '0');
     return `${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}_${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`;
   }
-}
-
-function inferEnvironmentFromUrl(url: string): string {
-  const normalizedUrl = (url || '').toLowerCase();
-
-  if (!normalizedUrl) return '-';
-  if (normalizedUrl.includes('val')) return 'Validation';
-  if (normalizedUrl.includes('dev') || normalizedUrl.includes('sandbox')) return 'Staging';
-  if (normalizedUrl.includes('localhost') || normalizedUrl.includes('127.0.0.1')) return 'Local';
-  return 'Production';
 }

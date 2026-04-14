@@ -47,7 +47,7 @@ export class MainLayout implements OnInit, OnDestroy {
     ];
 
     if (this.auth.canEdit()) {
-      items.push({ label: 'Run Scripts', icon: 'pi pi-play', route: '/runner' });
+      items.push({ label: 'Run Scripts', icon: 'pi pi-bolt', route: '/runner' });
     }
 
       items.push({ label: 'History', icon: 'pi pi-history', route: '/history' });
@@ -261,3 +261,4 @@ export class MainLayout implements OnInit, OnDestroy {
     this.router.navigate([item.route]);
   }
 }
+
