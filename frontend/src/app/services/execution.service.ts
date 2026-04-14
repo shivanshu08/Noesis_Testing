@@ -29,8 +29,20 @@ export class ExecutionService {
     }
   }
 
-  runScripts(scriptIds: number[], suiteName?: string): Observable<{ runId: number; message: string; totalScripts: number }> {
-    return this.http.post<{ runId: number; message: string; totalScripts: number }>(`${this.apiUrl}/run`, {
+  runScripts(scriptIds: number[], suiteName?: string): Observable<{
+    runId: number;
+    message: string;
+    totalScripts: number;
+    resolvedScriptIds?: number[];
+    autoIncludedDependencyIds?: number[];
+  }> {
+    return this.http.post<{
+      runId: number;
+      message: string;
+      totalScripts: number;
+      resolvedScriptIds?: number[];
+      autoIncludedDependencyIds?: number[];
+    }>(`${this.apiUrl}/run`, {
       scriptIds,
       suiteName,
     });

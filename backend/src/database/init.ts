@@ -75,6 +75,26 @@ async function initDatabase() {
       // Ignore migration failures
     }
 
+    // Ensure script dependency graph table exists
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS script_dependencies (
+          id BIGSERIAL PRIMARY KEY,
+          script_id INT NOT NULL REFERENCES scripts(id) ON DELETE CASCADE,
+          depends_on_script_id INT NOT NULL REFERENCES scripts(id) ON DELETE CASCADE,
+          created_by INT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT script_dependencies_no_self_dependency CHECK (script_id <> depends_on_script_id),
+          UNIQUE (script_id, depends_on_script_id)
+        )
+      `);
+
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_script_dependencies_script ON script_dependencies(script_id)');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_script_dependencies_depends_on ON script_dependencies(depends_on_script_id)');
+    } catch {
+      // Ignore migration failures
+    }
+
     // Ensure script configuration resource snapshots table exists
     try {
       await pool.query(`

@@ -5,11 +5,17 @@ import { createHash } from 'crypto';
 import multer from 'multer';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { query, execute } from '../database/connection';
+import { query, execute, getConnection } from '../database/connection';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { logger } from '../utils/logger';
 import { config } from '../config';
 import { appLogService } from '../services/appLogService';
+import {
+  detectCycleForProposedDependencies,
+  ensureScriptDependencyStore,
+  getScriptDependencyMap,
+  normalizeScriptIdArray,
+} from '../services/scriptDependencyService';
 
 const router = Router();
 router.use(authenticate);
@@ -2704,7 +2710,22 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
     sql += ' ORDER BY sc.sort_order, s.name';
 
     const scripts = await query<ScriptRow & { last_run_at?: Date; last_run_status?: string }>(sql, params);
-    res.json(scripts.map(s => ({
+    await ensureScriptDependencyStore();
+    const dependencyMap = await getScriptDependencyMap(scripts.map((script) => script.id));
+    const dependentCountByScriptId = new Map<number, number>();
+
+    for (const dependencyIds of dependencyMap.values()) {
+      for (const dependencyId of dependencyIds) {
+        dependentCountByScriptId.set(
+          dependencyId,
+          (dependentCountByScriptId.get(dependencyId) || 0) + 1
+        );
+      }
+    }
+
+    res.json(scripts.map(s => {
+      const dependencyIds = dependencyMap.get(s.id) || [];
+      return {
       id: s.id,
       name: (s.name || '').replace(/\.java$/i, ''),
       className: s.class_name,
@@ -2721,7 +2742,11 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
       createdAt: s.created_at,
       lastRunAt: s.last_run_at || null,
       lastRunStatus: s.last_run_status || null,
-    })));
+      dependencies: dependencyIds,
+      dependencyCount: dependencyIds.length,
+      dependentCount: dependentCountByScriptId.get(s.id) || 0,
+    };
+    }));
   } catch (error) {
     logger.error('List scripts error:', error);
     res.status(500).json({ error: 'Failed to fetch scripts.' });
@@ -3272,6 +3297,137 @@ router.get('/:id/configuration/attachment', async (req: AuthRequest, res: Respon
   }
 });
 
+// PUT /api/scripts/:id/dependencies - Configure script dependency chain
+router.put('/:id/dependencies', authorize('admin', 'tester'), async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const scriptId = Number(req.params.id);
+    if (!Number.isInteger(scriptId) || scriptId <= 0) {
+      res.status(400).json({ error: 'Invalid script ID.' });
+      return;
+    }
+
+    if (req.body?.dependencyIds !== undefined && !Array.isArray(req.body.dependencyIds)) {
+      res.status(400).json({ error: 'dependencyIds must be an array.' });
+      return;
+    }
+
+    const normalizedDependencyIds = normalizeScriptIdArray(
+      Array.isArray(req.body?.dependencyIds) ? req.body.dependencyIds : []
+    );
+
+    if (normalizedDependencyIds.includes(scriptId)) {
+      res.status(400).json({ error: 'A script cannot depend on itself.' });
+      return;
+    }
+
+    await ensureScriptDependencyStore();
+
+    const candidateIds = [scriptId, ...normalizedDependencyIds];
+    const candidateScripts = await query<{ id: number; name: string; is_active: boolean }>(
+      'SELECT id, name, is_active FROM scripts WHERE id = ANY($1::int[])',
+      [candidateIds]
+    );
+    const candidateById = new Map<number, { id: number; name: string; is_active: boolean }>(
+      candidateScripts.map((script) => [script.id, script])
+    );
+
+    if (!candidateById.has(scriptId)) {
+      res.status(404).json({ error: 'Script not found.' });
+      return;
+    }
+
+    const missingDependencyIds = normalizedDependencyIds.filter((id) => !candidateById.has(id));
+    if (missingDependencyIds.length > 0) {
+      res.status(400).json({
+        error: 'Some dependency scripts were not found.',
+        missingDependencyIds,
+      });
+      return;
+    }
+
+    const inactiveDependencyIds = normalizedDependencyIds.filter((id) => !candidateById.get(id)?.is_active);
+    if (inactiveDependencyIds.length > 0) {
+      res.status(400).json({
+        error: 'Inactive scripts cannot be added as dependencies.',
+        inactiveDependencyIds,
+      });
+      return;
+    }
+
+    const cyclePath = await detectCycleForProposedDependencies(scriptId, normalizedDependencyIds);
+    if (cyclePath) {
+      const cycleLabels = cyclePath.map((id) => {
+        const candidate = candidateById.get(id);
+        return candidate?.name || `Script #${id}`;
+      });
+
+      res.status(400).json({
+        error: 'Dependency cycle detected. Remove circular links before saving.',
+        cyclePath,
+        cycleLabels,
+      });
+      return;
+    }
+
+    const client = await getConnection();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM script_dependencies WHERE script_id = $1', [scriptId]);
+
+      for (const dependencyId of normalizedDependencyIds) {
+        await client.query(
+          `
+            INSERT INTO script_dependencies (script_id, depends_on_script_id, created_by)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (script_id, depends_on_script_id) DO NOTHING
+          `,
+          [scriptId, dependencyId, req.userId || null]
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    const updatedScript = candidateById.get(scriptId);
+    logScriptEvent(req, {
+      action: 'SCRIPT_DEPENDENCY_UPDATE',
+      severity: 'INFO',
+      status: 'SUCCESS',
+      httpStatus: 200,
+      message: `Dependencies updated for script "${updatedScript?.name || `#${scriptId}`}".`,
+      metadata: {
+        scriptId,
+        dependencyCount: normalizedDependencyIds.length,
+        dependencyIds: normalizedDependencyIds,
+      },
+    });
+
+    res.json({
+      message: 'Script dependencies updated.',
+      scriptId,
+      dependencyIds: normalizedDependencyIds,
+    });
+  } catch (error) {
+    logger.error('Update script dependencies error:', error);
+    logScriptEvent(req, {
+      action: 'SCRIPT_DEPENDENCY_UPDATE',
+      severity: 'ERROR',
+      status: 'FAILED',
+      httpStatus: 500,
+      message: `Script dependency update failed: ${(error as Error).message}`,
+      metadata: {
+        scriptId: Number(req.params.id),
+      },
+    });
+    res.status(500).json({ error: 'Failed to update script dependencies.' });
+  }
+});
+
 // GET /api/scripts/:id - Get script details
 router.get('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -3288,6 +3444,15 @@ router.get('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
     }
 
     const s = scripts[0];
+    await ensureScriptDependencyStore();
+    const dependencyMap = await getScriptDependencyMap([s.id]);
+    const dependencyIds = dependencyMap.get(s.id) || [];
+    const dependentCountRows = await query<{ count: string }>(
+      'SELECT COUNT(*)::text as count FROM script_dependencies WHERE depends_on_script_id = $1',
+      [s.id]
+    );
+    const dependentCount = Number(dependentCountRows[0]?.count || 0);
+
     res.json({
       id: s.id,
       name: (s.name || '').replace(/\.java$/i, ''),
@@ -3303,6 +3468,9 @@ router.get('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
       isActive: s.is_active,
       tags: s.tags || [],
       createdAt: s.created_at,
+      dependencies: dependencyIds,
+      dependencyCount: dependencyIds.length,
+      dependentCount,
     });
   } catch (error) {
     logger.error('Get script error:', error);

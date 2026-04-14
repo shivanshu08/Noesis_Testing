@@ -43,6 +43,9 @@ export interface Script {
   createdAt: string;
   lastRunAt?: string;
   lastRunStatus?: string;
+  dependencies?: number[];
+  dependencyCount?: number;
+  dependentCount?: number;
 }
 
 export interface ScriptCategory {

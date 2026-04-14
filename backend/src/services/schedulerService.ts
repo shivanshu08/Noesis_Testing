@@ -2,6 +2,7 @@ import * as cron from 'node-cron';
 import { query, execute, getConnection } from '../database/connection';
 import { logger } from '../utils/logger';
 import { appLogService } from './appLogService';
+import { resolveScriptExecutionPlan } from './scriptDependencyService';
 
 interface ScheduledRunRow {
   id: number;
@@ -115,15 +116,45 @@ async function executeScheduledRun(schedule: ScheduledRunRow): Promise<void> {
       return;
     }
 
-    // Fetch script details
-    const placeholders = scriptIds.map((_, i) => `$${i + 1}`).join(',');
-    const scripts = await query<any>(
-      `SELECT id, name, class_name, method_name FROM scripts WHERE id IN (${placeholders}) AND is_active = TRUE`,
-      scriptIds
+    const dependencyPlan = await resolveScriptExecutionPlan(scriptIds);
+    if (dependencyPlan.cyclePath) {
+      logger.warn(
+        `Scheduler: dependency cycle detected for schedule "${schedule.name}". Path: ${dependencyPlan.cyclePath.join(' -> ')}`
+      );
+      return;
+    }
+    if (dependencyPlan.missingScriptIds.length > 0) {
+      logger.warn(
+        `Scheduler: missing or inactive scripts for schedule "${schedule.name}". IDs: ${dependencyPlan.missingScriptIds.join(', ')}`
+      );
+      return;
+    }
+    if (dependencyPlan.orderedScriptIds.length === 0) {
+      logger.warn(`Scheduler: No executable scripts after dependency resolution for schedule "${schedule.name}"`);
+      return;
+    }
+
+    const scriptRows = await query<any>(
+      `SELECT id, name, class_name, method_name FROM scripts WHERE id = ANY($1::int[]) AND is_active = TRUE`,
+      [dependencyPlan.orderedScriptIds]
     );
+    const scriptById = new Map<number, any>(
+      scriptRows.map((script) => [Number(script.id), script])
+    );
+    const scripts = dependencyPlan.orderedScriptIds
+      .map((scriptId) => scriptById.get(scriptId))
+      .filter(Boolean);
 
     if (scripts.length === 0) {
       logger.warn(`Scheduler: No active scripts found for schedule "${schedule.name}"`);
+      return;
+    }
+
+    if (scripts.length !== dependencyPlan.orderedScriptIds.length) {
+      const unresolved = dependencyPlan.orderedScriptIds.filter((id) => !scriptById.has(id));
+      logger.warn(
+        `Scheduler: some dependency-resolved scripts could not be loaded for schedule "${schedule.name}". IDs: ${unresolved.join(', ')}`
+      );
       return;
     }
 
@@ -204,6 +235,7 @@ async function executeScheduledRun(schedule: ScheduledRunRow): Promise<void> {
           scheduleId: schedule.id,
           runId,
           scriptCount: scripts.length,
+          autoIncludedDependencyCount: dependencyPlan.autoIncludedDependencyIds.length,
         },
       });
 

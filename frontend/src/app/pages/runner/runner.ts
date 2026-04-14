@@ -26,6 +26,9 @@ import { Subscription } from 'rxjs';
 
 interface SelectableScript extends Script {
   selected: boolean;
+  dependencies: number[];
+  dependencyCount: number;
+  dependentCount: number;
 }
 
 interface CronPreset {
@@ -76,6 +79,15 @@ export class Runner implements OnInit, OnDestroy {
   // Run Confirmation Dialog
   showRunConfirm = false;
   runName = '';
+  plannedScriptOrderIds: number[] = [];
+  autoIncludedDependencyIds: number[] = [];
+  dependencyCyclePathIds: number[] = [];
+
+  // Dependency Configuration Dialog
+  showDependencyDialog = false;
+  dependencyTargetScriptId: number | null = null;
+  dependencyDraftIds: number[] = [];
+  savingDependencies = false;
 
   // Schedule Dialog
   showScheduleDialog = false;
@@ -181,6 +193,54 @@ export class Runner implements OnInit, OnDestroy {
     return this.selectedScripts.length;
   }
 
+  get dependencyTargetScript(): SelectableScript | null {
+    const scriptId = this.dependencyTargetScriptId;
+    if (!scriptId) return null;
+    return this.scripts().find((script) => script.id === scriptId) || null;
+  }
+
+  get dependencyCandidates(): SelectableScript[] {
+    const targetId = this.dependencyTargetScriptId;
+    if (!targetId) return [];
+
+    return this.scripts()
+      .filter((script) => script.id !== targetId && script.isActive)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  get hasDependencyCycleInSelection(): boolean {
+    return this.dependencyCyclePathIds.length > 0;
+  }
+
+  get plannedScriptTotalCount(): number {
+    return this.plannedScriptOrderIds.length > 0 ? this.plannedScriptOrderIds.length : this.selectedCount;
+  }
+
+  get autoIncludedDependencyCount(): number {
+    return this.autoIncludedDependencyIds.length;
+  }
+
+  get dependencyCyclePathLabel(): string {
+    if (this.dependencyCyclePathIds.length === 0) {
+      return '';
+    }
+
+    return this.dependencyCyclePathIds.map((id) => this.getScriptNameById(id)).join(' -> ');
+  }
+
+  get confirmPreviewRows(): Array<{ scriptId: number; scriptName: string; isAutoDependency: boolean }> {
+    const orderedIds = this.plannedScriptOrderIds.length > 0
+      ? this.plannedScriptOrderIds
+      : this.selectedScripts.map((script) => script.id);
+    const autoDependencySet = new Set(this.autoIncludedDependencyIds);
+
+    return orderedIds.map((scriptId) => ({
+      scriptId,
+      scriptName: this.getScriptNameById(scriptId),
+      isAutoDependency: autoDependencySet.has(scriptId),
+    }));
+  }
+
   selectAll() {
     const filtered = this.filteredScripts;
     const allSelected = filtered.every(s => s.selected);
@@ -217,20 +277,121 @@ export class Runner implements OnInit, OnDestroy {
     }
   }
 
+  openDependencyDialog(event: Event, scriptId: number) {
+    event.stopPropagation();
+    if (!this.auth.canEdit()) return;
+
+    const targetScript = this.scripts().find((script) => script.id === scriptId);
+    if (!targetScript) return;
+
+    this.dependencyTargetScriptId = scriptId;
+    this.dependencyDraftIds = [...(targetScript.dependencies || [])];
+    this.savingDependencies = false;
+    this.showDependencyDialog = true;
+  }
+
+  closeDependencyDialog() {
+    if (this.savingDependencies) return;
+    this.showDependencyDialog = false;
+    this.dependencyTargetScriptId = null;
+    this.dependencyDraftIds = [];
+  }
+
+  isDependencyDraftSelected(scriptId: number): boolean {
+    return this.dependencyDraftIds.includes(scriptId);
+  }
+
+  toggleDependencyDraft(scriptId: number, checked: boolean) {
+    const next = new Set(this.dependencyDraftIds);
+    if (checked) {
+      next.add(scriptId);
+    } else {
+      next.delete(scriptId);
+    }
+    this.dependencyDraftIds = Array.from(next);
+  }
+
+  saveDependencyDialog() {
+    const targetScript = this.dependencyTargetScript;
+    if (!targetScript) {
+      this.closeDependencyDialog();
+      return;
+    }
+
+    const dependencyIds = this.dependencyDraftIds
+      .map((id) => Number(id))
+      .filter((id) => Number.isInteger(id) && id > 0 && id !== targetScript.id);
+    this.savingDependencies = true;
+
+    this.scriptService.updateScriptDependencies(targetScript.id, dependencyIds).subscribe({
+      next: () => {
+        this.savingDependencies = false;
+        this.showDependencyDialog = false;
+        this.dependencyTargetScriptId = null;
+        this.dependencyDraftIds = [];
+
+        this.scripts.update((list) => list.map((script) => (
+          script.id === targetScript.id
+            ? { ...script, dependencies: [...dependencyIds], dependencyCount: dependencyIds.length }
+            : script
+        )));
+        this.recalculateDependentCounts();
+
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Dependencies Updated',
+          detail: `"${targetScript.name}" now has ${dependencyIds.length} prerequisite script${dependencyIds.length === 1 ? '' : 's'}.`,
+        });
+      },
+      error: (error) => {
+        this.savingDependencies = false;
+        const cycleLabels = Array.isArray(error?.error?.cycleLabels)
+          ? error.error.cycleLabels.join(' -> ')
+          : '';
+        const detail = cycleLabels
+          ? `Circular dependency: ${cycleLabels}`
+          : (error?.error?.error || 'Failed to update script dependencies.');
+
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Dependency Update Failed',
+          detail,
+        });
+      },
+    });
+  }
+
   // ---- Run Confirmation ----
 
   openRunConfirm() {
+    const selectedIds = this.selectedScripts.map((script) => script.id);
+    const plan = this.computeLocalDependencyPlan(selectedIds);
+
     this.runName = `Run ${new Date().toISOString().replace('T', ' ').substring(0, 19)}`;
+    this.plannedScriptOrderIds = plan.orderedScriptIds.length > 0 ? plan.orderedScriptIds : selectedIds;
+    this.autoIncludedDependencyIds = plan.autoIncludedDependencyIds;
+    this.dependencyCyclePathIds = plan.cyclePath;
     this.showRunConfirm = true;
   }
 
   confirmAndRun() {
+    if (this.hasDependencyCycleInSelection) {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Dependency Cycle Detected',
+        detail: this.dependencyCyclePathLabel || 'Please resolve circular script dependencies before running.',
+      });
+      return;
+    }
     this.showRunConfirm = false;
     this.executeRun();
   }
 
   cancelRunConfirm() {
     this.showRunConfirm = false;
+    this.plannedScriptOrderIds = [];
+    this.autoIncludedDependencyIds = [];
+    this.dependencyCyclePathIds = [];
   }
 
   // ---- Run Execution ----
@@ -241,8 +402,27 @@ export class Runner implements OnInit, OnDestroy {
 
   private executeRun() {
     if (!this.auth.canEdit()) return;
-    const scriptIds = this.selectedScripts.map(s => s.id);
-    if (scriptIds.length === 0) return;
+    const selectedScriptIds = this.selectedScripts.map((script) => script.id);
+    if (selectedScriptIds.length === 0) return;
+
+    const localPlan = this.computeLocalDependencyPlan(selectedScriptIds);
+    if (localPlan.cyclePath.length > 0) {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Dependency Cycle Detected',
+        detail: localPlan.cyclePath.map((id) => this.getScriptNameById(id)).join(' -> '),
+      });
+      return;
+    }
+
+    const optimisticTotalScripts = localPlan.orderedScriptIds.length > 0
+      ? localPlan.orderedScriptIds.length
+      : selectedScriptIds.length;
+    this.plannedScriptOrderIds = localPlan.orderedScriptIds.length > 0
+      ? localPlan.orderedScriptIds
+      : selectedScriptIds;
+    this.autoIncludedDependencyIds = localPlan.autoIncludedDependencyIds;
+    this.dependencyCyclePathIds = [];
 
     this.running.set(true);
     this.logs.set([]);
@@ -250,21 +430,64 @@ export class Runner implements OnInit, OnDestroy {
     this.startTimer();
 
     // Initialize progress tracking
-    this.totalExecutionScripts.set(scriptIds.length);
+    this.totalExecutionScripts.set(optimisticTotalScripts);
     this.completedScripts.set(0);
     this.executionProgress.set(0);
     this.currentExecutingScript.set('');
     this.artifacts.set([]);
     this.latestRunDetails.set(null);
 
-    this.messageService.add({ severity: 'info', summary: 'Execution Started', detail: `Running ${scriptIds.length} script(s)...` });
+    const localDependencyCount = localPlan.autoIncludedDependencyIds.length;
+    this.messageService.add({
+      severity: 'info',
+      summary: 'Execution Started',
+      detail: localDependencyCount > 0
+        ? `Running ${optimisticTotalScripts} script(s) including ${localDependencyCount} dependency script${localDependencyCount === 1 ? '' : 's'}.`
+        : `Running ${optimisticTotalScripts} script(s)...`,
+    });
 
-    this.executionService.runScripts(scriptIds, this.runName || undefined).subscribe({
+    this.executionService.runScripts(selectedScriptIds, this.runName || undefined).subscribe({
       next: (res) => {
+        const backendResolvedIds = Array.isArray(res.resolvedScriptIds) ? res.resolvedScriptIds : [];
+        const resolvedScriptIds = backendResolvedIds.length > 0
+          ? backendResolvedIds
+          : this.plannedScriptOrderIds;
+        const backendAutoDependencyIds = Array.isArray(res.autoIncludedDependencyIds)
+          ? res.autoIncludedDependencyIds
+          : this.autoIncludedDependencyIds;
+        const totalScripts = Number.isFinite(res.totalScripts) && res.totalScripts > 0
+          ? res.totalScripts
+          : (resolvedScriptIds.length > 0 ? resolvedScriptIds.length : optimisticTotalScripts);
+
+        this.totalExecutionScripts.set(totalScripts);
+        this.plannedScriptOrderIds = resolvedScriptIds.length > 0 ? resolvedScriptIds : this.plannedScriptOrderIds;
+        this.autoIncludedDependencyIds = backendAutoDependencyIds;
+
         this.currentRunId.set(res.runId);
         this.logs.update(l => [...l, `▶ Execution started (Run #${res.runId})`]);
-        this.logs.update(l => [...l, `  Running ${scriptIds.length} script(s)...`]);
+        this.logs.update(l => [...l, `  Running ${totalScripts} script(s)...`]);
+        if (backendAutoDependencyIds.length > 0) {
+          const dependencyNamePreview = backendAutoDependencyIds
+            .slice(0, 4)
+            .map((id) => this.getScriptNameById(id))
+            .join(', ');
+          const remainingCount = backendAutoDependencyIds.length - Math.min(backendAutoDependencyIds.length, 4);
+          const suffix = remainingCount > 0 ? ` (+${remainingCount} more)` : '';
+
+          this.logs.update(l => [
+            ...l,
+            `  Auto-included dependencies (${backendAutoDependencyIds.length}): ${dependencyNamePreview}${suffix}`,
+          ]);
+        }
         this.logs.update(l => [...l, '']);
+
+        if (backendAutoDependencyIds.length > 0) {
+          this.messageService.add({
+            severity: 'info',
+            summary: 'Dependencies Auto-Included',
+            detail: `${backendAutoDependencyIds.length} prerequisite script${backendAutoDependencyIds.length === 1 ? '' : 's'} were added automatically.`,
+          });
+        }
 
         this.executionService.connectToRun(res.runId);
 
@@ -310,8 +533,9 @@ export class Runner implements OnInit, OnDestroy {
               const passedMatch = logText.match(/(\d+)\s+passed/i);
               const failedMatch = logText.match(/(\d+)\s+failed/i);
               const passed = passedMatch ? parseInt(passedMatch[1]) : 0;
-              const failed = failedMatch ? parseInt(failedMatch[1]) : scriptIds.length;
-              const total = passed + failed;
+              const plannedTotal = this.totalExecutionScripts();
+              const failed = failedMatch ? parseInt(failedMatch[1]) : Math.max(plannedTotal - passed, 0);
+              const total = Math.max(passed + failed, plannedTotal);
               this.messageService.add({ severity: status === 'failed' ? 'error' : 'success', summary: 'Execution Completed', detail: `Total: ${total}, Passed: ${passed}, Failed: ${failed}` });
 
               const readyArtifacts = this.executionService.artifactsReady();
@@ -372,6 +596,9 @@ export class Runner implements OnInit, OnDestroy {
     this.elapsedSeconds = 0;
     this.artifacts.set([]);
     this.latestRunDetails.set(null);
+    this.plannedScriptOrderIds = [];
+    this.autoIncludedDependencyIds = [];
+    this.dependencyCyclePathIds = [];
   }
 
   // ---- Artifacts & Completion ----
@@ -641,6 +868,153 @@ export class Runner implements OnInit, OnDestroy {
     return this.categories().find(c => c.id === catId)?.name || 'Unknown';
   }
 
+  getScriptNameById(scriptId: number): string {
+    return this.scripts().find((script) => script.id === scriptId)?.name || `Script #${scriptId}`;
+  }
+
+  private recalculateDependentCounts() {
+    this.scripts.update((list) => {
+      const dependentCountById = new Map<number, number>();
+
+      for (const script of list) {
+        const uniqueDependencies = Array.from(new Set(script.dependencies || []))
+          .filter((dependencyId) => Number.isInteger(dependencyId) && dependencyId > 0 && dependencyId !== script.id);
+
+        for (const dependencyId of uniqueDependencies) {
+          dependentCountById.set(dependencyId, (dependentCountById.get(dependencyId) || 0) + 1);
+        }
+      }
+
+      return list.map((script) => {
+        const dependencyIds = Array.from(new Set(script.dependencies || []))
+          .filter((dependencyId) => Number.isInteger(dependencyId) && dependencyId > 0 && dependencyId !== script.id);
+
+        return {
+          ...script,
+          dependencies: dependencyIds,
+          dependencyCount: dependencyIds.length,
+          dependentCount: dependentCountById.get(script.id) || 0,
+        };
+      });
+    });
+  }
+
+  private computeLocalDependencyPlan(selectedScriptIdsRaw: number[]): {
+    orderedScriptIds: number[];
+    autoIncludedDependencyIds: number[];
+    cyclePath: number[];
+  } {
+    const selectedScriptIds = Array.from(
+      new Set(
+        selectedScriptIdsRaw
+          .map((id) => Number(id))
+          .filter((id) => Number.isInteger(id) && id > 0)
+      )
+    );
+    if (selectedScriptIds.length === 0) {
+      return {
+        orderedScriptIds: [],
+        autoIncludedDependencyIds: [],
+        cyclePath: [],
+      };
+    }
+
+    const scripts = this.scripts();
+    const dependencyMap = new Map<number, number[]>();
+    for (const script of scripts) {
+      const dependencyIds = Array.from(new Set(script.dependencies || []))
+        .filter((dependencyId) => Number.isInteger(dependencyId) && dependencyId > 0 && dependencyId !== script.id);
+      dependencyMap.set(script.id, dependencyIds);
+    }
+    for (const selectedId of selectedScriptIds) {
+      if (!dependencyMap.has(selectedId)) {
+        dependencyMap.set(selectedId, []);
+      }
+    }
+
+    const selectedPriority = new Map<number, number>();
+    selectedScriptIds.forEach((id, index) => selectedPriority.set(id, index));
+    const comparator = (a: number, b: number): number => {
+      const aPriority = selectedPriority.has(a) ? selectedPriority.get(a)! : Number.MAX_SAFE_INTEGER;
+      const bPriority = selectedPriority.has(b) ? selectedPriority.get(b)! : Number.MAX_SAFE_INTEGER;
+      if (aPriority !== bPriority) {
+        return aPriority - bPriority;
+      }
+      return a - b;
+    };
+
+    const state = new Map<number, 0 | 1 | 2>();
+    const stack: number[] = [];
+    const stackIndex = new Map<number, number>();
+    let cyclePath: number[] = [];
+
+    const detectCycle = (scriptId: number): boolean => {
+      state.set(scriptId, 1);
+      stackIndex.set(scriptId, stack.length);
+      stack.push(scriptId);
+
+      const dependencyIds = [...(dependencyMap.get(scriptId) || [])].sort(comparator);
+      for (const dependencyId of dependencyIds) {
+        if (!dependencyMap.has(dependencyId)) {
+          dependencyMap.set(dependencyId, []);
+        }
+
+        const depState = state.get(dependencyId) || 0;
+        if (depState === 0) {
+          if (detectCycle(dependencyId)) {
+            return true;
+          }
+        } else if (depState === 1) {
+          const cycleStartIndex = stackIndex.get(dependencyId) ?? 0;
+          cyclePath = [...stack.slice(cycleStartIndex), dependencyId];
+          return true;
+        }
+      }
+
+      stack.pop();
+      stackIndex.delete(scriptId);
+      state.set(scriptId, 2);
+      return false;
+    };
+
+    for (const selectedId of selectedScriptIds) {
+      if ((state.get(selectedId) || 0) === 0 && detectCycle(selectedId)) {
+        return {
+          orderedScriptIds: [],
+          autoIncludedDependencyIds: [],
+          cyclePath,
+        };
+      }
+    }
+
+    const visited = new Set<number>();
+    const orderedScriptIds: number[] = [];
+    const visit = (scriptId: number): void => {
+      if (visited.has(scriptId)) return;
+      visited.add(scriptId);
+
+      const dependencyIds = [...(dependencyMap.get(scriptId) || [])].sort(comparator);
+      for (const dependencyId of dependencyIds) {
+        visit(dependencyId);
+      }
+
+      orderedScriptIds.push(scriptId);
+    };
+
+    for (const selectedId of selectedScriptIds) {
+      visit(selectedId);
+    }
+
+    const selectedSet = new Set<number>(selectedScriptIds);
+    const autoIncludedDependencyIds = orderedScriptIds.filter((id) => !selectedSet.has(id));
+
+    return {
+      orderedScriptIds,
+      autoIncludedDependencyIds,
+      cyclePath: [],
+    };
+  }
+
   private loadRegistryData() {
     this.loading.set(true);
 
@@ -650,7 +1024,30 @@ export class Runner implements OnInit, OnDestroy {
 
     this.scriptService.getScripts().subscribe({
       next: (data) => {
-        this.scripts.set(data.filter(s => s.isActive).map(s => ({ ...s, selected: false })));
+        const previouslySelected = new Set(
+          this.scripts()
+            .filter((script) => script.selected)
+            .map((script) => script.id)
+        );
+
+        this.scripts.set(
+          data
+            .filter((script) => script.isActive)
+            .map((script) => {
+              const dependencyIds = Array.from(new Set(script.dependencies || []))
+                .map((id) => Number(id))
+                .filter((id) => Number.isInteger(id) && id > 0 && id !== script.id);
+
+              return {
+                ...script,
+                selected: previouslySelected.has(script.id),
+                dependencies: dependencyIds,
+                dependencyCount: typeof script.dependencyCount === 'number' ? script.dependencyCount : dependencyIds.length,
+                dependentCount: typeof script.dependentCount === 'number' ? script.dependentCount : 0,
+              };
+            })
+        );
+        this.recalculateDependentCounts();
         this.loading.set(false);
       },
       error: () => this.loading.set(false),

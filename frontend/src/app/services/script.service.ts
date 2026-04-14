@@ -99,6 +99,18 @@ export class ScriptService {
     return this.http.put(`${this.apiUrl}/${id}`, data);
   }
 
+  updateScriptDependencies(id: number, dependencyIds: number[]): Observable<{
+    message: string;
+    scriptId: number;
+    dependencyIds: number[];
+  }> {
+    return this.http.put<{
+      message: string;
+      scriptId: number;
+      dependencyIds: number[];
+    }>(`${this.apiUrl}/${id}/dependencies`, { dependencyIds });
+  }
+
   syncScripts(): Observable<any> {
     return this.http.post(`${this.apiUrl}/sync`, {});
   }

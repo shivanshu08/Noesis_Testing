@@ -124,9 +124,35 @@
                 <div class="script-info">
                   <span class="script-name">{{ script.name }}</span>
                   <span class="script-class">{{ script.className.split('.').pop() }}</span>
+                  @if ((script.dependencyCount || 0) > 0 || (script.dependentCount || 0) > 0) {
+                    <div class="script-dependency-meta">
+                      @if ((script.dependencyCount || 0) > 0) {
+                        <span class="dependency-chip">
+                          <i class="pi pi-link"></i>
+                          {{ script.dependencyCount }} prerequisite{{ (script.dependencyCount || 0) === 1 ? '' : 's' }}
+                        </span>
+                      }
+                      @if ((script.dependentCount || 0) > 0) {
+                        <span class="dependency-chip secondary">
+                          <i class="pi pi-sitemap"></i>
+                          used by {{ script.dependentCount }}
+                        </span>
+                      }
+                    </div>
+                  }
                 </div>
                 <div class="script-actions" style="display: flex; gap: 8px; align-items: center;">
                   <p-tag [value]="getCategoryName(script.categoryId)" size="small" severity="secondary" />
+                  <p-button
+                    icon="pi pi-link"
+                    [text]="true"
+                    severity="secondary"
+                    size="small"
+                    pTooltip="Manage Dependencies"
+                    (onClick)="openDependencyDialog($event, script.id)"
+                    [disabled]="running() || !auth.canEdit()"
+                    styleClass="btn-config-dependency"
+                  />
                   <p-button
                     icon="pi pi-bolt"
                     [text]="true"
@@ -337,24 +363,38 @@
 
     <div class="confirm-details">
       <div class="confirm-stat">
-        <span class="stat-label">Scripts</span>
+        <span class="stat-label">Selected</span>
         <span class="stat-value">{{ selectedCount }}</span>
       </div>
       <div class="confirm-stat">
-        <span class="stat-label">Categories</span>
-        <span class="stat-value">{{ (selectedScripts | slice:0:3).length > 0 ? (selectedScripts | slice:0:3).length : 0 }}</span>
+        <span class="stat-label">Dependencies</span>
+        <span class="stat-value">{{ autoIncludedDependencyCount }}</span>
+      </div>
+      <div class="confirm-stat">
+        <span class="stat-label">Total Run</span>
+        <span class="stat-value">{{ plannedScriptTotalCount }}</span>
       </div>
     </div>
 
+    @if (hasDependencyCycleInSelection) {
+      <div class="confirm-cycle-warning">
+        <i class="pi pi-exclamation-triangle"></i>
+        <span>{{ dependencyCyclePathLabel }}</span>
+      </div>
+    }
+
     <div class="confirm-scripts-list">
-      @for (script of selectedScripts | slice:0:5; track script.id) {
-        <div class="confirm-script-item">
+      @for (preview of confirmPreviewRows | slice:0:7; track preview.scriptId) {
+        <div class="confirm-script-item" [class.dependency-auto]="preview.isAutoDependency">
           <i class="pi pi-file"></i>
-          <span>{{ script.name }}</span>
+          <span>{{ preview.scriptName }}</span>
+          @if (preview.isAutoDependency) {
+            <small>dependency</small>
+          }
         </div>
       }
-      @if (selectedCount > 5) {
-        <div class="confirm-more">+ {{ selectedCount - 5 }} more...</div>
+      @if (confirmPreviewRows.length > 7) {
+        <div class="confirm-more">+ {{ confirmPreviewRows.length - 7 }} more...</div>
       }
     </div>
 
@@ -367,7 +407,55 @@
   <ng-template #footer>
     <div class="confirm-footer">
       <p-button label="Cancel" [text]="true" severity="secondary" (onClick)="cancelRunConfirm()" />
-      <p-button label="Run Now" icon="pi pi-bolt" (onClick)="confirmAndRun()" id="btn-confirm-run" />
+      <p-button label="Run Now" icon="pi pi-bolt" (onClick)="confirmAndRun()" [disabled]="hasDependencyCycleInSelection" id="btn-confirm-run" />
+    </div>
+  </ng-template>
+</p-dialog>
+
+<!-- Dependency Dialog -->
+<p-dialog
+  header="Configure Dependencies"
+  [(visible)]="showDependencyDialog"
+  [modal]="true"
+  [closable]="!savingDependencies"
+  [style]="{ width: '540px', maxWidth: '95vw' }"
+  [dismissableMask]="!savingDependencies"
+  styleClass="dependency-dialog"
+  id="dialog-dependency-config"
+>
+  <div class="dependency-dialog-body">
+    @if (dependencyTargetScript) {
+      <p class="dependency-intro">
+        Select prerequisite scripts that must run before
+        <strong>{{ dependencyTargetScript.name }}</strong>.
+      </p>
+
+      @if (dependencyCandidates.length === 0) {
+        <div class="dependency-empty">No other active scripts are available to link.</div>
+      } @else {
+        <div class="dependency-candidate-list">
+          @for (candidate of dependencyCandidates; track candidate.id) {
+            <label class="dependency-candidate-row" [class.active]="isDependencyDraftSelected(candidate.id)">
+              <p-checkbox
+                [binary]="true"
+                [ngModel]="isDependencyDraftSelected(candidate.id)"
+                (ngModelChange)="toggleDependencyDraft(candidate.id, $event)"
+              />
+              <div class="dependency-candidate-content">
+                <span class="dependency-candidate-name">{{ candidate.name }}</span>
+                <span class="dependency-candidate-meta">{{ getCategoryName(candidate.categoryId) }}</span>
+              </div>
+            </label>
+          }
+        </div>
+      }
+    }
+  </div>
+
+  <ng-template #footer>
+    <div class="dependency-dialog-footer">
+      <p-button label="Cancel" [text]="true" severity="secondary" (onClick)="closeDependencyDialog()" [disabled]="savingDependencies" />
+      <p-button label="Save Dependencies" icon="pi pi-check" (onClick)="saveDependencyDialog()" [loading]="savingDependencies" id="btn-save-dependencies" />
     </div>
   </ng-template>
 </p-dialog>

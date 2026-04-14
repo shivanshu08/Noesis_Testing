@@ -8,6 +8,7 @@ import path from 'path';
 import { Server as SocketIOServer } from 'socket.io';
 import { appLogService } from '../services/appLogService';
 import { computeNextRun, refreshSchedule, unregisterTask } from '../services/schedulerService';
+import { resolveScriptExecutionPlan } from '../services/scriptDependencyService';
 import cron from 'node-cron';
 
 const router = Router();
@@ -157,22 +158,62 @@ function expandActionFilterAliases(values: string[]): string[] {
 // POST /api/execution/run - Execute scripts
 router.post('/run', authorize('admin', 'tester'), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { scriptIds, suiteName, environment = 'local' } = req.body;
+    const { scriptIds: scriptIdsRaw, suiteName, environment = 'local' } = req.body;
 
-    if (!scriptIds || !Array.isArray(scriptIds) || scriptIds.length === 0) {
+    if (!Array.isArray(scriptIdsRaw) || scriptIdsRaw.length === 0) {
       res.status(400).json({ error: 'At least one script ID is required.' });
       return;
     }
 
-    // Fetch script details
-    const placeholders = scriptIds.map((_: any, i: number) => `$${i + 1}`).join(',');
-    const scripts = await query<any>(
-      `SELECT id, name, class_name, method_name FROM scripts WHERE id IN (${placeholders}) AND is_active = TRUE`,
-      scriptIds
+    const dependencyPlan = await resolveScriptExecutionPlan(scriptIdsRaw);
+
+    if (dependencyPlan.requestedScriptIds.length === 0) {
+      res.status(400).json({ error: 'At least one valid script ID is required.' });
+      return;
+    }
+
+    if (dependencyPlan.cyclePath) {
+      res.status(400).json({
+        error: 'Circular script dependency detected. Please update dependencies before running.',
+        cyclePath: dependencyPlan.cyclePath,
+      });
+      return;
+    }
+
+    if (dependencyPlan.missingScriptIds.length > 0) {
+      res.status(400).json({
+        error: 'One or more scripts (or dependencies) are missing or inactive.',
+        missingScriptIds: dependencyPlan.missingScriptIds,
+      });
+      return;
+    }
+
+    if (dependencyPlan.orderedScriptIds.length === 0) {
+      res.status(400).json({ error: 'No runnable scripts found for this selection.' });
+      return;
+    }
+
+    const scriptRows = await query<any>(
+      `SELECT id, name, class_name, method_name FROM scripts WHERE id = ANY($1::int[]) AND is_active = TRUE`,
+      [dependencyPlan.orderedScriptIds]
     );
+    const scriptById = new Map<number, any>(
+      scriptRows.map((script) => [Number(script.id), script])
+    );
+    const scripts = dependencyPlan.orderedScriptIds
+      .map((scriptId) => scriptById.get(scriptId))
+      .filter(Boolean);
 
     if (scripts.length === 0) {
       res.status(400).json({ error: 'No valid active scripts found.' });
+      return;
+    }
+
+    if (scripts.length !== dependencyPlan.orderedScriptIds.length) {
+      res.status(400).json({
+        error: 'Some scripts could not be resolved for execution.',
+        missingScriptIds: dependencyPlan.orderedScriptIds.filter((scriptId) => !scriptById.has(scriptId)),
+      });
       return;
     }
 
@@ -213,6 +254,8 @@ router.post('/run', authorize('admin', 'tester'), async (req: AuthRequest, res: 
         runId,
         message: 'Execution started.',
         totalScripts: scripts.length,
+        resolvedScriptIds: dependencyPlan.orderedScriptIds,
+        autoIncludedDependencyIds: dependencyPlan.autoIncludedDependencyIds,
       });
     } catch (err) {
       await client.query('ROLLBACK');

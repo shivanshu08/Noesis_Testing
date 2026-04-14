@@ -108,6 +108,22 @@ CREATE TRIGGER update_scripts_updated_at BEFORE UPDATE ON scripts
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================
+-- Script Dependency Graph (script -> prerequisite script)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS script_dependencies (
+    id BIGSERIAL PRIMARY KEY,
+    script_id INT NOT NULL REFERENCES scripts(id) ON DELETE CASCADE,
+    depends_on_script_id INT NOT NULL REFERENCES scripts(id) ON DELETE CASCADE,
+    created_by INT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT script_dependencies_no_self_dependency CHECK (script_id <> depends_on_script_id),
+    UNIQUE (script_id, depends_on_script_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_script_dependencies_script ON script_dependencies(script_id);
+CREATE INDEX IF NOT EXISTS idx_script_dependencies_depends_on ON script_dependencies(depends_on_script_id);
+
+-- ============================================================
 -- Script Configuration Resource Snapshot
 -- ============================================================
 CREATE TABLE IF NOT EXISTS script_configuration_resources (
