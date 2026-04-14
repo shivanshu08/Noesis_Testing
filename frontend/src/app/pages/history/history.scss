@@ -592,24 +592,24 @@
     letter-spacing: 0.3px;
   }
 
-  .p-select-overlay {
+  .history-filter-select-overlay.p-select-overlay {
     border-radius: 10px;
     border: 1px solid color-mix(in srgb, var(--surface-border) 90%, transparent);
     box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
     overflow: hidden;
   }
 
-  .p-select-overlay .p-select-list {
+  .history-filter-select-overlay.p-select-overlay .p-select-list {
     padding: 4px;
   }
 
-  .p-select-overlay .p-select-option,
-  .p-select-overlay .p-select-empty-message {
+  .history-filter-select-overlay.p-select-overlay .p-select-option,
+  .history-filter-select-overlay.p-select-overlay .p-select-empty-message {
     font-size: 0.72rem;
     line-height: 1.2;
   }
 
-  .p-select-overlay .p-select-option {
+  .history-filter-select-overlay.p-select-overlay .p-select-option {
     min-height: 28px;
     padding: 0.36rem 0.55rem;
     border-radius: 6px;
@@ -619,13 +619,13 @@
     text-align: center;
   }
 
-  .p-select-overlay .p-select-option.p-select-option-selected {
+  .history-filter-select-overlay.p-select-overlay .p-select-option.p-select-option-selected {
     background: color-mix(in srgb, var(--noesis-primary) 14%, var(--surface-card));
     color: var(--noesis-primary);
     font-weight: 700;
   }
 
-  .p-select-overlay .p-select-option:not(.p-select-option-selected):hover {
+  .history-filter-select-overlay.p-select-overlay .p-select-option:not(.p-select-option-selected):hover {
     background: color-mix(in srgb, var(--noesis-primary) 8%, var(--surface-card));
   }
 }

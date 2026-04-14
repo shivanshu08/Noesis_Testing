@@ -419,6 +419,31 @@ a {
   color: var(--noesis-primary) !important;
 }
 
+// Rows-per-page dropdown (PrimeNG Select) — enforce one visual style everywhere.
+.p-paginator .p-paginator-rpp-dropdown {
+  min-width: 4.1rem !important;
+  height: 1.85rem !important;
+  border-radius: 8px !important;
+  border: 1px solid color-mix(in srgb, var(--noesis-border) 92%, transparent) !important;
+  background: var(--surface-card) !important;
+}
+
+.p-paginator .p-paginator-rpp-dropdown .p-select-label {
+  padding: 0.34rem 1.7rem 0.34rem 0.6rem !important;
+  font-size: 0.78rem !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+}
+
+.p-paginator .p-paginator-rpp-dropdown .p-select-dropdown {
+  width: 1.7rem !important;
+  color: var(--noesis-text-secondary) !important;
+}
+
+.p-paginator .p-paginator-rpp-dropdown .p-select-dropdown-icon {
+  font-size: 0.68rem !important;
+}
+
 // Global Compact Toast Overrides
 ::ng-deep .p-toast {
   &.noesis-toast-alert {
