@@ -293,9 +293,9 @@ export class Dashboard implements OnInit, OnDestroy {
   }
 
   formatDuration(seconds: number | null): string {
-    if (!seconds) return '-';
+    if (seconds === null || seconds === undefined || Number.isNaN(seconds) || seconds < 0) return '-';
     const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
+    const s = Math.floor(seconds % 60);
     return m > 0 ? `${m}m ${s}s` : `${s}s`;
   }
 

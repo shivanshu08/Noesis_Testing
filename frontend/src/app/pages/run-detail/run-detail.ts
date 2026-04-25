@@ -319,10 +319,9 @@ export class RunDetail implements OnInit, OnDestroy {
       return '-';
     }
 
-    const rounded = Math.round(seconds);
-    const hours = Math.floor(rounded / 3600);
-    const minutes = Math.floor((rounded % 3600) / 60);
-    const secs = rounded % 60;
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
 
     if (hours > 0) {
       return `${hours}h ${minutes}m ${secs}s`;

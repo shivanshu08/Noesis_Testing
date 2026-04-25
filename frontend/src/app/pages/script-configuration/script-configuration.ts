@@ -266,9 +266,9 @@ export class ScriptConfiguration implements OnInit, OnDestroy {
 
   formatDuration(durationMs: number | null | undefined): string {
     if (!durationMs || Number.isNaN(durationMs) || durationMs < 0) return '-';
-    const totalSeconds = Math.round(durationMs / 1000);
+    const totalSeconds = durationMs / 1000;
     const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
+    const seconds = Math.floor(totalSeconds % 60);
     if (minutes > 0) {
       return `${minutes}m ${seconds}s`;
     }
