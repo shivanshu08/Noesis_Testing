@@ -187,6 +187,11 @@ export class History implements OnInit {
     this.applyFilters();
   }
 
+  clearSearch(): void {
+    this.searchTerm = '';
+    this.applyFilters();
+  }
+
   removeFilter(key: FilterChipKey): void {
     switch (key) {
       case 'search':

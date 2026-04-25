@@ -196,9 +196,9 @@
   flex-wrap: nowrap;
 
   .search-field {
-    flex: 1 1 240px;
-    min-width: 180px;
-    max-width: 320px;
+    flex: 1 1 280px;
+    min-width: 220px;
+    max-width: 400px;
   }
 
   .compact-select {
@@ -477,12 +477,79 @@
   }
 
   .filters-inline-row {
-    .p-inputtext,
     .p-select {
       width: 100%;
     }
 
-    .p-inputtext {
+    .premium-search-wrapper {
+      .p-iconfield {
+        width: 100%;
+      }
+
+      .premium-search-input.p-inputtext {
+        width: 100%;
+        padding-left: 2.6rem !important;
+        padding-right: 2.6rem !important;
+        border-radius: 12px;
+        border: 1px solid color-mix(in srgb, var(--noesis-border) 65%, transparent);
+        background: color-mix(in srgb, var(--noesis-surface) 75%, transparent);
+        backdrop-filter: blur(8px);
+        color: var(--noesis-text);
+        font-size: 0.82rem;
+        min-height: 40px;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+
+        &::placeholder {
+          color: var(--noesis-text-secondary);
+          opacity: 0.7;
+        }
+
+        &:hover {
+          border-color: color-mix(in srgb, var(--noesis-primary) 35%, var(--noesis-border));
+          background: color-mix(in srgb, var(--noesis-surface) 90%, transparent);
+        }
+
+        &:focus {
+          background: var(--noesis-surface);
+          border-color: var(--noesis-primary);
+          box-shadow: 0 0 0 4px color-mix(in srgb, var(--noesis-primary) 14%, transparent),
+                      0 4px 12px rgba(0, 0, 0, 0.05);
+          transform: translateY(-1px);
+        }
+      }
+
+      .pi-search {
+        left: 1rem !important;
+        font-size: 0.9rem;
+        color: var(--noesis-text-secondary);
+        transition: all 0.25s ease;
+      }
+
+      &:focus-within .pi-search {
+        color: var(--noesis-primary);
+        transform: scale(1.1);
+      }
+
+      .search-clear-icon {
+        right: 1rem !important;
+        left: auto !important;
+        font-size: 0.9rem;
+        color: var(--noesis-text-secondary);
+        opacity: 0.4;
+        cursor: pointer;
+        pointer-events: auto !important;
+        transition: all 0.2s ease;
+
+        &:hover {
+          opacity: 1;
+          color: var(--noesis-danger);
+          transform: scale(1.15);
+        }
+      }
+    }
+
+    .p-inputtext:not(.premium-search-input) {
       border-radius: 10px;
       border-color: color-mix(in srgb, var(--surface-border) 90%, transparent);
       background: color-mix(in srgb, var(--surface-ground) 65%, var(--surface-card));
@@ -492,7 +559,7 @@
       min-height: 36px;
     }
 
-    .p-inputtext:focus {
+    .p-inputtext:not(.premium-search-input):focus {
       border-color: color-mix(in srgb, var(--noesis-primary) 50%, var(--surface-border));
       box-shadow: 0 0 0 2px color-mix(in srgb, var(--noesis-primary) 14%, transparent);
     }

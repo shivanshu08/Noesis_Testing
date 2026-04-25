@@ -97,16 +97,24 @@
 
   <p-card styleClass="filters-card">
     <div class="filters-inline-row">
-      <p-iconfield styleClass="search-field compact-control">
-        <p-inputicon styleClass="pi pi-search" />
+      <div class="premium-search-wrapper search-field compact-control">
+        <p-iconfield>
+          <p-inputicon styleClass="pi pi-search" />
           <input
             pInputText
             type="text"
-            placeholder="Search"
+            placeholder="Search history..."
             [(ngModel)]="searchTerm"
             (ngModelChange)="onFilterChange()"
+            class="premium-search-input"
           />
-      </p-iconfield>
+          <p-inputicon
+            *ngIf="searchTerm"
+            styleClass="pi pi-times-circle search-clear-icon"
+            (click)="clearSearch()"
+          />
+        </p-iconfield>
+      </div>
 
       <p-select
         styleClass="compact-control compact-select"
