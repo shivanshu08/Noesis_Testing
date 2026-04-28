@@ -40,6 +40,7 @@ export class Users implements OnInit {
   totalSuites = signal(0);
   totalScripts = signal(0);
   activeCount = signal(0);
+  lockedCount = signal(0);
 
   roles = [
     { label: 'Admin', value: 'admin' },
@@ -73,6 +74,7 @@ export class Users implements OnInit {
         this.totalSuites.set(data.reduce((acc, user) => acc + (user.suites_created || 0), 0));
         this.totalScripts.set(data.reduce((acc, user) => acc + (user.scripts_registered || 0), 0));
         this.activeCount.set(data.filter(user => user.is_active).length);
+        this.lockedCount.set(data.filter(user => user.is_locked).length);
         
         this.loading.set(false);
       },
@@ -142,6 +144,29 @@ export class Users implements OnInit {
         this.loadUsers();
       },
       error: (err) => this.messageService.add({ severity: 'error', summary: 'Error', detail: err.error?.error || 'Failed to save user' })
+    });
+  }
+
+  toggleUserLock(user: any) {
+    const nextLockedState = !user.is_locked;
+    this.http.put(
+      `http://localhost:3000/api/users/${user.id}/lock`,
+      { isLocked: nextLockedState },
+      { headers: this.getHeaders() }
+    ).subscribe({
+      next: () => {
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Successful',
+          detail: `User ${nextLockedState ? 'Locked' : 'Unlocked'}`
+        });
+        this.loadUsers();
+      },
+      error: (err) => this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: err.error?.error || 'Failed to update user lock status'
+      })
     });
   }
 

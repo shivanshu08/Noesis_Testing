@@ -62,6 +62,18 @@ async function initDatabase() {
       // Ignore migration failures
     }
 
+    // Ensure account lockout columns exist
+    try {
+      await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INT NOT NULL DEFAULT 0');
+      await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_locked BOOLEAN NOT NULL DEFAULT FALSE');
+      await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_at TIMESTAMP DEFAULT NULL');
+      await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_by INT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL');
+      await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS unlocked_at TIMESTAMP DEFAULT NULL');
+      await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS unlocked_by INT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL');
+    } catch (e) {
+      // Ignore migration failures
+    }
+
     // Ensure execution_logs supports rich diagnostics payload
     try {
       await pool.query('ALTER TABLE execution_logs ADD COLUMN IF NOT EXISTS detailed_description TEXT');

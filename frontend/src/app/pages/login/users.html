@@ -43,11 +43,11 @@
 
     <div class="stat-card">
       <div class="stat-icon asset-stats">
-        <i class="pi pi-objects-column"></i>
+        <i class="pi pi-lock"></i>
       </div>
       <div class="stat-info">
-        <div class="stat-value">{{totalSuites() + totalScripts()}}</div>
-        <div class="stat-label">Assets Created</div>
+        <div class="stat-value">{{lockedCount()}}</div>
+        <div class="stat-label">Locked Users</div>
       </div>
     </div>
   </div>
@@ -80,7 +80,7 @@
           <th style="width: 15%">Activity Details</th>
           <th style="width: 20%">Statistics</th>
           <th style="width: 10%">Status</th>
-          <th style="width: 10%; text-align: center;">Actions</th>
+          <th style="width: 132px; text-align: center;">Actions</th>
         </tr>
       </ng-template>
       <ng-template pTemplate="body" let-user>
@@ -125,13 +125,24 @@
             </div>
           </td>
           <td>
-            <div class="status-indicator">
-                <span class="status-dot" [ngClass]="{'active': user.is_active}"></span>
-                <span class="status-text">{{user.is_active ? 'Active' : 'Disabled'}}</span>
+            <div class="status-indicator" [ngClass]="{'locked': user.is_locked}">
+                <span class="status-dot" [ngClass]="{'active': user.is_active && !user.is_locked, 'locked': user.is_locked}"></span>
+                <span class="status-text">{{user.is_locked ? 'Locked' : (user.is_active ? 'Active' : 'Disabled')}}</span>
             </div>
+            @if (user.is_locked) {
+              <span class="failed-attempts">{{user.failed_login_attempts || 3}} failed attempts</span>
+            }
           </td>
           <td class="text-center actions-cell">
             <div class="action-group">
+                <p-button
+                  [icon]="user.is_locked ? 'pi pi-lock' : 'pi pi-lock-open'"
+                  [rounded]="true"
+                  [text]="true"
+                  [severity]="user.is_locked ? 'warn' : 'secondary'"
+                  (onClick)="toggleUserLock(user)"
+                  [pTooltip]="user.is_locked ? 'Unlock User' : 'Lock User'">
+                </p-button>
                 <p-button icon="pi pi-user-edit" [rounded]="true" [text]="true" severity="info" (onClick)="editUser(user)" pTooltip="Edit User"></p-button>
                 <p-button icon="pi pi-trash" [rounded]="true" [text]="true" severity="danger" (onClick)="deleteUser(user)" pTooltip="Delete User"></p-button>
             </div>

@@ -5,6 +5,8 @@ export interface User {
   fullName: string;
   role: string;
   avatarUrl?: string;
+  isLocked?: boolean;
+  failedLoginAttempts?: number;
   lastLogin?: string;
   createdAt?: string;
   assignedScriptCount?: number;

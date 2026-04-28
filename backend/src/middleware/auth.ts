@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { logger } from '../utils/logger';
+import { query } from '../database/connection';
+import { ensureUserLockoutSchema } from '../database/schemaMaintenance';
 
 export interface AuthRequest extends Request {
   userId?: number;
@@ -10,7 +12,7 @@ export interface AuthRequest extends Request {
   username?: string;
 }
 
-export function authenticate(req: AuthRequest, res: Response, next: NextFunction): void {
+export async function authenticate(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Access denied. No token provided.' });
@@ -20,8 +22,31 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
   const token = authHeader.substring(7);
   try {
     const decoded = jwt.verify(token, config.jwt.secret) as { userId: number; role: string };
+    await ensureUserLockoutSchema();
+    const users = await query<{ username: string; role: string; is_active: boolean; is_locked: boolean }>(
+      'SELECT username, role, is_active, is_locked FROM users WHERE id = $1',
+      [decoded.userId]
+    );
+
+    if (users.length === 0) {
+      res.status(401).json({ error: 'User account no longer exists.' });
+      return;
+    }
+
+    const user = users[0];
+    if (!user.is_active) {
+      res.status(403).json({ error: 'This account has been disabled.' });
+      return;
+    }
+
+    if (user.is_locked) {
+      res.status(423).json({ error: 'This account is locked. Please contact an administrator to unlock it.' });
+      return;
+    }
+
     req.userId = decoded.userId;
-    req.userRole = decoded.role;
+    req.userRole = user.role || decoded.role;
+    req.username = user.username;
     next();
   } catch (error: any) {
     if (error.name === 'TokenExpiredError') {

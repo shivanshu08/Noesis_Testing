@@ -5,6 +5,8 @@ function isUndefinedTableError(error: any): boolean {
   return error?.code === '42P01';
 }
 
+let userLockoutSchemaReady: Promise<void> | null = null;
+
 export async function ensureTestSuitesSchema(): Promise<void> {
   try {
     await execute('ALTER TABLE test_suites ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT NULL');
@@ -39,5 +41,33 @@ export async function ensureScriptAssignmentsSchema(): Promise<void> {
       return;
     }
     logger.warn(`Script assignments migration failed: ${error?.message || String(error)}`);
+  }
+}
+
+export async function ensureUserLockoutSchema(): Promise<void> {
+  if (userLockoutSchemaReady) return userLockoutSchemaReady;
+
+  userLockoutSchemaReady = ensureUserLockoutSchemaInternal().catch((error) => {
+    userLockoutSchemaReady = null;
+    throw error;
+  });
+
+  return userLockoutSchemaReady;
+}
+
+async function ensureUserLockoutSchemaInternal(): Promise<void> {
+  try {
+    await execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts INT NOT NULL DEFAULT 0');
+    await execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS is_locked BOOLEAN NOT NULL DEFAULT FALSE');
+    await execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_at TIMESTAMP DEFAULT NULL');
+    await execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_by INT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL');
+    await execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS unlocked_at TIMESTAMP DEFAULT NULL');
+    await execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS unlocked_by INT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL');
+  } catch (error: any) {
+    if (isUndefinedTableError(error)) {
+      logger.warn('Skipping users lockout migration because users table does not exist yet.');
+      return;
+    }
+    logger.warn(`Users lockout migration failed: ${error?.message || String(error)}`);
   }
 }

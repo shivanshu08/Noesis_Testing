@@ -61,7 +61,7 @@
         &.total-users { background: rgba(99, 102, 241, 0.1); color: #6366f1; }
         &.active-users { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
         &.run-stats { background: rgba(14, 165, 233, 0.1); color: #0ea5e9; }
-        &.asset-stats { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+        &.asset-stats { background: rgba(245, 158, 11, 0.1); color: #d97706; }
       }
 
       .stat-info {
@@ -218,6 +218,10 @@
     align-items: center;
     gap: 8px;
 
+    &.locked .status-text {
+      color: #d97706;
+    }
+
     .status-dot {
       width: 8px;
       height: 8px;
@@ -225,12 +229,34 @@
       background: #ef4444;
       
       &.active { background: #22c55e; box-shadow: 0 0 10px rgba(34, 197, 94, 0.5); }
+      &.locked { background: #d97706; box-shadow: 0 0 10px rgba(217, 119, 6, 0.45); }
     }
 
     .status-text {
       font-size: 0.85rem;
       font-weight: 600;
       color: var(--text-color);
+    }
+  }
+
+  .failed-attempts {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.72rem;
+    color: var(--text-color-secondary);
+    white-space: nowrap;
+  }
+
+  .actions-cell {
+    min-width: 132px;
+
+    .action-group {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      flex-wrap: nowrap;
+      white-space: nowrap;
     }
   }
 }

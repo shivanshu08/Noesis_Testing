@@ -5,8 +5,10 @@ import { query, execute } from '../database/connection';
 import { config } from '../config';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { logger } from '../utils/logger';
+import { ensureUserLockoutSchema } from '../database/schemaMaintenance';
 
 const router = Router();
+const MAX_FAILED_LOGIN_ATTEMPTS = 3;
 
 interface UserRow {
   id: number;
@@ -17,6 +19,8 @@ interface UserRow {
   role: string;
   is_active: boolean;
   avatar_url: string | null;
+  is_locked: boolean;
+  failed_login_attempts: number;
   last_login: Date | null;
   created_at: Date;
 }
@@ -31,8 +35,10 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    await ensureUserLockoutSchema();
+
     const users = await query<UserRow>(
-      'SELECT * FROM users WHERE (username = $1 OR email = $2) AND is_active = TRUE',
+      'SELECT * FROM users WHERE username = $1 OR email = $2',
       [username, username]
     );
 
@@ -42,14 +48,40 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     }
 
     const user = users[0];
-    const validPassword = await bcrypt.compare(password, user.password_hash);
-
-    if (!validPassword) {
-      res.status(401).json({ error: 'Invalid credentials.' });
+    if (!user.is_active) {
+      res.status(403).json({ error: 'This account has been disabled. Please contact an administrator.' });
       return;
     }
 
-    await execute('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
+    if (user.is_locked) {
+      res.status(423).json({ error: 'This account is locked. Please contact an administrator to unlock it.' });
+      return;
+    }
+
+    const validPassword = await bcrypt.compare(password, user.password_hash);
+
+    if (!validPassword) {
+      const failedAttempts = (user.failed_login_attempts || 0) + 1;
+      if (failedAttempts >= MAX_FAILED_LOGIN_ATTEMPTS) {
+        await execute(
+          'UPDATE users SET failed_login_attempts = $1, is_locked = TRUE, locked_at = NOW(), locked_by = NULL WHERE id = $2',
+          [failedAttempts, user.id]
+        );
+        logger.warn(`User locked after failed login attempts: ${user.username}`);
+        res.status(423).json({ error: 'Account locked after 3 wrong password attempts. Please contact an administrator to unlock it.' });
+        return;
+      }
+
+      await execute('UPDATE users SET failed_login_attempts = $1 WHERE id = $2', [failedAttempts, user.id]);
+      const remainingAttempts = MAX_FAILED_LOGIN_ATTEMPTS - failedAttempts;
+      res.status(401).json({ error: `Invalid credentials. ${remainingAttempts} attempt${remainingAttempts === 1 ? '' : 's'} remaining before lock.` });
+      return;
+    }
+
+    await execute(
+      'UPDATE users SET last_login = NOW(), failed_login_attempts = 0, unlocked_at = NULL, unlocked_by = NULL WHERE id = $1',
+      [user.id]
+    );
 
     const token = jwt.sign(
       { userId: user.id, role: user.role },
@@ -95,7 +127,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 router.get('/me', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const users = await query<UserRow>(
-      'SELECT id, username, email, full_name, role, avatar_url, last_login, created_at FROM users WHERE id = $1',
+      'SELECT id, username, email, full_name, role, avatar_url, is_locked, failed_login_attempts, last_login, created_at FROM users WHERE id = $1',
       [req.userId]
     );
 
@@ -112,6 +144,8 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response): Promise
       fullName: user.full_name,
       role: user.role,
       avatarUrl: user.avatar_url,
+      isLocked: user.is_locked,
+      failedLoginAttempts: user.failed_login_attempts,
       lastLogin: user.last_login,
       createdAt: user.created_at,
     });
