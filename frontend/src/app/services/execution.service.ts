@@ -80,6 +80,18 @@ export class ExecutionService {
     return `${this.apiUrl}/artifacts/${artifactId}/download`;
   }
 
+  mailArtifacts(runId: number, data: {
+    recipients: string[];
+    artifactIds: number[];
+    subject?: string;
+    message?: string;
+  }): Observable<{ message: string; artifactCount: number; recipientCount: number }> {
+    return this.http.post<{ message: string; artifactCount: number; recipientCount: number }>(
+      `${this.apiUrl}/runs/${runId}/artifacts/mail`,
+      data
+    );
+  }
+
   downloadArtifactBlob(artifactId: number, fileName: string): void {
     this.http.get(`${this.apiUrl}/artifacts/${artifactId}/download`, { responseType: 'blob' }).subscribe({
       next: (blob) => {

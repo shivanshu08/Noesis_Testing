@@ -108,6 +108,14 @@ export class Runner implements OnInit, OnDestroy {
   showSchedulesPanel = false;
   loadingSchedules = false;
 
+  // Artifact mail dialog
+  showMailArtifactsDialog = false;
+  mailRecipients = '';
+  mailSubject = '';
+  mailMessage = '';
+  mailArtifactIds: number[] = [];
+  mailingArtifacts = false;
+
   // Cron presets — daily & weekly
   cronPresets: CronPreset[] = [
     { label: 'Daily 6 AM', icon: 'pi pi-sun', cron: '0 6 * * *', description: 'Every day at 6:00 AM' },
@@ -627,6 +635,105 @@ export class Runner implements OnInit, OnDestroy {
       setTimeout(() => {
         this.downloadArtifact(artifact);
       }, index * 500); // Stagger downloads slightly
+    });
+  }
+
+  openMailArtifactsDialog() {
+    const runId = this.currentRunId();
+    const artifacts = this.artifacts();
+    if (!runId || artifacts.length === 0) {
+      this.messageService.add({ severity: 'warn', summary: 'No Artifacts', detail: 'There are no artifacts available to mail yet.' });
+      return;
+    }
+
+    this.mailArtifactIds = artifacts.map((artifact) => artifact.id);
+    this.mailRecipients = '';
+    this.mailSubject = `Noesis artifacts for Run #${runId}`;
+    this.mailMessage = 'Please find the selected execution artifacts attached.';
+    this.mailingArtifacts = false;
+    this.showMailArtifactsDialog = true;
+  }
+
+  closeMailArtifactsDialog() {
+    if (this.mailingArtifacts) return;
+    this.showMailArtifactsDialog = false;
+  }
+
+  isMailArtifactSelected(artifactId: number): boolean {
+    return this.mailArtifactIds.includes(artifactId);
+  }
+
+  toggleMailArtifact(artifactId: number, checked: boolean) {
+    const next = new Set(this.mailArtifactIds);
+    if (checked) {
+      next.add(artifactId);
+    } else {
+      next.delete(artifactId);
+    }
+    this.mailArtifactIds = Array.from(next);
+  }
+
+  toggleAllMailArtifacts() {
+    const artifacts = this.artifacts();
+    this.mailArtifactIds = this.mailArtifactIds.length === artifacts.length
+      ? []
+      : artifacts.map((artifact) => artifact.id);
+  }
+
+  get selectedMailArtifactCount(): number {
+    return this.mailArtifactIds.length;
+  }
+
+  get mailRecipientList(): string[] {
+    return this.mailRecipients
+      .split(/[,\n;]/)
+      .map((recipient) => recipient.trim())
+      .filter(Boolean);
+  }
+
+  sendArtifactMail() {
+    const runId = this.currentRunId();
+    if (!runId) return;
+
+    const recipients = this.mailRecipientList;
+    const invalidRecipient = recipients.find((email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
+    if (recipients.length === 0) {
+      this.messageService.add({ severity: 'warn', summary: 'Recipients Required', detail: 'Enter at least one email address.' });
+      return;
+    }
+    if (invalidRecipient) {
+      this.messageService.add({ severity: 'error', summary: 'Invalid Email', detail: invalidRecipient });
+      return;
+    }
+    if (this.mailArtifactIds.length === 0) {
+      this.messageService.add({ severity: 'warn', summary: 'Artifacts Required', detail: 'Select at least one artifact to attach.' });
+      return;
+    }
+
+    this.mailingArtifacts = true;
+    this.executionService.mailArtifacts(runId, {
+      recipients,
+      artifactIds: this.mailArtifactIds,
+      subject: this.mailSubject.trim() || undefined,
+      message: this.mailMessage.trim() || undefined,
+    }).subscribe({
+      next: (response) => {
+        this.mailingArtifacts = false;
+        this.showMailArtifactsDialog = false;
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Artifacts Mailed',
+          detail: response.message || 'Selected artifacts were mailed successfully.',
+        });
+      },
+      error: (error) => {
+        this.mailingArtifacts = false;
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Mail Failed',
+          detail: error?.error?.error || 'Could not mail artifacts.',
+        });
+      },
     });
   }
 

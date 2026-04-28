@@ -396,7 +396,19 @@
               <h3><i class="pi pi-box"></i> Artifacts Hub</h3>
               <p>Collected files and ready-to-download reports</p>
             </div>
-            <span class="count-pill">{{ artifacts().length + 1 }}</span>
+            <div class="card-actions">
+              <p-button
+                label="Mail"
+                icon="pi pi-send"
+                severity="secondary"
+                [outlined]="true"
+                size="small"
+                [disabled]="artifacts().length === 0"
+                (onClick)="openMailArtifactsDialog()"
+                id="btn-mail-artifacts-detail"
+              />
+              <span class="count-pill">{{ artifacts().length + 1 }}</span>
+            </div>
           </div>
 
           <div class="hub-shell">
@@ -464,3 +476,92 @@
     </div>
   }
 </div>
+
+<p-dialog
+  header="Mail Artifacts"
+  [(visible)]="showMailArtifactsDialog"
+  [modal]="true"
+  [closable]="!mailingArtifacts"
+  [style]="{ width: '620px', maxWidth: '95vw' }"
+  position="center"
+  appendTo="body"
+  [blockScroll]="false"
+  [draggable]="false"
+  [resizable]="false"
+  [dismissableMask]="!mailingArtifacts"
+  styleClass="mail-artifacts-dialog"
+  id="dialog-mail-artifacts-detail"
+>
+  <div class="mail-artifacts-body">
+    <div class="mail-field">
+      <label for="detail-mail-recipients-input">Recipients</label>
+      <textarea
+        pTextarea
+        [(ngModel)]="mailRecipients"
+        id="detail-mail-recipients-input"
+        rows="2"
+        placeholder="name@company.com, team@company.com"
+        class="w-full"
+      ></textarea>
+    </div>
+
+    <div class="mail-field">
+      <label for="detail-mail-subject-input">Subject</label>
+      <input type="text" pInputText [(ngModel)]="mailSubject" id="detail-mail-subject-input" class="w-full" />
+    </div>
+
+    <div class="mail-field">
+      <label for="detail-mail-message-input">Message</label>
+      <textarea pTextarea [(ngModel)]="mailMessage" id="detail-mail-message-input" rows="3" class="w-full"></textarea>
+    </div>
+
+    <div class="mail-note">
+      <i class="pi pi-info-circle"></i>
+      <span>The generated Noesis Run Report is downloaded in-browser; mailed attachments use the captured server artifacts below.</span>
+    </div>
+
+    <div class="mail-attachments-header">
+      <span>{{ selectedMailArtifactCount }} of {{ artifacts().length }} selected</span>
+      <p-button
+        [label]="selectedMailArtifactCount === artifacts().length ? 'Clear All' : 'Select All'"
+        [text]="true"
+        size="small"
+        severity="secondary"
+        (onClick)="toggleAllMailArtifacts()"
+      />
+    </div>
+
+    <div class="mail-attachment-list">
+      @for (artifact of artifacts(); track artifact.id) {
+        <label class="mail-attachment-row" [class.active]="isMailArtifactSelected(artifact.id)">
+          <p-checkbox
+            [binary]="true"
+            [ngModel]="isMailArtifactSelected(artifact.id)"
+            (ngModelChange)="toggleMailArtifact(artifact.id, $event)"
+          />
+          <span class="mail-attachment-icon">
+            <i class="pi" [ngClass]="{ 'pi-file-pdf': artifact.artifactType === 'pdf', 'pi-file': artifact.artifactType !== 'pdf' }"></i>
+          </span>
+          <span class="mail-attachment-copy">
+            <strong>{{ artifact.fileName }}</strong>
+            <small>{{ artifact.artifactType | uppercase }} · {{ artifact.fileSizeBytes ? (artifact.fileSizeBytes / 1024 | number:'1.0-1') + ' KB' : '--' }}</small>
+          </span>
+        </label>
+      }
+    </div>
+  </div>
+
+  <ng-template #footer>
+    <div class="mail-artifacts-footer">
+      <p-button label="Cancel" [text]="true" severity="secondary" (onClick)="closeMailArtifactsDialog()" [disabled]="mailingArtifacts" />
+      <p-button
+        label="Send Artifacts"
+        icon="pi pi-send"
+        (onClick)="sendArtifactMail()"
+        [loading]="mailingArtifacts"
+        [disabled]="selectedMailArtifactCount === 0"
+        id="btn-send-artifact-mail-detail"
+      />
+    </div>
+  </ng-template>
+</p-dialog>

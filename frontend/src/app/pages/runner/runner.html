@@ -262,6 +262,51 @@
         </div>
       </p-card>
 
+      @if (artifacts().length > 0) {
+        <section class="artifact-mailroom">
+          <div class="artifact-mailroom-header">
+            <div>
+              <h3>Artifacts</h3>
+              <p>{{ artifacts().length }} file{{ artifacts().length === 1 ? '' : 's' }} captured from this run</p>
+            </div>
+            <div class="artifact-mailroom-actions">
+              <p-button
+                label="Mail Artifacts"
+                icon="pi pi-send"
+                size="small"
+                severity="help"
+                (onClick)="openMailArtifactsDialog()"
+                id="btn-mail-artifacts"
+              />
+              <p-button
+                label="Download All"
+                icon="pi pi-download"
+                size="small"
+                severity="secondary"
+                [outlined]="true"
+                (onClick)="downloadAllArtifacts()"
+                id="btn-download-all-artifacts"
+              />
+            </div>
+          </div>
+
+          <div class="artifact-strip">
+            @for (artifact of artifacts(); track artifact.id) {
+              <button class="artifact-tile" (click)="downloadArtifact(artifact)">
+                <span class="artifact-icon" [class.pdf]="artifact.artifactType === 'pdf'" [class.html]="artifact.artifactType === 'html'">
+                  <i class="pi" [ngClass]="{ 'pi-file-pdf': artifact.artifactType === 'pdf', 'pi-file': artifact.artifactType !== 'pdf' }"></i>
+                </span>
+                <span class="artifact-copy">
+                  <strong>{{ artifact.fileName }}</strong>
+                  <small>{{ artifact.artifactType | uppercase }} · {{ formatBytes(artifact.fileSizeBytes) }}</small>
+                </span>
+                <i class="pi pi-download artifact-download-icon"></i>
+              </button>
+            }
+          </div>
+        </section>
+      }
+
     </div>
   </div>
 </div>
@@ -378,6 +423,91 @@
     <div class="dependency-dialog-footer">
       <p-button label="Cancel" [text]="true" severity="secondary" (onClick)="closeDependencyDialog()" [disabled]="savingDependencies" />
       <p-button label="Save Dependencies" icon="pi pi-check" (onClick)="saveDependencyDialog()" [loading]="savingDependencies" id="btn-save-dependencies" />
+    </div>
+  </ng-template>
+</p-dialog>
+
+<!-- Mail Artifacts Dialog -->
+<p-dialog
+  header="Mail Artifacts"
+  [(visible)]="showMailArtifactsDialog"
+  [modal]="true"
+  [closable]="!mailingArtifacts"
+  [style]="{ width: '620px', maxWidth: '95vw' }"
+  position="center"
+  appendTo="body"
+  [blockScroll]="false"
+  [draggable]="false"
+  [resizable]="false"
+  [dismissableMask]="!mailingArtifacts"
+  styleClass="mail-artifacts-dialog"
+  id="dialog-mail-artifacts"
+>
+  <div class="mail-artifacts-body">
+    <div class="mail-field">
+      <label for="mail-recipients-input">Recipients</label>
+      <textarea
+        pTextarea
+        [(ngModel)]="mailRecipients"
+        id="mail-recipients-input"
+        rows="2"
+        placeholder="name@company.com, team@company.com"
+        class="w-full"
+      ></textarea>
+    </div>
+
+    <div class="mail-field">
+      <label for="mail-subject-input">Subject</label>
+      <input type="text" pInputText [(ngModel)]="mailSubject" id="mail-subject-input" class="w-full" />
+    </div>
+
+    <div class="mail-field">
+      <label for="mail-message-input">Message</label>
+      <textarea pTextarea [(ngModel)]="mailMessage" id="mail-message-input" rows="3" class="w-full"></textarea>
+    </div>
+
+    <div class="mail-attachments-header">
+      <span>{{ selectedMailArtifactCount }} of {{ artifacts().length }} selected</span>
+      <p-button
+        [label]="selectedMailArtifactCount === artifacts().length ? 'Clear All' : 'Select All'"
+        [text]="true"
+        size="small"
+        severity="secondary"
+        (onClick)="toggleAllMailArtifacts()"
+      />
+    </div>
+
+    <div class="mail-attachment-list">
+      @for (artifact of artifacts(); track artifact.id) {
+        <label class="mail-attachment-row" [class.active]="isMailArtifactSelected(artifact.id)">
+          <p-checkbox
+            [binary]="true"
+            [ngModel]="isMailArtifactSelected(artifact.id)"
+            (ngModelChange)="toggleMailArtifact(artifact.id, $event)"
+          />
+          <span class="mail-attachment-icon">
+            <i class="pi" [ngClass]="{ 'pi-file-pdf': artifact.artifactType === 'pdf', 'pi-file': artifact.artifactType !== 'pdf' }"></i>
+          </span>
+          <span class="mail-attachment-copy">
+            <strong>{{ artifact.fileName }}</strong>
+            <small>{{ artifact.artifactType | uppercase }} · {{ formatBytes(artifact.fileSizeBytes) }}</small>
+          </span>
+        </label>
+      }
+    </div>
+  </div>
+
+  <ng-template #footer>
+    <div class="mail-artifacts-footer">
+      <p-button label="Cancel" [text]="true" severity="secondary" (onClick)="closeMailArtifactsDialog()" [disabled]="mailingArtifacts" />
+      <p-button
+        label="Send Artifacts"
+        icon="pi pi-send"
+        (onClick)="sendArtifactMail()"
+        [loading]="mailingArtifacts"
+        [disabled]="selectedMailArtifactCount === 0"
+        id="btn-send-artifact-mail"
+      />
     </div>
   </ng-template>
 </p-dialog>

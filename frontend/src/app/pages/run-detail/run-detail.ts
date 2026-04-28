@@ -13,6 +13,9 @@ import { SelectModule } from 'primeng/select';
 import { InputTextModule } from 'primeng/inputtext';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
+import { DialogModule } from 'primeng/dialog';
+import { TextareaModule } from 'primeng/textarea';
+import { CheckboxModule } from 'primeng/checkbox';
 import { MessageService } from 'primeng/api';
 import { ExecutionService } from '../../services/execution.service';
 import { ExecutionRun, ExecutionLog, ExecutionArtifact, ExecutionResult } from '../../models/interfaces';
@@ -51,6 +54,9 @@ interface RunSummaryCounts {
     InputTextModule,
     IconFieldModule,
     InputIconModule,
+    DialogModule,
+    TextareaModule,
+    CheckboxModule,
   ],
   templateUrl: './run-detail.html',
   styleUrl: './run-detail.scss',
@@ -74,6 +80,13 @@ export class RunDetail implements OnInit, OnDestroy {
   logLevelFilter: LogLevelFilter = 'all';
 
   autoRefreshEnabled = true;
+
+  showMailArtifactsDialog = false;
+  mailRecipients = '';
+  mailSubject = '';
+  mailMessage = '';
+  mailArtifactIds: number[] = [];
+  mailingArtifacts = false;
 
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
   private liveConnectionActive = false;
@@ -241,6 +254,106 @@ export class RunDetail implements OnInit, OnDestroy {
 
   downloadArtifact(artifact: ExecutionArtifact): void {
     this.executionService.downloadArtifactBlob(artifact.id, artifact.fileName);
+  }
+
+  openMailArtifactsDialog(): void {
+    const artifacts = this.artifacts();
+    if (artifacts.length === 0) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'No Artifacts',
+        detail: 'There are no captured artifacts available to mail for this run.',
+      });
+      return;
+    }
+
+    this.mailRecipients = '';
+    this.mailArtifactIds = artifacts.map((artifact) => artifact.id);
+    this.mailSubject = `Noesis artifacts for Run #${this.runId}`;
+    this.mailMessage = 'Please find the selected execution artifacts attached.';
+    this.mailingArtifacts = false;
+    this.showMailArtifactsDialog = true;
+  }
+
+  closeMailArtifactsDialog(): void {
+    if (this.mailingArtifacts) return;
+    this.showMailArtifactsDialog = false;
+  }
+
+  isMailArtifactSelected(artifactId: number): boolean {
+    return this.mailArtifactIds.includes(artifactId);
+  }
+
+  toggleMailArtifact(artifactId: number, checked: boolean): void {
+    const next = new Set(this.mailArtifactIds);
+    if (checked) {
+      next.add(artifactId);
+    } else {
+      next.delete(artifactId);
+    }
+    this.mailArtifactIds = Array.from(next);
+  }
+
+  toggleAllMailArtifacts(): void {
+    const artifacts = this.artifacts();
+    this.mailArtifactIds = this.mailArtifactIds.length === artifacts.length
+      ? []
+      : artifacts.map((artifact) => artifact.id);
+  }
+
+  get selectedMailArtifactCount(): number {
+    return this.mailArtifactIds.length;
+  }
+
+  get mailRecipientList(): string[] {
+    return this.mailRecipients
+      .split(/[,\n;]/)
+      .map((recipient) => recipient.trim())
+      .filter(Boolean);
+  }
+
+  sendArtifactMail(): void {
+    const recipients = this.mailRecipientList;
+    const invalidRecipient = recipients.find((email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
+
+    if (recipients.length === 0) {
+      this.messageService.add({ severity: 'warn', summary: 'Recipients Required', detail: 'Enter at least one email address.' });
+      return;
+    }
+    if (invalidRecipient) {
+      this.messageService.add({ severity: 'error', summary: 'Invalid Email', detail: invalidRecipient });
+      return;
+    }
+    if (this.mailArtifactIds.length === 0) {
+      this.messageService.add({ severity: 'warn', summary: 'Artifacts Required', detail: 'Select at least one artifact to attach.' });
+      return;
+    }
+
+    this.mailingArtifacts = true;
+    this.executionService.mailArtifacts(this.runId, {
+      recipients,
+      artifactIds: this.mailArtifactIds,
+      subject: this.mailSubject.trim() || undefined,
+      message: this.mailMessage.trim() || undefined,
+    }).subscribe({
+      next: (response) => {
+        this.mailingArtifacts = false;
+        this.showMailArtifactsDialog = false;
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Artifacts Mailed',
+          detail: response.message || 'Selected artifacts were mailed successfully.',
+        });
+      },
+      error: (error) => {
+        this.mailingArtifacts = false;
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Mail Failed',
+          detail: error?.error?.error || 'Could not mail artifacts.',
+        });
+      },
+    });
   }
 
   stopRun(): void {

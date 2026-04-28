@@ -4,12 +4,13 @@ import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { logger } from '../utils/logger';
 import { config } from '../config';
 import { spawn, execSync, ChildProcess } from 'child_process';
+import fs from 'fs';
 import path from 'path';
 import { Server as SocketIOServer } from 'socket.io';
 import { appLogService } from '../services/appLogService';
 import { computeNextRun, refreshSchedule, unregisterTask } from '../services/schedulerService';
 import { resolveScriptExecutionPlan } from '../services/scriptDependencyService';
-import { sendExecutionCompletionEmail } from '../services/emailNotificationService';
+import { ExecutionArtifactEmailAttachment, isMailConfigured, sendExecutionArtifactsEmail, sendExecutionCompletionEmail } from '../services/emailNotificationService';
 import cron from 'node-cron';
 
 const router = Router();
@@ -2540,6 +2541,160 @@ router.get('/runs/:runId/artifacts', async (req: AuthRequest, res: Response): Pr
   } catch (error) {
     logger.error('List artifacts error:', error);
     res.status(500).json({ error: 'Failed to fetch artifacts.' });
+  }
+});
+
+// POST /api/execution/runs/:runId/artifacts/mail - Email selected artifacts for a run
+router.post('/runs/:runId/artifacts/mail', authorize('admin', 'tester'), async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!isMailConfigured()) {
+      res.status(503).json({ error: 'Mail is disabled or SMTP is not configured.' });
+      return;
+    }
+
+    const runId = parseInt(req.params.runId as string, 10);
+    if (!Number.isInteger(runId) || runId <= 0) {
+      res.status(400).json({ error: 'A valid run ID is required.' });
+      return;
+    }
+
+    const recipientsRaw: unknown[] = Array.isArray(req.body?.recipients)
+      ? req.body.recipients
+      : String(req.body?.recipients || '').split(',');
+    const recipients: string[] = Array.from(
+      new Set(
+        recipientsRaw
+          .map((value: unknown) => String(value || '').trim().toLowerCase())
+          .filter((value: string) => value.length > 0)
+      )
+    );
+    const invalidRecipients = recipients.filter((email: string) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
+    if (recipients.length === 0 || invalidRecipients.length > 0) {
+      res.status(400).json({
+        error: invalidRecipients.length > 0
+          ? `Invalid recipient email: ${invalidRecipients[0]}`
+          : 'At least one recipient email is required.',
+      });
+      return;
+    }
+
+    const requestedArtifactIds = Array.isArray(req.body?.artifactIds)
+      ? Array.from(new Set(req.body.artifactIds.map((id: unknown) => Number(id)).filter((id: number) => Number.isInteger(id) && id > 0)))
+      : [];
+    const subject = typeof req.body?.subject === 'string' ? req.body.subject.trim() : '';
+    const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
+
+    const runRows = await query<any>(
+      `SELECT er.id, er.run_name, er.triggered_by, u.full_name AS triggered_by_name, u.username AS triggered_by_username
+       FROM execution_runs er
+       LEFT JOIN users u ON er.triggered_by = u.id
+       WHERE er.id = $1`,
+      [runId]
+    );
+    if (runRows.length === 0) {
+      res.status(404).json({ error: 'Run not found.' });
+      return;
+    }
+
+    const artifactParams: any[] = [runId];
+    let artifactFilter = '';
+    if (requestedArtifactIds.length > 0) {
+      artifactParams.push(requestedArtifactIds);
+      artifactFilter = ' AND id = ANY($2::int[])';
+    }
+
+    const artifactRows = await query<any>(
+      `SELECT id, file_name, stored_path, file_size_bytes, mime_type
+       FROM execution_artifacts
+       WHERE run_id = $1${artifactFilter}
+       ORDER BY created_at ASC`,
+      artifactParams
+    );
+
+    if (artifactRows.length === 0) {
+      res.status(404).json({ error: 'No matching artifacts found for this run.' });
+      return;
+    }
+    if (artifactRows.length > 20) {
+      res.status(400).json({ error: 'You can mail up to 20 artifacts at once.' });
+      return;
+    }
+
+    const attachments: ExecutionArtifactEmailAttachment[] = [];
+    let totalBytes = 0;
+    for (const artifact of artifactRows) {
+      if (!artifact.stored_path || !fs.existsSync(artifact.stored_path)) {
+        res.status(404).json({ error: `Artifact file is missing on disk: ${artifact.file_name}` });
+        return;
+      }
+
+      const stats = fs.statSync(artifact.stored_path);
+      totalBytes += stats.size;
+      attachments.push({
+        fileName: artifact.file_name,
+        filePath: artifact.stored_path,
+        mimeType: artifact.mime_type,
+        sizeBytes: artifact.file_size_bytes || stats.size,
+      });
+    }
+
+    const run = runRows[0];
+    const senderName = req.username || run.triggered_by_name || run.triggered_by_username || null;
+    const maxBatchBytes = 18 * 1024 * 1024;
+    const oversizedAttachment = attachments.find((attachment) => (attachment.sizeBytes || 0) > maxBatchBytes);
+    if (oversizedAttachment) {
+      res.status(400).json({
+        error: `Artifact "${oversizedAttachment.fileName}" is too large to send by email. Download it directly from the run details page.`,
+      });
+      return;
+    }
+
+    const batches: ExecutionArtifactEmailAttachment[][] = [];
+    let currentBatch: ExecutionArtifactEmailAttachment[] = [];
+    let currentBatchBytes = 0;
+    for (const attachment of attachments) {
+      const attachmentBytes = attachment.sizeBytes || 0;
+      if (currentBatch.length > 0 && currentBatchBytes + attachmentBytes > maxBatchBytes) {
+        batches.push(currentBatch);
+        currentBatch = [];
+        currentBatchBytes = 0;
+      }
+
+      currentBatch.push(attachment);
+      currentBatchBytes += attachmentBytes;
+    }
+    if (currentBatch.length > 0) {
+      batches.push(currentBatch);
+    }
+
+    for (let index = 0; index < batches.length; index += 1) {
+      const batch = batches[index];
+      const batchSubject = batches.length > 1
+        ? `${subject || `[Noesis] Execution artifacts for ${run.run_name || `Run #${runId}`}`} (${index + 1}/${batches.length})`
+        : subject;
+
+      await sendExecutionArtifactsEmail({
+        runId,
+        runName: run.run_name,
+        senderName,
+        recipients,
+        subject: batchSubject,
+        message: batches.length > 1
+          ? `${message || 'Please find the selected execution artifacts attached.'}\n\nBatch ${index + 1} of ${batches.length}.`
+          : message,
+        attachments: batch,
+      });
+    }
+
+    res.json({
+      message: `Mailed ${attachments.length} artifact${attachments.length === 1 ? '' : 's'} in ${batches.length} email${batches.length === 1 ? '' : 's'} to ${recipients.length} recipient${recipients.length === 1 ? '' : 's'}.`,
+      artifactCount: attachments.length,
+      recipientCount: recipients.length,
+      batchCount: batches.length,
+    });
+  } catch (error: any) {
+    logger.error('Mail artifacts error:', error);
+    res.status(500).json({ error: error?.message || 'Failed to mail artifacts.' });
   }
 });
 
