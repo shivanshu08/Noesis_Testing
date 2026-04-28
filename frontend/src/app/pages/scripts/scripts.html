@@ -41,11 +41,24 @@
       [(ngModel)]="selectedAvailability"
       optionLabel="label"
       optionValue="value"
-      placeholder="All Status"
+      placeholder="All Availability"
       [showClear]="true"
       (onChange)="onAvailabilityChange()"
       [style]="{ minWidth: '210px' }"
-    />
+    >
+      <ng-template pTemplate="selectedItem" let-selectedOption>
+        <div class="availability-filter-value">
+          <i class="pi pi-filter"></i>
+          <span>{{ selectedOption?.label || getAvailabilityFilterLabel() }}</span>
+        </div>
+      </ng-template>
+      <ng-template pTemplate="item" let-option>
+        <div class="availability-filter-value">
+          <i class="pi pi-circle-fill"></i>
+          <span>{{ option.label }}</span>
+        </div>
+      </ng-template>
+    </p-select>
 
     <span class="result-count">{{ filteredScripts().length }} scripts</span>
   </div>
@@ -55,6 +68,9 @@
     <div class="selection-info">
       <i class="pi pi-check-circle"></i>
       <span><strong>{{ selectedScripts().length }}</strong> scripts selected</span>
+      @if (getRunnableSelectedCount() !== selectedScripts().length) {
+        <span class="selection-warning">{{ getRunnableSelectedCount() }} runnable</span>
+      }
     </div>
     <div class="action-buttons">
       <p-button label="Clear Selection" [text]="true" severity="secondary" size="small" (onClick)="selectedScripts.set([])" />
@@ -90,7 +106,7 @@
           <th>Category</th>
           <th style="min-width: 210px">Assigned To</th>
           <th style="width: 150px">Last Run</th>
-          <th pSortableColumn="isActive" style="width: 220px">Availability <p-sortIcon field="isActive" /></th>
+          <th pSortableColumn="isActive" style="width: 240px">Availability <p-sortIcon field="isActive" /></th>
           <th style="width: 160px; text-align: center;">Actions</th>
         </tr>
       </ng-template>
@@ -110,8 +126,6 @@
                 <a
                   class="script-name script-name-link"
                   [routerLink]="['/scripts', script.id, 'configuration']"
-                  pTooltip="View Script Configuration"
-                  tooltipStyleClass="single-line-tooltip"
                   (click)="$event.stopPropagation()"
                 >
                   {{ getDisplayScriptName(script) }}
@@ -156,6 +170,7 @@
             <span class="text-muted" *ngIf="!script.lastRunAt">Never</span>
           </td>
           <td>
+            @let availability = getScriptAvailability(script);
             <p-select
               [options]="statusOptions"
               [(ngModel)]="script.isActive"
@@ -165,11 +180,13 @@
               styleClass="inline-status-dropdown"
               appendTo="body"
               [disabled]="!auth.canEdit()"
+              [pTooltip]="getAvailabilityTooltip(script)"
+              tooltipStyleClass="single-line-tooltip"
             >
               <ng-template pTemplate="selectedItem" let-selectedOption>
-                <div class="availability-pill" [ngClass]="selectedOption?.value ? 'ready' : 'maintenance'">
-                  <i [class]="selectedOption?.icon || (selectedOption?.value ? 'pi pi-check-circle' : 'pi pi-pause-circle')"></i>
-                  <span>{{ selectedOption?.label || (script.isActive ? 'Ready to Run' : 'Under Maintenance') }}</span>
+                <div class="availability-pill" [ngClass]="availability.pillClass">
+                  <i [class]="availability.icon"></i>
+                  <span>{{ availability.label }}</span>
                 </div>
               </ng-template>
               <ng-template pTemplate="item" let-option>
@@ -179,6 +196,21 @@
                 </div>
               </ng-template>
             </p-select>
+            <div class="availability-meta">
+              <span class="availability-detail">{{ availability.detail }}</span>
+              @if ((script.dependencyCount || 0) > 0) {
+                <span class="availability-mini-chip">
+                  <i class="pi pi-sitemap"></i>
+                  {{ script.dependencyCount }}
+                </span>
+              }
+              @if ((script.dependentCount || 0) > 0) {
+                <span class="availability-mini-chip">
+                  <i class="pi pi-share-alt"></i>
+                  {{ script.dependentCount }}
+                </span>
+              }
+            </div>
           </td>
           <td style="text-align: center;">
             <p-button
@@ -194,7 +226,7 @@
               tooltipStyleClass="single-line-tooltip"
               routerLink="/runner"
               [queryParams]="{ select: script.id }"
-              [disabled]="!script.isActive"
+              [disabled]="!getScriptAvailability(script).canRun"
             />
             <p-button
               icon="pi pi-cog"

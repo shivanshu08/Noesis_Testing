@@ -39,9 +39,20 @@ a {
   text-decoration: none;
 }
 
-.p-tooltip .p-tooltip-text {
-  white-space: nowrap;
-  max-width: none;
+.p-tooltip,
+.single-line-tooltip {
+  width: max-content !important;
+  max-width: calc(100vw - 2rem) !important;
+}
+
+.p-tooltip .p-tooltip-text,
+.single-line-tooltip .p-tooltip-text {
+  display: block !important;
+  width: max-content !important;
+  max-width: calc(100vw - 2rem) !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
 }
 
 .alert-dialog-content {

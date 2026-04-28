@@ -36,7 +36,7 @@
           }
         </div>
       }
-      <a (click)="auth.logout()" class="nav-item logout-item" pTooltip="Logout" tooltipPosition="right">
+      <a (click)="auth.logout()" class="nav-item logout-item" [pTooltip]="sidebarCollapsed() ? 'Logout' : ''" tooltipPosition="right">
         <i class="pi pi-sign-out"></i>
         @if (!sidebarCollapsed()) {
           <span>Logout</span>

@@ -29,6 +29,21 @@ import { AuthService } from '../../services/auth.service';
 import { RouterModule, Router } from '@angular/router';
 import { AlertOverlayComponent } from '../../components/alert-overlay/alert-overlay';
 
+type AvailabilityKind = 'ready' | 'maintenance' | 'blocked' | 'attention' | 'unassigned' | 'never-run';
+type AvailabilityFilter = 'runnable' | AvailabilityKind;
+type AvailabilitySeverity = 'success' | 'info' | 'warn' | 'danger' | 'secondary' | 'contrast';
+
+interface ScriptAvailabilityView {
+  kind: AvailabilityKind;
+  label: string;
+  detail: string;
+  icon: string;
+  severity: AvailabilitySeverity;
+  pillClass: string;
+  canRun: boolean;
+  reasons: string[];
+}
+
 @Component({
   selector: 'app-scripts',
   standalone: true,
@@ -54,15 +69,20 @@ export class Scripts implements OnInit {
 
   searchTerm = '';
   selectedCategory: number | null = null;
-  selectedAvailability: boolean | null = null;
+  selectedAvailability: AvailabilityFilter | null = null;
 
   statusOptions = [
     { label: 'Ready to Run', value: true, icon: 'pi pi-check-circle' },
     { label: 'Under Maintenance', value: false, icon: 'pi pi-pause-circle' }
   ];
   availabilityFilterOptions = [
-    { label: 'Ready to Run', value: true },
-    { label: 'Under Maintenance', value: false }
+    { label: 'Runnable', value: 'runnable' },
+    { label: 'Ready', value: 'ready' },
+    { label: 'Needs Review', value: 'attention' },
+    { label: 'Never Run', value: 'never-run' },
+    { label: 'Dependency Blocked', value: 'blocked' },
+    { label: 'Unassigned', value: 'unassigned' },
+    { label: 'Under Maintenance', value: 'maintenance' }
   ];
 
   syncDialogVisible = signal(false);
@@ -151,8 +171,9 @@ export class Scripts implements OnInit {
     if (this.selectedCategory) {
       results = results.filter(s => s.categoryId === this.selectedCategory);
     }
-    if (this.selectedAvailability !== null) {
-      results = results.filter(s => s.isActive === this.selectedAvailability);
+    const availabilityFilter = this.selectedAvailability;
+    if (availabilityFilter) {
+      results = results.filter(s => this.matchesAvailabilityFilter(s, availabilityFilter));
     }
     this.filteredScripts.set(results);
   }
@@ -172,6 +193,9 @@ export class Scripts implements OnInit {
   toggleScript(script: Script) {
     if (!this.auth.canEdit()) return;
 
+    const previousScript = this.scripts().find(s => s.id === script.id);
+    const previousIsActive = previousScript?.isActive ?? !script.isActive;
+
     this.scriptService.updateScript(script.id, { isActive: script.isActive }).subscribe({
       next: () => {
         const updated = this.scripts().map(s =>
@@ -182,6 +206,7 @@ export class Scripts implements OnInit {
         this.messageService.add({ severity: 'success', summary: 'Status Updated', detail: `${script.name} is now ${script.isActive ? 'Ready' : 'Under Maintenance'}.` });
       },
       error: () => {
+        script.isActive = previousIsActive;
         this.messageService.add({ severity: 'error', summary: 'Update Failed', detail: 'Could not update script status.' });
       }
     });
@@ -189,7 +214,23 @@ export class Scripts implements OnInit {
 
   runSelectedScripts() {
     if (!this.auth.canRun()) return;
-    const ids = this.selectedScripts().map(s => s.id).join(',');
+    const runnableScripts = this.selectedScripts().filter(script => this.getScriptAvailability(script).canRun);
+    const blockedCount = this.selectedScripts().length - runnableScripts.length;
+
+    if (runnableScripts.length === 0) {
+      this.showAlert('No Runnable Scripts', 'Selected scripts are blocked, under maintenance, or missing required prerequisites.', 'warn');
+      return;
+    }
+
+    if (blockedCount > 0) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Skipped Unavailable Scripts',
+        detail: `${blockedCount} selected script${blockedCount === 1 ? '' : 's'} skipped because they are not runnable.`
+      });
+    }
+
+    const ids = runnableScripts.map(s => s.id).join(',');
     this.router.navigate(['/runner'], { queryParams: { select: ids } });
   }
 
@@ -612,6 +653,165 @@ export class Scripts implements OnInit {
     const users = this.getAssignedUsers(script);
     if (users.length === 0) return 'No tester assigned';
     return users.map(user => user.fullName || user.username).join(', ');
+  }
+
+  getScriptAvailability(script: Script): ScriptAvailabilityView {
+    const reasons: string[] = [];
+    const inactiveDependencies = this.getInactiveDependencyNames(script);
+    const assignedCount = this.getAssignmentCount(script);
+    const lastRunStatus = String(script.lastRunStatus || '').toLowerCase();
+    const hasFailedLastRun = ['failed', 'error'].includes(lastRunStatus);
+
+    if (!script.isActive) {
+      return {
+        kind: 'maintenance',
+        label: 'Under Maintenance',
+        detail: 'Disabled for execution',
+        icon: 'pi pi-pause-circle',
+        severity: 'warn',
+        pillClass: 'maintenance',
+        canRun: false,
+        reasons: [
+          'Script is manually paused',
+          ...this.getDependencySummaryReasons(script),
+        ],
+      };
+    }
+
+    if (inactiveDependencies.length > 0) {
+      return {
+        kind: 'blocked',
+        label: 'Blocked',
+        detail: 'Prerequisite unavailable',
+        icon: 'pi pi-ban',
+        severity: 'danger',
+        pillClass: 'blocked',
+        canRun: false,
+        reasons: [
+          `Inactive prerequisite${inactiveDependencies.length === 1 ? '' : 's'}: ${inactiveDependencies.join(', ')}`,
+          ...this.getDependencySummaryReasons(script),
+        ],
+      };
+    }
+
+    if (assignedCount === 0 && this.auth.isAdmin()) {
+      return {
+        kind: 'unassigned',
+        label: 'Unassigned',
+        detail: 'No tester access',
+        icon: 'pi pi-user-minus',
+        severity: 'warn',
+        pillClass: 'unassigned',
+        canRun: true,
+        reasons: [
+          'Admins can run it, but no tester can see it yet',
+          ...this.getDependencySummaryReasons(script),
+        ],
+      };
+    }
+
+    if (hasFailedLastRun) {
+      return {
+        kind: 'attention',
+        label: 'Needs Review',
+        detail: this.getLastRunDetail(script),
+        icon: 'pi pi-exclamation-triangle',
+        severity: 'danger',
+        pillClass: 'attention',
+        canRun: true,
+        reasons: [
+          `Last run ${lastRunStatus}`,
+          ...this.getDependencySummaryReasons(script),
+        ],
+      };
+    }
+
+    if (!script.lastRunAt) {
+      return {
+        kind: 'never-run',
+        label: 'Never Run',
+        detail: 'Ready for first execution',
+        icon: 'pi pi-star',
+        severity: 'info',
+        pillClass: 'never-run',
+        canRun: true,
+        reasons: [
+          'No execution history yet',
+          ...this.getDependencySummaryReasons(script),
+        ],
+      };
+    }
+
+    return {
+      kind: 'ready',
+      label: 'Ready',
+      detail: this.getLastRunDetail(script),
+      icon: 'pi pi-check-circle',
+      severity: 'success',
+      pillClass: 'ready',
+      canRun: true,
+      reasons: this.getDependencySummaryReasons(script),
+    };
+  }
+
+  getAvailabilityTooltip(script: Script): string {
+    const availability = this.getScriptAvailability(script);
+    const parts = [availability.detail, ...availability.reasons].filter(Boolean);
+    return parts.length > 0 ? parts.join(' | ') : availability.label;
+  }
+
+  getAvailabilityFilterLabel(): string {
+    const selected = this.availabilityFilterOptions.find(option => option.value === this.selectedAvailability);
+    return selected?.label || 'All Availability';
+  }
+
+  getRunnableSelectedCount(): number {
+    return this.selectedScripts().filter(script => this.getScriptAvailability(script).canRun).length;
+  }
+
+  private matchesAvailabilityFilter(script: Script, filter: AvailabilityFilter): boolean {
+    const availability = this.getScriptAvailability(script);
+    if (filter === 'runnable') {
+      return availability.canRun;
+    }
+    return availability.kind === filter;
+  }
+
+  private getAssignmentCount(script: Script): number {
+    return Number(script.assignedUserCount ?? this.getAssignedUsers(script).length ?? 0);
+  }
+
+  private getInactiveDependencyNames(script: Script): string[] {
+    const dependencies = Array.isArray(script.dependencies) ? script.dependencies : [];
+    if (dependencies.length === 0) return [];
+
+    const scriptById = new Map(this.scripts().map(item => [Number(item.id), item]));
+    return dependencies
+      .map(id => scriptById.get(Number(id)))
+      .filter((dependency): dependency is Script => dependency !== undefined && !dependency.isActive)
+      .map(dependency => this.getDisplayScriptName(dependency));
+  }
+
+  private getDependencySummaryReasons(script: Script): string[] {
+    const reasons: string[] = [];
+    const dependencyCount = Number(script.dependencyCount ?? script.dependencies?.length ?? 0);
+    const dependentCount = Number(script.dependentCount ?? 0);
+
+    if (dependencyCount > 0) {
+      reasons.push(`${dependencyCount} prerequisite${dependencyCount === 1 ? '' : 's'}`);
+    }
+
+    if (dependentCount > 0) {
+      reasons.push(`Used by ${dependentCount} script${dependentCount === 1 ? '' : 's'}`);
+    }
+
+    return reasons;
+  }
+
+  private getLastRunDetail(script: Script): string {
+    if (!script.lastRunAt) return 'No execution history';
+    const status = script.lastRunStatus ? `${script.lastRunStatus} ` : '';
+    return `Last ${status}${this.timeAgo(script.lastRunAt)}`.trim();
   }
 
   timeAgo(dateStr: string): string {

@@ -72,11 +72,11 @@
       </div>
 
       <div class="overview-actions">
-        <button type="button" class="ghost-action" (click)="copyToClipboard(r.id)" pTooltip="Copy Run ID" tooltipPosition="left">
+        <button type="button" class="ghost-action" (click)="copyToClipboard(r.id)">
           <i class="pi pi-hashtag"></i>
           <span>Copy Run ID</span>
         </button>
-        <button type="button" class="ghost-action" (click)="copyToClipboard(r.triggeredBy || 'System')" pTooltip="Copy Triggered By" tooltipPosition="left">
+        <button type="button" class="ghost-action" (click)="copyToClipboard(r.triggeredBy || 'System')">
           <i class="pi pi-user"></i>
           <span>Copy User</span>
         </button>
@@ -84,8 +84,6 @@
           type="button"
           class="ghost-action"
           (click)="copyAppUrl()"
-          pTooltip="Copy Application URL"
-          tooltipPosition="left"
           [disabled]="executionAppUrl === '-'"
         >
           <i class="pi pi-copy"></i>

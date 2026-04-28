@@ -19,8 +19,6 @@
           severity="info"
           [outlined]="true"
           (onClick)="toggleSchedulesPanel()"
-          pTooltip="Manage Scheduled Runs"
-          tooltipPosition="bottom"
           id="btn-view-schedules"
         />
         <p-button
@@ -29,8 +27,6 @@
           severity="secondary"
           [disabled]="selectedCount === 0"
           (onClick)="openScheduleDialog()"
-          pTooltip="Ctrl+Shift+S"
-          tooltipPosition="bottom"
           id="btn-schedule-run"
         />
         <p-button
@@ -38,8 +34,6 @@
           icon="pi pi-bolt"
           [disabled]="selectedCount === 0"
           (onClick)="runSelected()"
-          pTooltip="Ctrl+Enter"
-          tooltipPosition="bottom"
           id="btn-run-selected"
         />
       } @else {
@@ -105,7 +99,7 @@
         <!-- Quick Category Select -->
         <div class="category-chips">
           @for (cat of categories(); track cat.id) {
-            <button class="cat-chip" (click)="selectCategory(cat.id)" pTooltip="Select all {{ cat.name }} scripts">
+            <button class="cat-chip" (click)="selectCategory(cat.id)">
               {{ cat.name }}
               <span class="chip-count">{{ cat.scriptCount }}</span>
             </button>

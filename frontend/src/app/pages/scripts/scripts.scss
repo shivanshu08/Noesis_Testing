@@ -40,6 +40,16 @@
     i {
       font-size: 1.1rem;
     }
+
+    .selection-warning {
+      color: #b45309;
+      background: color-mix(in srgb, #f59e0b 14%, transparent);
+      border: 1px solid color-mix(in srgb, #f59e0b 32%, transparent);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
   }
 
   .action-buttons {
@@ -164,24 +174,42 @@
 
 /* Inline Dropdown Badge Styling */
 :host ::ng-deep .inline-status-dropdown {
-  background: var(--surface-card) !important;
-  border: 1px solid color-mix(in srgb, var(--surface-border) 85%, transparent) !important;
-  border-radius: 10px !important;
+  display: inline-flex !important;
+  width: auto !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
   box-shadow: none !important;
   transition: all 0.2s ease;
-  min-height: 34px;
+  min-height: 0;
 
   .p-select-label {
-    padding: 3px 8px;
+    padding: 0;
+    overflow: visible;
   }
+
   .p-select-dropdown {
-    width: 24px;
+    width: 18px;
+    min-width: 18px;
+    margin-left: 4px;
     color: var(--text-color-secondary);
   }
 
   &:hover {
-    border-color: color-mix(in srgb, var(--noesis-primary) 35%, var(--surface-border)) !important;
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--noesis-primary) 10%, transparent) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+
+    .availability-pill {
+      border-color: color-mix(in srgb, var(--noesis-primary) 42%, var(--surface-border));
+    }
+  }
+
+  &.p-disabled {
+    opacity: 1;
+
+    .p-select-dropdown {
+      display: none;
+    }
   }
 }
 
@@ -191,9 +219,10 @@
   gap: 6px;
   font-size: 0.78rem;
   font-weight: 600;
-  padding: 5px 10px;
+  padding: 4px 9px;
   border-radius: 999px;
   white-space: nowrap;
+  line-height: 1.15;
 
   i {
     font-size: 0.78rem;
@@ -209,6 +238,30 @@
     color: #d97706;
     background: color-mix(in srgb, #f59e0b 14%, transparent);
     border: 1px solid color-mix(in srgb, #f59e0b 38%, transparent);
+  }
+
+  &.blocked {
+    color: #dc2626;
+    background: color-mix(in srgb, #ef4444 12%, transparent);
+    border: 1px solid color-mix(in srgb, #ef4444 34%, transparent);
+  }
+
+  &.attention {
+    color: #be123c;
+    background: color-mix(in srgb, #f43f5e 11%, transparent);
+    border: 1px solid color-mix(in srgb, #f43f5e 32%, transparent);
+  }
+
+  &.unassigned {
+    color: #7c3aed;
+    background: color-mix(in srgb, #8b5cf6 11%, transparent);
+    border: 1px solid color-mix(in srgb, #8b5cf6 30%, transparent);
+  }
+
+  &.never-run {
+    color: #2563eb;
+    background: color-mix(in srgb, #3b82f6 11%, transparent);
+    border: 1px solid color-mix(in srgb, #3b82f6 32%, transparent);
   }
 
   &.option-item {
@@ -643,6 +696,58 @@
     background: var(--surface-card);
     border-color: color-mix(in srgb, var(--noesis-primary) 34%, var(--surface-border));
     box-shadow: inset 3px 0 0 var(--noesis-primary);
+  }
+}
+
+.availability-filter-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+
+  i {
+    color: var(--text-color-secondary);
+    font-size: 0.66rem;
+  }
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.availability-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 18px;
+  margin-top: 5px;
+  padding-left: 1px;
+  color: var(--text-color-secondary);
+  font-size: 0.72rem;
+}
+
+.availability-detail {
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.availability-mini-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border-radius: 999px;
+  padding: 1px 6px;
+  color: var(--text-color-secondary);
+  background: color-mix(in srgb, var(--surface-ground) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--surface-border) 75%, transparent);
+  font-weight: 700;
+
+  i {
+    font-size: 0.64rem;
   }
 }
 
