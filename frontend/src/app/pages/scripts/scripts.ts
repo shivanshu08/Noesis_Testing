@@ -188,6 +188,7 @@ export class Scripts implements OnInit {
   }
 
   runSelectedScripts() {
+    if (!this.auth.canRun()) return;
     const ids = this.selectedScripts().map(s => s.id).join(',');
     this.router.navigate(['/runner'], { queryParams: { select: ids } });
   }

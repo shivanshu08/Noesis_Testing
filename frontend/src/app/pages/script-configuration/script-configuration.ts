@@ -21,6 +21,7 @@ import {
 } from '../../models/interfaces';
 import { formatExecutionEnvironmentLabel } from '../../utils/execution-environment';
 import { ScriptService } from '../../services/script.service';
+import { AuthService } from '../../services/auth.service';
 
 interface CompareLineView {
   lineNumber: number;
@@ -127,7 +128,8 @@ export class ScriptConfiguration implements OnInit, OnDestroy {
 
   constructor(
     private readonly route: ActivatedRoute,
-    private readonly scriptService: ScriptService
+    private readonly scriptService: ScriptService,
+    public readonly auth: AuthService
   ) {}
 
   ngOnInit(): void {
@@ -345,6 +347,7 @@ export class ScriptConfiguration implements OnInit, OnDestroy {
   }
 
   saveSelectedFile(): void {
+    if (!this.auth.canEdit()) return;
     const selectedPath = this.selectedEditablePath();
     if (!selectedPath || this.editorSaving()) return;
 

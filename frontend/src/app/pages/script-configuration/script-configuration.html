@@ -15,7 +15,9 @@
         (onClick)="loadConfiguration(true)"
       />
       @if (details(); as vm) {
-        <a pButton [outlined]="true" severity="success" icon="pi pi-bolt" label="Run Script" routerLink="/runner" [queryParams]="{ select: vm.script.id }"></a>
+        @if (auth.canRun()) {
+          <a pButton [outlined]="true" severity="success" icon="pi pi-bolt" label="Run Script" routerLink="/runner" [queryParams]="{ select: vm.script.id }"></a>
+        }
       }
     </div>
   </div>
@@ -197,22 +199,24 @@
             />
 
             <div class="editor-actions">
-              <p-button
-                label="Revert"
-                icon="pi pi-undo"
-                severity="secondary"
-                [outlined]="true"
-                [disabled]="!hasUnsavedEditorChanges() || editorLoading() || editorSaving()"
-                (onClick)="resetEditorContent()"
-              />
-              <p-button
-                label="Save Changes"
-                icon="pi pi-save"
-                severity="primary"
-                [loading]="editorSaving()"
-                [disabled]="!hasUnsavedEditorChanges() || editorLoading() || editorSaving()"
-                (onClick)="saveSelectedFile()"
-              />
+              @if (auth.canEdit()) {
+                <p-button
+                  label="Revert"
+                  icon="pi pi-undo"
+                  severity="secondary"
+                  [outlined]="true"
+                  [disabled]="!hasUnsavedEditorChanges() || editorLoading() || editorSaving()"
+                  (onClick)="resetEditorContent()"
+                />
+                <p-button
+                  label="Save Changes"
+                  icon="pi pi-save"
+                  severity="primary"
+                  [loading]="editorSaving()"
+                  [disabled]="!hasUnsavedEditorChanges() || editorLoading() || editorSaving()"
+                  (onClick)="saveSelectedFile()"
+                />
+              }
             </div>
           </div>
 
@@ -225,7 +229,7 @@
             class="editor-textarea editor-preview-textarea"
             [ngModel]="editorContent()"
             (ngModelChange)="editorContent.set($event)"
-            [disabled]="editorLoading() || editorSaving()"
+            [disabled]="editorLoading() || editorSaving() || !auth.canEdit()"
             (click)="openEditorFullscreen()"
             spellcheck="false"
           ></textarea>
@@ -282,7 +286,9 @@
             <h4>No execution runs yet</h4>
             <p>This script has not been executed yet. Run it once to start tracking timeline metrics.</p>
             <div class="timeline-empty-actions">
-              <a pButton severity="primary" icon="pi pi-bolt" label="Run Script" routerLink="/runner" [queryParams]="{ select: vm.script.id }"></a>
+              @if (auth.canRun()) {
+                <a pButton severity="primary" icon="pi pi-bolt" label="Run Script" routerLink="/runner" [queryParams]="{ select: vm.script.id }"></a>
+              }
               <a pButton [outlined]="true" severity="secondary" icon="pi pi-list" label="Open History" routerLink="/history"></a>
             </div>
           </div>
@@ -431,6 +437,7 @@
           </div>
           <div class="editor-fullscreen-actions">
             <p-button
+              *ngIf="auth.canEdit()"
               label="Revert"
               icon="pi pi-undo"
               severity="secondary"
@@ -439,6 +446,7 @@
               (onClick)="resetEditorContent()"
             />
             <p-button
+              *ngIf="auth.canEdit()"
               label="Save Changes"
               icon="pi pi-save"
               severity="primary"
@@ -460,7 +468,7 @@
           class="editor-fullscreen-textarea"
           [ngModel]="editorContent()"
           (ngModelChange)="editorContent.set($event)"
-          [disabled]="editorLoading() || editorSaving()"
+          [disabled]="editorLoading() || editorSaving() || !auth.canEdit()"
           spellcheck="false"
         ></textarea>
       </section>

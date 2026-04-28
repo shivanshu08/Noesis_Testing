@@ -18,11 +18,13 @@ export class AuthService {
   readonly isLoggedIn = computed(() => !!this.currentUser());
   readonly isAdmin = computed(() => this.currentUser()?.role === 'admin');
   readonly isViewer = computed(() => this.currentUser()?.role === 'viewer');
+  readonly isTester = computed(() => this.currentUser()?.role === 'tester');
   readonly canEdit = computed(() => {
     const role = this.currentUser()?.role;
     return role === 'admin' || role === 'tester';
   });
-  readonly isTester = computed(() => this.currentUser()?.role === 'tester');
+  readonly canRun = computed(() => this.canEdit());
+  readonly canViewSystemLogs = computed(() => this.canEdit());
   readonly assignedScriptCount = computed(() => this.currentUser()?.assignedScriptCount ?? null);
 
   constructor(private http: HttpClient, private router: Router) {}

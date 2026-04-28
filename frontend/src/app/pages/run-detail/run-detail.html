@@ -24,7 +24,9 @@
       />
 
       @if (run(); as r) {
-        <a pButton class="p-button-sm p-button-secondary" label="Trigger Re-run" icon="pi pi-refresh" routerLink="/runner" [queryParams]="{ rerun: r.id }"></a>
+        @if (auth.canRun()) {
+          <a pButton class="p-button-sm p-button-secondary" label="Trigger Re-run" icon="pi pi-refresh" routerLink="/runner" [queryParams]="{ rerun: r.id }"></a>
+        }
 
         @if (r.status === 'running') {
           <p-button

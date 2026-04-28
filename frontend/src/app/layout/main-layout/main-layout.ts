@@ -46,7 +46,7 @@ export class MainLayout implements OnInit, OnDestroy {
         { label: 'Test Suites', icon: 'pi pi-sitemap', route: '/suites' },
     ];
 
-    if (this.auth.canEdit()) {
+    if (this.auth.canRun()) {
       items.push({ label: 'Run Scripts', icon: 'pi pi-bolt', route: '/runner' });
     }
 
@@ -56,8 +56,9 @@ export class MainLayout implements OnInit, OnDestroy {
       items.push({ label: 'User Management', icon: 'pi pi-users', route: '/users' });
     }
 
-      // System diagnostics always at the absolute bottom
+    if (this.auth.canViewSystemLogs()) {
       items.push({ label: 'Logs', icon: 'pi pi-list', route: '/logs' });
+    }
 
     return items;
   });

@@ -45,3 +45,13 @@ export const editGuard: CanActivateFn = () => {
   router.navigate(['/dashboard']);
   return false;
 };
+
+export const systemLogsGuard: CanActivateFn = () => {
+  const authService = inject(AuthService);
+  const router = inject(Router);
+
+  if (authService.canViewSystemLogs()) return true;
+
+  router.navigate(['/dashboard']);
+  return false;
+};

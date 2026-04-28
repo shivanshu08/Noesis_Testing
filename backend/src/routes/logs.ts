@@ -1,11 +1,11 @@
 import { Router, Response } from 'express';
 import { query } from '../database/connection';
-import { authenticate, AuthRequest } from '../middleware/auth';
+import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { logger } from '../utils/logger';
 import { appLogService } from '../services/appLogService';
 
 const router = Router();
-router.use(authenticate);
+router.use(authenticate, authorize('admin', 'tester'));
 
 function normalizeDateFilter(value: unknown): string | null {
   if (typeof value !== 'string' || !value.trim()) return null;

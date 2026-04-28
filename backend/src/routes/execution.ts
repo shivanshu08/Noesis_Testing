@@ -672,7 +672,7 @@ router.post('/global-logs/delete-multiple', authorize('admin', 'tester'), async 
 });
 
 // GET /api/execution/global-logs - Get all execution logs across all runs (up to 1 year)
-router.get('/global-logs', async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/global-logs', authorize('admin', 'tester'), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     await appLogService.initialize().catch((error) => {
       logger.warn(`Unable to initialize app logs storage before global logs query: ${(error as Error).message}`);

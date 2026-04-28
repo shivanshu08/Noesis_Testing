@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, guestGuard, adminGuard, editGuard } from './guards/auth.guard';
+import { authGuard, guestGuard, adminGuard, editGuard, systemLogsGuard } from './guards/auth.guard';
 
 export const routes: Routes = [
   {
@@ -21,7 +21,7 @@ export const routes: Routes = [
       { path: 'history', loadComponent: () => import('./pages/history/history').then(m => m.History) },
       { path: 'run/:id', loadComponent: () => import('./pages/run-detail/run-detail').then(m => m.RunDetail) },
       { path: 'users', canActivate: [adminGuard], loadComponent: () => import('./pages/login/users').then(m => m.Users) },
-      { path: 'logs', loadComponent: () => import('./pages/logs/logs').then(m => m.LogsPage) },
+      { path: 'logs', canActivate: [systemLogsGuard], loadComponent: () => import('./pages/logs/logs').then(m => m.LogsPage) },
       { path: 'notifications', loadComponent: () => import('./pages/notifications/notifications').then(m => m.Notifications) },
       { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
     ],
