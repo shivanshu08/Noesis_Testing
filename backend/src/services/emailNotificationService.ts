@@ -98,7 +98,7 @@ async function getExecutionRecipients(triggeredByUserId: number): Promise<string
      WHERE is_active = TRUE
        AND email IS NOT NULL
        AND email <> ''
-       AND (role = 'admin' OR id = $1)`,
+       AND (role IN ('admin', 'tester') OR id = $1)`,
     [triggeredByUserId]
   );
 

@@ -2125,11 +2125,13 @@ async function executeScripts(runId: number, testngXml: string, scripts: any[], 
     child.on('close', async (code: number | null) => {
       activeProcesses.delete(runId);
 
-      // Determine final status
-      const finalStatus = code === 0 ? 'passed' : 'failed';
-
-      // Parse test results from output
-      const { passed, failed, errors, skipped } = parseTestResults(output);
+      const reportSummary = parseTestResultsFromReports(runId, reportsDirectory, stPath);
+      const { finalStatus, passed, failed, errors, skipped, errorMessage } = normalizeFinalTestResult(
+        code,
+        output,
+        reportSummary,
+        scripts.length
+      );
 
       await execute(
         'UPDATE execution_runs SET status = $1, passed_count = $2, failed_count = $3, error_count = $4, skipped_count = $5, completed_at = NOW(), duration_ms = EXTRACT(EPOCH FROM (NOW() - started_at)) * 1000 WHERE id = $6',
@@ -2151,7 +2153,9 @@ async function executeScripts(runId: number, testngXml: string, scripts: any[], 
       await insertExecutionLog(
         runId,
         finalStatus === 'passed' ? 'INFO' : 'ERROR',
-        `Execution completed with status ${finalStatus}. Passed=${passed}, Failed=${failed}, Errors=${errors}, Skipped=${skipped}`,
+        errorMessage
+          ? `Execution completed with status ${finalStatus}. ${errorMessage} Passed=${passed}, Failed=${failed}, Errors=${errors}, Skipped=${skipped}`
+          : `Execution completed with status ${finalStatus}. Passed=${passed}, Failed=${failed}, Errors=${errors}, Skipped=${skipped}`,
         {
           phase: 'status',
           runName,
@@ -2189,7 +2193,7 @@ async function executeScripts(runId: number, testngXml: string, scripts: any[], 
       };
 
       await persistRunMetadata(runId, completedMetadata);
-      await notifyExecutionCompletionByEmail(runId, runName, userId, finalStatus, { passed, failed, errors, skipped });
+      await notifyExecutionCompletionByEmail(runId, runName, userId, finalStatus, { passed, failed, errors, skipped }, errorMessage);
 
       if (io) {
         if (artifacts.length > 0) {
@@ -2301,6 +2305,122 @@ function parseTestResults(output: string): { passed: number; failed: number; err
   }
 
   return { passed, failed, errors, skipped };
+}
+
+function parseNumberAttribute(source: string, name: string): number | null {
+  const match = source.match(new RegExp(`\\b${name}="(\\d+)"`, 'i'));
+  return match ? Number(match[1]) : null;
+}
+
+function parseTestResultsFromXml(content: string): { passed: number; failed: number; errors: number; skipped: number } | null {
+  const testNgMatch = content.match(/<testng-results\b[^>]*>/i);
+  if (testNgMatch) {
+    const tag = testNgMatch[0];
+    const total = parseNumberAttribute(tag, 'total');
+    const passed = parseNumberAttribute(tag, 'passed');
+    const failed = parseNumberAttribute(tag, 'failed');
+    const skipped = parseNumberAttribute(tag, 'skipped');
+
+    if (total !== null && passed !== null && failed !== null && skipped !== null) {
+      return {
+        passed,
+        failed,
+        errors: Math.max(0, total - passed - failed - skipped),
+        skipped,
+      };
+    }
+  }
+
+  const testsuiteMatch = content.match(/<testsuite\b[^>]*>/i);
+  if (testsuiteMatch) {
+    const tag = testsuiteMatch[0];
+    const total = parseNumberAttribute(tag, 'tests');
+    const failed = parseNumberAttribute(tag, 'failures');
+    const errors = parseNumberAttribute(tag, 'errors');
+    const skipped = parseNumberAttribute(tag, 'skipped');
+
+    if (total !== null && failed !== null && errors !== null && skipped !== null) {
+      return {
+        passed: Math.max(0, total - failed - errors - skipped),
+        failed,
+        errors,
+        skipped,
+      };
+    }
+  }
+
+  return null;
+}
+
+function parseTestResultsFromReports(runId: number, reportsDirectory: string, workspacePath: string): { passed: number; failed: number; errors: number; skipped: number } | null {
+  try {
+    const fs = require('fs');
+    const reportCandidates = [
+      path.join(reportsDirectory, 'testng-results.xml'),
+      path.join(reportsDirectory, 'TEST-TestSuite.xml'),
+      path.join(reportsDirectory, 'TestSuite.txt'),
+      path.join(workspacePath, 'target', 'surefire-reports', 'testng-results.xml'),
+      path.join(workspacePath, 'target', 'surefire-reports', 'TEST-TestSuite.xml'),
+      path.join(workspacePath, 'target', 'surefire-reports', 'TestSuite.txt'),
+    ];
+
+    for (const reportPath of reportCandidates) {
+      if (!fs.existsSync(reportPath)) continue;
+
+      const content = fs.readFileSync(reportPath, 'utf8');
+      const normalizedPath = reportPath.replace(/\\/g, '/');
+      const isRunScopedPath = normalizedPath.includes(`/run-${runId}/`);
+      const mentionsRun = content.includes(`run-${runId}`) || content.includes(`Run #${runId}`);
+      const isRootSurefireReport = normalizedPath.endsWith('/target/surefire-reports/testng-results.xml')
+        || normalizedPath.endsWith('/target/surefire-reports/TEST-TestSuite.xml')
+        || normalizedPath.endsWith('/target/surefire-reports/TestSuite.txt');
+
+      if (isRootSurefireReport && !mentionsRun) {
+        continue;
+      }
+
+      const fromXml = parseTestResultsFromXml(content);
+      if (fromXml) return fromXml;
+
+      const fromText = parseTestResults(content);
+      if (isRunScopedPath || mentionsRun || fromText.passed + fromText.failed + fromText.errors + fromText.skipped > 0) {
+        return fromText;
+      }
+    }
+  } catch (error: any) {
+    logger.warn(`Run ${runId}: failed to parse test reports: ${error?.message || error}`);
+  }
+
+  return null;
+}
+
+function hasBrowserSessionFailure(output: string): boolean {
+  return /NoSuchSessionException|invalid session id|browser has closed the connection|disconnected: not connected to DevTools|chrome not reachable/i.test(output);
+}
+
+function normalizeFinalTestResult(
+  exitCode: number | null,
+  output: string,
+  reportSummary: { passed: number; failed: number; errors: number; skipped: number } | null,
+  scriptCount: number
+): { finalStatus: 'passed' | 'failed'; passed: number; failed: number; errors: number; skipped: number; errorMessage: string | null } {
+  const stdoutSummary = parseTestResults(output);
+  const summary = reportSummary || stdoutSummary;
+  let { passed, failed, errors, skipped } = summary;
+  const browserSessionFailure = hasBrowserSessionFailure(output);
+  const hasFailures = failed > 0 || errors > 0 || browserSessionFailure;
+  const finalStatus = exitCode === 0 && !hasFailures ? 'passed' : 'failed';
+  let errorMessage: string | null = null;
+
+  if (browserSessionFailure) {
+    errorMessage = 'Browser session was closed or disconnected during script execution.';
+  }
+
+  if (finalStatus === 'failed' && failed + errors === 0) {
+    failed = Math.max(1, scriptCount - passed - skipped);
+  }
+
+  return { finalStatus, passed, failed, errors, skipped, errorMessage };
 }
 
 async function captureReportArtifacts(runId: number, scripts: any[], executionWorkspacePath: string) {
