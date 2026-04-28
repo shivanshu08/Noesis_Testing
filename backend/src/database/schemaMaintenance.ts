@@ -17,3 +17,27 @@ export async function ensureTestSuitesSchema(): Promise<void> {
   }
 }
 
+export async function ensureScriptAssignmentsSchema(): Promise<void> {
+  try {
+    await execute(`
+      CREATE TABLE IF NOT EXISTS script_assignments (
+        id SERIAL PRIMARY KEY,
+        user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        script_id INT NOT NULL REFERENCES scripts(id) ON DELETE CASCADE,
+        assigned_by INT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
+        assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (user_id, script_id)
+      )
+    `);
+
+    await execute('CREATE INDEX IF NOT EXISTS idx_script_assignments_user ON script_assignments(user_id)');
+    await execute('CREATE INDEX IF NOT EXISTS idx_script_assignments_script ON script_assignments(script_id)');
+    await execute('CREATE INDEX IF NOT EXISTS idx_script_assignments_assigned_by ON script_assignments(assigned_by)');
+  } catch (error: any) {
+    if (isUndefinedTableError(error)) {
+      logger.warn('Skipping script_assignments migration because users or scripts table does not exist yet.');
+      return;
+    }
+    logger.warn(`Script assignments migration failed: ${error?.message || String(error)}`);
+  }
+}

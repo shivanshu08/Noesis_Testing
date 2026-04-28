@@ -10,6 +10,7 @@ import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { logger } from '../utils/logger';
 import { config } from '../config';
 import { appLogService } from '../services/appLogService';
+import { ensureScriptAssignmentsSchema } from '../database/schemaMaintenance';
 import {
   detectCycleForProposedDependencies,
   ensureScriptDependencyStore,
@@ -20,6 +21,45 @@ import {
 const router = Router();
 router.use(authenticate);
 const execFileAsync = promisify(execFile);
+
+/**
+ * Middleware to check if the requesting user has access to a specific script.
+ * Admins have full access. Testers are restricted to their assigned scripts.
+ */
+async function checkScriptAccess(req: AuthRequest, res: Response, next: Function): Promise<void> {
+  const scriptId = Number(req.params.id);
+  if (!Number.isInteger(scriptId) || scriptId <= 0) {
+    res.status(400).json({ error: 'Invalid script ID.' });
+    return;
+  }
+
+  if (req.userRole === 'admin') {
+    next();
+    return;
+  }
+
+  if (req.userRole === 'tester') {
+    try {
+      const assignment = await query<{ count: string }>(
+        'SELECT COUNT(*)::text AS count FROM script_assignments WHERE user_id = $1 AND script_id = $2',
+        [req.userId!, scriptId]
+      );
+      if (Number(assignment[0]?.count || 0) > 0) {
+        next();
+        return;
+      }
+      res.status(403).json({ error: 'Access denied: Script not assigned to you.' });
+      return;
+    } catch (error) {
+      logger.error('Script access check error:', error);
+      res.status(500).json({ error: 'Internal server error during access check.' });
+      return;
+    }
+  }
+
+  // Viewers or other roles
+  next();
+}
 
 interface ScriptRow {
   id: number;
@@ -2674,10 +2714,13 @@ async function readScriptConfigChangeDetail(
 // GET /api/scripts - List all scripts with filtering
 router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    await ensureScriptAssignmentsSchema();
     const { category, search, active } = req.query;
     let sql = `
       SELECT s.*, sc.name as category_name, sc.icon as category_icon, sc.color as category_color,
-        lr.last_run_at, lr.last_run_status
+        lr.last_run_at, lr.last_run_status,
+        COALESCE(assignments.assigned_user_count, 0)::int AS assigned_user_count,
+        COALESCE(assignments.assigned_users, '[]'::json) AS assigned_users
       FROM scripts s
       JOIN script_categories sc ON s.category_id = sc.id
       LEFT JOIN LATERAL (
@@ -2688,10 +2731,36 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
         ORDER BY er.started_at DESC NULLS LAST
         LIMIT 1
       ) lr ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          COUNT(u.id)::int AS assigned_user_count,
+          COALESCE(
+            json_agg(
+              json_build_object(
+                'id', u.id,
+                'username', u.username,
+                'fullName', u.full_name
+              )
+              ORDER BY u.full_name, u.username
+            ) FILTER (WHERE u.id IS NOT NULL),
+            '[]'::json
+          ) AS assigned_users
+        FROM script_assignments sa
+        JOIN users u ON u.id = sa.user_id
+        WHERE sa.script_id = s.id
+          AND u.role = 'tester'
+          AND u.is_active = TRUE
+      ) assignments ON TRUE
       WHERE 1=1
     `;
     const params: any[] = [];
     let paramIdx = 1;
+
+    // Tester role: only show scripts assigned to this user
+    if (req.userRole === 'tester') {
+      sql += ` AND s.id IN (SELECT sa.script_id FROM script_assignments sa WHERE sa.user_id = $${paramIdx++})`;
+      params.push(req.userId);
+    }
 
     if (category) {
       sql += ` AND s.category_id = $${paramIdx++}`;
@@ -2709,7 +2778,12 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
 
     sql += ' ORDER BY sc.sort_order, s.name';
 
-    const scripts = await query<ScriptRow & { last_run_at?: Date; last_run_status?: string }>(sql, params);
+    const scripts = await query<ScriptRow & {
+      last_run_at?: Date;
+      last_run_status?: string;
+      assigned_user_count?: number;
+      assigned_users?: Array<{ id: number; username: string; fullName: string }>;
+    }>(sql, params);
     await ensureScriptDependencyStore();
     const dependencyMap = await getScriptDependencyMap(scripts.map((script) => script.id));
     const dependentCountByScriptId = new Map<number, number>();
@@ -2742,6 +2816,8 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
       createdAt: s.created_at,
       lastRunAt: s.last_run_at || null,
       lastRunStatus: s.last_run_status || null,
+      assignedUsers: Array.isArray(s.assigned_users) ? s.assigned_users : [],
+      assignedUserCount: Number(s.assigned_user_count || 0),
       dependencies: dependencyIds,
       dependencyCount: dependencyIds.length,
       dependentCount: dependentCountByScriptId.get(s.id) || 0,
@@ -2779,7 +2855,7 @@ router.get('/categories', async (_req: AuthRequest, res: Response): Promise<void
 });
 
 // GET /api/scripts/:id/configuration - Get enriched script configuration details
-router.get('/:id/configuration', async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/:id/configuration', checkScriptAccess, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const scriptId = Number(req.params.id);
     if (!Number.isInteger(scriptId) || scriptId <= 0) {
@@ -2975,7 +3051,7 @@ router.get('/:id/configuration', async (req: AuthRequest, res: Response): Promis
 });
 
 // GET /api/scripts/:id/configuration/file-content - Read editable config file content
-router.get('/:id/configuration/file-content', async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/:id/configuration/file-content', checkScriptAccess, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const scriptId = Number(req.params.id);
     const requestedPath = String(req.query.path || '').trim();
@@ -3035,7 +3111,7 @@ router.get('/:id/configuration/file-content', async (req: AuthRequest, res: Resp
 });
 
 // PUT /api/scripts/:id/configuration/file - Update editable config file
-router.put('/:id/configuration/file', authorize('admin', 'tester'), async (req: AuthRequest, res: Response): Promise<void> => {
+router.put('/:id/configuration/file', authorize('admin', 'tester'), checkScriptAccess, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const scriptId = Number(req.params.id);
     const requestedPath = String(req.body?.path || '').trim();
@@ -3170,7 +3246,7 @@ router.put('/:id/configuration/file', authorize('admin', 'tester'), async (req: 
 });
 
 // GET /api/scripts/:id/configuration/changes - Read configuration file change history
-router.get('/:id/configuration/changes', async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/:id/configuration/changes', checkScriptAccess, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const scriptId = Number(req.params.id);
     const limitRaw = Number(req.query.limit || 40);
@@ -3196,7 +3272,7 @@ router.get('/:id/configuration/changes', async (req: AuthRequest, res: Response)
 });
 
 // GET /api/scripts/:id/configuration/changes/:changeId - Read a single configuration change in detail
-router.get('/:id/configuration/changes/:changeId', async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/:id/configuration/changes/:changeId', checkScriptAccess, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const scriptId = Number(req.params.id);
     const changeId = Number(req.params.changeId);
@@ -3230,7 +3306,7 @@ router.get('/:id/configuration/changes/:changeId', async (req: AuthRequest, res:
 });
 
 // GET /api/scripts/:id/configuration/attachment - Stream attachment referenced by script JSON
-router.get('/:id/configuration/attachment', async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/:id/configuration/attachment', checkScriptAccess, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const scriptId = Number(req.params.id);
     const requestedPath = String(req.query.path || '').trim();
@@ -3298,7 +3374,7 @@ router.get('/:id/configuration/attachment', async (req: AuthRequest, res: Respon
 });
 
 // PUT /api/scripts/:id/dependencies - Configure script dependency chain
-router.put('/:id/dependencies', authorize('admin', 'tester'), async (req: AuthRequest, res: Response): Promise<void> => {
+router.put('/:id/dependencies', authorize('admin', 'tester'), checkScriptAccess, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const scriptId = Number(req.params.id);
     if (!Number.isInteger(scriptId) || scriptId <= 0) {
@@ -3429,7 +3505,7 @@ router.put('/:id/dependencies', authorize('admin', 'tester'), async (req: AuthRe
 });
 
 // GET /api/scripts/:id - Get script details
-router.get('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/:id(\\d+)', checkScriptAccess, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const scripts = await query<ScriptRow>(`
       SELECT s.*, sc.name as category_name, sc.icon as category_icon, sc.color as category_color
@@ -3479,7 +3555,7 @@ router.get('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
 });
 
 // PUT /api/scripts/:id - Update script
-router.put('/:id', authorize('admin', 'tester'), async (req: AuthRequest, res: Response): Promise<void> => {
+router.put('/:id(\\d+)', authorize('admin', 'tester'), checkScriptAccess, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { name, description, methodName, isActive, tags } = req.body;
     const scriptId = Number(req.params.id);
@@ -3628,7 +3704,7 @@ router.post('/delete-multiple', authorize('admin', 'tester'), async (req: AuthRe
 });
 
 // DELETE /api/scripts/:id - Remove single script
-router.delete('/:id', authorize('admin', 'tester'), async (req: AuthRequest, res: Response): Promise<void> => {
+router.delete('/:id(\\d+)', authorize('admin', 'tester'), checkScriptAccess, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const scriptId = Number(req.params.id);
     if (!Number.isInteger(scriptId) || scriptId <= 0) {
@@ -4230,5 +4306,169 @@ function extractJavaScriptMetadata(source: string, fileName: string): JavaScript
     packageName,
   };
 }
+
+// ============================================================
+// Script Assignment Management (Admin Only)
+// ============================================================
+
+// GET /api/scripts/assignments - List all assignments grouped by user
+router.get('/assignments', authorize('admin'), async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const rows = await query<{
+      user_id: number;
+      username: string;
+      full_name: string;
+      role: string;
+      script_id: number;
+      script_name: string;
+      assigned_at: Date;
+      assigned_by_name: string | null;
+    }>(`
+      SELECT
+        sa.user_id,
+        u.username,
+        u.full_name,
+        u.role,
+        sa.script_id,
+        COALESCE(s.name, '') AS script_name,
+        sa.assigned_at,
+        ab.full_name AS assigned_by_name
+      FROM script_assignments sa
+      JOIN users u ON u.id = sa.user_id
+      JOIN scripts s ON s.id = sa.script_id
+      LEFT JOIN users ab ON ab.id = sa.assigned_by
+      ORDER BY u.username, s.name
+    `);
+
+    // Group by user
+    const byUser = new Map<number, {
+      userId: number;
+      username: string;
+      fullName: string;
+      role: string;
+      assignments: Array<{ scriptId: number; scriptName: string; assignedAt: Date; assignedByName: string | null }>;
+    }>();
+
+    for (const row of rows) {
+      if (!byUser.has(row.user_id)) {
+        byUser.set(row.user_id, {
+          userId: row.user_id,
+          username: row.username,
+          fullName: row.full_name,
+          role: row.role,
+          assignments: [],
+        });
+      }
+      byUser.get(row.user_id)!.assignments.push({
+        scriptId: row.script_id,
+        scriptName: row.script_name,
+        assignedAt: row.assigned_at,
+        assignedByName: row.assigned_by_name,
+      });
+    }
+
+    res.json(Array.from(byUser.values()));
+  } catch (error) {
+    logger.error('List script assignments error:', error);
+    res.status(500).json({ error: 'Failed to fetch script assignments.' });
+  }
+});
+
+// GET /api/scripts/assignments/:userId - Get assigned script IDs for a specific user
+router.get('/assignments/:userId', authorize('admin'), async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = Number(req.params.userId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      res.status(400).json({ error: 'Invalid user ID.' });
+      return;
+    }
+
+    const rows = await query<{ script_id: number }>(`
+      SELECT script_id FROM script_assignments WHERE user_id = $1 ORDER BY script_id
+    `, [userId]);
+
+    res.json({ userId, scriptIds: rows.map(r => r.script_id) });
+  } catch (error) {
+    logger.error('Get user assignments error:', error);
+    res.status(500).json({ error: 'Failed to fetch user assignments.' });
+  }
+});
+
+// PUT /api/scripts/assignments/:userId - Bulk set script assignments for a user
+router.put('/assignments/:userId', authorize('admin'), async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const userId = Number(req.params.userId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      res.status(400).json({ error: 'Invalid user ID.' });
+      return;
+    }
+
+    const { scriptIds } = req.body;
+    if (!Array.isArray(scriptIds)) {
+      res.status(400).json({ error: 'scriptIds must be an array of numbers.' });
+      return;
+    }
+
+    const validScriptIds = scriptIds
+      .map((id: any) => Number(id))
+      .filter((id: number) => Number.isInteger(id) && id > 0);
+
+    const conn = await getConnection();
+    try {
+      await conn.query('BEGIN');
+
+      // Remove all existing assignments for this user
+      await conn.query('DELETE FROM script_assignments WHERE user_id = $1', [userId]);
+
+      // Insert new assignments
+      if (validScriptIds.length > 0) {
+        const valuesParts: string[] = [];
+        const params: any[] = [];
+        let idx = 1;
+
+        for (const scriptId of validScriptIds) {
+          valuesParts.push(`($${idx++}, $${idx++}, $${idx++})`);
+          params.push(userId, scriptId, req.userId);
+        }
+
+        await conn.query(
+          `INSERT INTO script_assignments (user_id, script_id, assigned_by)
+           VALUES ${valuesParts.join(', ')}
+           ON CONFLICT (user_id, script_id) DO NOTHING`,
+          params
+        );
+      }
+
+      await conn.query('COMMIT');
+
+      // Audit log (stored in app_logs, excluded from Logs screen display)
+      appLogService.enqueue({
+        action: 'SCRIPT_ASSIGNMENT_UPDATE',
+        module: 'script-assignments',
+        severity: 'INFO',
+        status: 'SUCCESS',
+        userId: req.userId,
+        username: req.username,
+        message: `Updated script assignments for user #${userId}: ${validScriptIds.length} scripts assigned.`,
+        metadata: {
+          targetUserId: userId,
+          assignedScriptIds: validScriptIds,
+          assignedCount: validScriptIds.length,
+          assignedBy: req.userId,
+        },
+      });
+
+      res.json({ success: true, userId, assignedCount: validScriptIds.length });
+    } catch (innerError) {
+      await conn.query('ROLLBACK');
+      throw innerError;
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    logger.error('Update script assignments error:', error);
+    res.status(500).json({ error: 'Failed to update script assignments.' });
+  }
+});
 
 export default router;

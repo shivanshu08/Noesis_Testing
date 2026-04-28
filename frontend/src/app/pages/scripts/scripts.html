@@ -1,3 +1,9 @@
+@if (auth.isTester()) {
+  <div class="tester-info-banner">
+    <i class="pi pi-info-circle"></i>
+    <span>You are viewing only scripts assigned to you by an administrator. Contact your admin for additional access.</span>
+  </div>
+}
 <div class="scripts-page">
   <div class="page-header">
     <div>
@@ -6,6 +12,7 @@
     </div>
     <div class="header-actions">
       <input type="file" #fileInput accept=".java" style="display: none;" (change)="onFileImport($event)" />
+      <p-button *ngIf="auth.isAdmin()" label="Manage Assignments" icon="pi pi-link" severity="info" (onClick)="openAssignmentManagement()" />
       <p-button label="Import Script" icon="pi pi-upload" severity="secondary" (onClick)="fileInput.click()" />
       <p-button label="Sync Workspace" icon="pi pi-refresh" severity="primary" (onClick)="syncScripts()" />
     </div>
@@ -77,6 +84,7 @@
           <th style="width: 3rem"><p-tableHeaderCheckbox></p-tableHeaderCheckbox></th>
           <th pSortableColumn="name" style="min-width: 250px">Script Details <p-sortIcon field="name" /></th>
           <th>Category</th>
+          <th style="min-width: 210px">Assigned To</th>
           <th style="width: 150px">Last Run</th>
           <th pSortableColumn="isActive" style="width: 220px">Availability <p-sortIcon field="isActive" /></th>
           <th style="width: 160px; text-align: center;">Actions</th>
@@ -117,6 +125,22 @@
             <p-tag [value]="getCategoryName(script.categoryId)" [severity]="getCategorySeverity(getCategoryName(script.categoryId))" />
           </td>
           <td>
+            @if (getAssignedUsers(script).length > 0) {
+              <div class="assignee-cell" [pTooltip]="getAssigneeTooltip(script)" tooltipStyleClass="single-line-tooltip">
+                <i class="pi pi-user"></i>
+                <span class="assignee-name">{{ getPrimaryAssigneeName(script) }}</span>
+                @if (getRemainingAssigneeCount(script) > 0) {
+                  <span class="assignee-more">+{{ getRemainingAssigneeCount(script) }}</span>
+                }
+              </div>
+            } @else {
+              <div class="assignee-empty">
+                <i class="pi pi-user-minus"></i>
+                <span>Unassigned</span>
+              </div>
+            }
+          </td>
+          <td>
             <div class="last-run-cell" *ngIf="script.lastRunAt">
               <span class="last-run-dot" [class.passed]="script.lastRunStatus === 'passed'" [class.failed]="script.lastRunStatus === 'failed' || script.lastRunStatus === 'error'"></span>
               <span class="last-run-time">{{ timeAgo(script.lastRunAt) }}</span>
@@ -124,11 +148,11 @@
             <span class="text-muted" *ngIf="!script.lastRunAt">Never</span>
           </td>
           <td>
-            <p-select 
-              [options]="statusOptions" 
-              [(ngModel)]="script.isActive" 
-              optionLabel="label" 
-              optionValue="value" 
+            <p-select
+              [options]="statusOptions"
+              [(ngModel)]="script.isActive"
+              optionLabel="label"
+              optionValue="value"
               (onChange)="toggleScript(script)"
               styleClass="inline-status-dropdown"
               appendTo="body"
@@ -148,21 +172,21 @@
             </p-select>
           </td>
           <td style="text-align: center;">
-            <p-button 
-              icon="pi pi-bolt" 
+            <p-button
+              icon="pi pi-bolt"
               [label]="'Run'"
-              [rounded]="true" 
+              [rounded]="true"
               [outlined]="true"
-              severity="success" 
+              severity="success"
               size="small"
               styleClass="run-action-btn"
               pTooltip="Execute Script"
               tooltipStyleClass="single-line-tooltip"
-              routerLink="/runner" 
-              [queryParams]="{ select: script.id }" 
-              [disabled]="!script.isActive" 
+              routerLink="/runner"
+              [queryParams]="{ select: script.id }"
+              [disabled]="!script.isActive"
             />
-            <p-button 
+            <p-button
               icon="pi pi-cog"
               [rounded]="true"
               [text]="true"
@@ -173,24 +197,24 @@
               tooltipStyleClass="single-line-tooltip"
               [routerLink]="['/scripts', script.id, 'configuration']"
             />
-            <p-button 
-              icon="pi pi-history" 
-              [rounded]="true" 
+            <p-button
+              icon="pi pi-history"
+              [rounded]="true"
               [text]="true"
-              severity="secondary" 
+              severity="secondary"
               size="small"
               styleClass="history-action-btn"
               pTooltip="Execution History"
               tooltipStyleClass="single-line-tooltip"
-              routerLink="/history" 
-              [queryParams]="{ search: script.name }" 
+              routerLink="/history"
+              [queryParams]="{ search: script.name }"
             />
           </td>
         </tr>
       </ng-template>
       <ng-template #emptymessage>
         <tr>
-          <td colspan="6" class="empty-row">
+          <td colspan="7" class="empty-row">
             <div class="empty-state">
               <i class="pi pi-file-code"></i>
               <p>No scripts found</p>
@@ -204,11 +228,11 @@
 </div>
 
 <!-- Workspace Sync Dialog -->
-<p-dialog 
-  header="Workspace Synchronization" 
-  [visible]="syncDialogVisible()" 
-  (visibleChange)="syncDialogVisible.set($event)" 
-  [modal]="true" 
+<p-dialog
+  header="Workspace Synchronization"
+  [visible]="syncDialogVisible()"
+  (visibleChange)="syncDialogVisible.set($event)"
+  [modal]="true"
   [closable]="syncStats() !== null"
   [style]="{ width: '450px' }"
 >
@@ -217,7 +241,7 @@
       <i class="pi pi-sync" [class.spin]="syncStats() === null"></i>
       <h3>{{ syncPhase() }}</h3>
     </div>
-    
+
     <p-progressBar [value]="syncProgress()" [showValue]="false" styleClass="sync-progress" />
 
     <div class="sync-stats-grid" *ngIf="syncStats() as stats">
@@ -360,3 +384,370 @@
 
 <app-alert-overlay [showConfirm]="false" />
 
+<!-- Script Assignment Management Dialog -->
+<p-dialog
+  header="Script Access Control"
+  [visible]="assignmentDialogVisible()"
+  (visibleChange)="assignmentDialogVisible.set($event)"
+  [modal]="true"
+  [style]="{ width: 'min(1120px, 96vw)', height: '86vh' }"
+  [contentStyle]="{ padding: '0' }"
+  styleClass="assignment-management-dialog"
+  [draggable]="false"
+  [resizable]="false"
+>
+  <div class="access-console">
+    <aside class="access-sidebar">
+      <div class="access-sidebar-head">
+        <div>
+          <span class="access-label">Testers</span>
+          <h3>Access Profiles</h3>
+        </div>
+        <p-badge [value]="testerUsers().length" severity="secondary" />
+      </div>
+
+      <p-iconfield styleClass="access-search">
+        <p-inputicon styleClass="pi pi-search" />
+        <input
+          type="text"
+          pInputText
+          placeholder="Search testers"
+          [ngModel]="assignmentTesterSearch()"
+          (ngModelChange)="assignmentTesterSearch.set($event)"
+        />
+      </p-iconfield>
+
+      <p-divider />
+
+      @if (assignmentLoading()) {
+        <div class="access-loading">
+          <p-progressSpinner strokeWidth="4" [style]="{ width: '32px', height: '32px' }" />
+        </div>
+      } @else {
+        <div class="access-user-list">
+          @for (user of filteredTesterUsers(); track user.id) {
+            <button
+              type="button"
+              class="access-user-card"
+              [class.active]="selectedTester()?.id === user.id"
+              (click)="onTesterChange(user)"
+            >
+              <p-avatar
+                [label]="(user.full_name || user.username).charAt(0).toUpperCase()"
+                shape="circle"
+                styleClass="access-avatar"
+              />
+              <span class="access-user-copy">
+                <strong>{{ user.full_name || user.username }}</strong>
+                <span>@{{ user.username }}</span>
+              </span>
+              <p-chip [label]="(user.assigned_script_count || 0) + ''" styleClass="access-count-chip" />
+            </button>
+          }
+
+          @if (testerUsers().length === 0) {
+            <div class="access-empty">
+              <i class="pi pi-user-plus"></i>
+              <strong>No testers found</strong>
+              <span>Create or activate a tester user.</span>
+            </div>
+          } @else if (filteredTesterUsers().length === 0) {
+            <div class="access-empty">
+              <i class="pi pi-search"></i>
+              <strong>No matching testers</strong>
+              <span>Clear the search to view all testers.</span>
+            </div>
+          }
+        </div>
+      }
+    </aside>
+
+    <section class="access-workspace">
+      @if (selectedTester(); as user) {
+        <div class="access-hero">
+          <div class="access-identity">
+            <p-avatar
+              [label]="(user.full_name || user.username).charAt(0).toUpperCase()"
+              shape="circle"
+              styleClass="access-hero-avatar"
+            />
+            <div>
+              <h2>{{ user.full_name || user.username }}</h2>
+              <div class="access-subtitle">@{{ user.username }} · Tester access</div>
+            </div>
+          </div>
+
+          <div class="access-stat-strip">
+            <div class="access-stat">
+              <strong>{{ selectedAssignmentCount() }}</strong>
+              <span>Assigned</span>
+            </div>
+            <div class="access-stat add">
+              <strong>{{ pendingAddCount() }}</strong>
+              <span>To Add</span>
+            </div>
+            <div class="access-stat remove">
+              <strong>{{ pendingRemoveCount() }}</strong>
+              <span>To Remove</span>
+            </div>
+            <div class="access-stat pending" [class.hot]="assignmentChangeCount() > 0">
+              <strong>{{ assignmentChangeCount() }}</strong>
+              <span>Pending</span>
+            </div>
+          </div>
+
+          <div class="access-hero-actions">
+            <p-button label="Assign Script" icon="pi pi-plus" size="small" (onClick)="openAssignmentCatalog()" />
+            <p-button label="Reset" icon="pi pi-undo" size="small" [text]="true" severity="secondary" [disabled]="assignmentChangeCount() === 0" (onClick)="resetAssignmentChanges()" />
+            <p-button label="Save" icon="pi pi-check" size="small" severity="success" [loading]="assignmentSaving()" (onClick)="saveAssignments()" />
+          </div>
+        </div>
+
+        <p-tabs [value]="assignmentWorkspaceTab()" styleClass="access-tabs">
+          <p-tablist>
+            <p-tab value="assigned" (click)="assignmentWorkspaceTab.set('assigned')">
+              Assigned
+              <p-badge [value]="selectedAssignmentCount()" severity="secondary" />
+            </p-tab>
+            <p-tab value="catalog" (click)="openAssignmentCatalog()">
+              Catalog
+              <p-badge [value]="availableCatalogCount()" severity="success" />
+            </p-tab>
+            <p-tab value="changes" (click)="assignmentWorkspaceTab.set('changes')">
+              Changes
+              <p-badge [value]="assignmentChangeCount()" [severity]="assignmentChangeCount() > 0 ? 'warn' : 'secondary'" />
+            </p-tab>
+          </p-tablist>
+
+          <p-tabpanels>
+            <p-tabpanel value="assigned">
+              <div class="access-toolbar">
+                <p-iconfield>
+                  <p-inputicon styleClass="pi pi-search" />
+                  <input
+                    type="text"
+                    pInputText
+                    placeholder="Search assigned scripts"
+                    [ngModel]="assignmentSearch()"
+                    (ngModelChange)="assignmentSearch.set($event)"
+                  />
+                </p-iconfield>
+
+                <p-select
+                  [options]="categories()"
+                  [ngModel]="assignmentSelectedCategory()"
+                  (ngModelChange)="assignmentSelectedCategory.set($event)"
+                  optionLabel="name"
+                  optionValue="id"
+                  placeholder="All Categories"
+                  [showClear]="true"
+                />
+
+                <p-button label="Assign Script" icon="pi pi-plus" size="small" [outlined]="true" (onClick)="openAssignmentCatalog()" />
+              </div>
+
+              <p-table
+                [value]="assignedScriptsForSelectedTester()"
+                styleClass="p-datatable-sm access-table"
+                [scrollable]="true"
+                scrollHeight="430px"
+                responsiveLayout="scroll"
+                [tableStyle]="{ 'table-layout': 'fixed', width: '100%' }"
+              >
+                <ng-template #header>
+                  <tr>
+                    <th>Script</th>
+                    <th style="width: 130px">Category</th>
+                    <th style="width: 120px">State</th>
+                    <th style="width: 92px">Action</th>
+                  </tr>
+                </ng-template>
+                <ng-template #body let-script>
+                  <tr>
+                    <td>
+                      <div class="access-script-cell">
+                        <span class="access-script-icon" [style.background-color]="script.categoryColor + '15'">
+                          <i [class]="'pi ' + script.categoryIcon" [style.color]="script.categoryColor"></i>
+                        </span>
+                        <span>
+                          <strong>{{ getDisplayScriptName(script) }}</strong>
+                          <small>{{ script.className }}</small>
+                        </span>
+                      </div>
+                    </td>
+                    <td>{{ script.categoryName }}</td>
+                    <td>
+                      <p-tag [value]="isOriginallyAssigned(script.id) ? 'Assigned' : 'Pending add'" [severity]="isOriginallyAssigned(script.id) ? 'success' : 'warn'" />
+                    </td>
+                    <td>
+                      <p-button icon="pi pi-times" [rounded]="true" [text]="true" severity="danger" size="small" pTooltip="Unassign" tooltipStyleClass="single-line-tooltip" (onClick)="unassignScript(script.id)" />
+                    </td>
+                  </tr>
+                </ng-template>
+                <ng-template #emptymessage>
+                  <tr>
+                    <td colspan="4">
+                      <div class="access-empty table-empty">
+                        <i class="pi pi-link"></i>
+                        <strong>No assigned scripts</strong>
+                        <p-button label="Assign Script" icon="pi pi-plus" size="small" (onClick)="openAssignmentCatalog()" />
+                      </div>
+                    </td>
+                  </tr>
+                </ng-template>
+              </p-table>
+            </p-tabpanel>
+
+            <p-tabpanel value="catalog">
+              <div class="access-toolbar catalog">
+                <p-iconfield>
+                  <p-inputicon styleClass="pi pi-search" />
+                  <input
+                    type="text"
+                    pInputText
+                    placeholder="Search scripts or assignees"
+                    [ngModel]="assignmentCatalogSearch()"
+                    (ngModelChange)="assignmentCatalogSearch.set($event)"
+                  />
+                </p-iconfield>
+
+                <p-select
+                  [options]="categories()"
+                  [ngModel]="assignmentCatalogCategory()"
+                  (ngModelChange)="assignmentCatalogCategory.set($event)"
+                  optionLabel="name"
+                  optionValue="id"
+                  placeholder="All Categories"
+                  [showClear]="true"
+                />
+
+                <p-select
+                  [options]="assignmentCatalogScopeOptions"
+                  [ngModel]="assignmentCatalogScope()"
+                  (ngModelChange)="assignmentCatalogScope.set($event)"
+                  optionLabel="label"
+                  optionValue="value"
+                />
+
+                <p-button label="Add Visible" icon="pi pi-check-square" size="small" [outlined]="true" [disabled]="availableCatalogCount() === 0" (onClick)="selectVisibleAssignments()" />
+                <p-button label="Add Category" icon="pi pi-folder-plus" size="small" [text]="true" [disabled]="!assignmentCatalogCategory()" (onClick)="assignCategoryScripts(assignmentCatalogCategory())" />
+              </div>
+
+              <div class="catalog-intel">
+                <p-chip [label]="availableCatalogCount() + ' available'" icon="pi pi-check-circle" />
+                <p-chip [label]="blockedCatalogCount() + ' unavailable'" icon="pi pi-lock" />
+                <p-chip [label]="pendingAddCount() + ' queued'" icon="pi pi-clock" />
+              </div>
+
+              <p-table
+                [value]="assignmentCatalogScripts()"
+                styleClass="p-datatable-sm access-table catalog-table"
+                [scrollable]="true"
+                scrollHeight="390px"
+                responsiveLayout="scroll"
+                [tableStyle]="{ 'table-layout': 'fixed', width: '100%' }"
+              >
+                <ng-template #header>
+                  <tr>
+                    <th>Script</th>
+                    <th style="width: 130px">Category</th>
+                    <th style="width: 210px">Availability</th>
+                    <th style="width: 82px">Action</th>
+                  </tr>
+                </ng-template>
+                <ng-template #body let-script>
+                  <tr [class.catalog-muted-row]="isCatalogScriptBlocked(script)">
+                    <td>
+                      <div class="access-script-cell">
+                        <span class="access-script-icon" [style.background-color]="script.categoryColor + '15'">
+                          <i [class]="'pi ' + script.categoryIcon" [style.color]="script.categoryColor"></i>
+                        </span>
+                        <span>
+                          <strong>{{ getDisplayScriptName(script) }}</strong>
+                          <small>{{ script.className }}</small>
+                        </span>
+                      </div>
+                    </td>
+                    <td>{{ script.categoryName }}</td>
+                    <td>
+                      <p-tag
+                        [value]="getCatalogAssignmentStatus(script)"
+                        [severity]="isCatalogScriptBlocked(script) ? 'secondary' : (isQueuedAssignment(script) ? 'warn' : 'success')"
+                      />
+                    </td>
+                    <td>
+                      <p-button
+                        [icon]="isQueuedAssignment(script) ? 'pi pi-check' : 'pi pi-plus'"
+                        [label]="isQueuedAssignment(script) ? 'Queued' : 'Add'"
+                        [outlined]="!isQueuedAssignment(script)"
+                        size="small"
+                        styleClass="catalog-add-btn"
+                        [disabled]="isCatalogScriptBlocked(script)"
+                        (onClick)="toggleCatalogAssignment(script)"
+                      />
+                    </td>
+                  </tr>
+                </ng-template>
+                <ng-template #emptymessage>
+                  <tr>
+                    <td colspan="4">
+                      <div class="access-empty table-empty">
+                        <i class="pi pi-search"></i>
+                        <strong>No matching scripts</strong>
+                        <p-button label="Reset Filters" icon="pi pi-filter-slash" [text]="true" size="small" (onClick)="assignmentCatalogSearch.set(''); assignmentCatalogCategory.set(null); assignmentCatalogScope.set('all')" />
+                      </div>
+                    </td>
+                  </tr>
+                </ng-template>
+              </p-table>
+            </p-tabpanel>
+
+            <p-tabpanel value="changes">
+              <div class="change-review">
+                <section>
+                  <h3>Pending Adds</h3>
+                  @if (pendingAddedScripts().length > 0) {
+                    <div class="change-list">
+                      @for (script of pendingAddedScripts(); track script.id) {
+                        <p-chip [label]="getDisplayScriptName(script)" icon="pi pi-plus-circle" />
+                      }
+                    </div>
+                  } @else {
+                    <div class="access-empty small-empty">No scripts queued for assignment.</div>
+                  }
+                </section>
+
+                <section>
+                  <h3>Pending Removes</h3>
+                  @if (pendingRemovedScripts().length > 0) {
+                    <div class="change-list">
+                      @for (script of pendingRemovedScripts(); track script.id) {
+                        <p-chip [label]="getDisplayScriptName(script)" icon="pi pi-minus-circle" />
+                      }
+                    </div>
+                  } @else {
+                    <div class="access-empty small-empty">No scripts queued for removal.</div>
+                  }
+                </section>
+              </div>
+            </p-tabpanel>
+          </p-tabpanels>
+        </p-tabs>
+
+        <div class="access-footer">
+          <span><i class="pi pi-info-circle"></i> {{ assignmentChangeCount() }} pending change{{ assignmentChangeCount() === 1 ? '' : 's' }}</span>
+          <div>
+            <p-button label="Reset" icon="pi pi-undo" size="small" [text]="true" severity="secondary" [disabled]="assignmentChangeCount() === 0" (onClick)="resetAssignmentChanges()" />
+            <p-button label="Save" icon="pi pi-check" size="small" severity="success" [loading]="assignmentSaving()" (onClick)="saveAssignments()" />
+          </div>
+        </div>
+      } @else if (!assignmentLoading()) {
+        <div class="access-empty workspace-empty">
+          <i class="pi pi-user-plus"></i>
+          <strong>Select a tester</strong>
+          <span>Choose a tester profile to manage script access.</span>
+        </div>
+      }
+    </section>
+  </div>
+</p-dialog>

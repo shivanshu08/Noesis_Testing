@@ -14,6 +14,27 @@ import cron from 'node-cron';
 const router = Router();
 router.use(authenticate);
 
+/**
+ * Verifies if all requested scripts are assigned to the tester user.
+ * Admins have access to all scripts.
+ */
+async function checkScriptAssignments(userId: number, role: string, scriptIds: number[]): Promise<boolean> {
+  if (role !== 'tester') return true;
+  if (!scriptIds || scriptIds.length === 0) return true;
+
+  // Use a set to handle duplicates and normalize to numbers
+  const uniqueIds = [...new Set(scriptIds.map(id => Number(id)).filter(id => !isNaN(id) && id > 0))];
+  if (uniqueIds.length === 0 && scriptIds.length > 0) return false;
+  if (uniqueIds.length === 0) return true;
+
+  const result = await query<{ count: string }>(
+    'SELECT COUNT(*)::text AS count FROM script_assignments WHERE user_id = $1 AND script_id = ANY($2::int[])',
+    [userId, uniqueIds]
+  );
+
+  return Number(result[0]?.count || 0) === uniqueIds.length;
+}
+
 // Store active processes
 const activeProcesses = new Map<number, ChildProcess>();
 
@@ -165,6 +186,12 @@ router.post('/run', authorize('admin', 'tester'), async (req: AuthRequest, res: 
       return;
     }
 
+    const hasAccess = await checkScriptAssignments(req.userId!, req.userRole!, scriptIdsRaw);
+    if (!hasAccess) {
+      res.status(403).json({ error: 'Access denied: One or more scripts are not assigned to you.' });
+      return;
+    }
+
     const dependencyPlan = await resolveScriptExecutionPlan(scriptIdsRaw);
 
     if (dependencyPlan.requestedScriptIds.length === 0) {
@@ -298,7 +325,7 @@ router.post('/stop/:runId', authorize('admin', 'tester'), async (req: AuthReques
     }).catch(() => {});
 
     await execute(
-      `INSERT INTO notifications (user_id, severity, summary, detail, icon, source, category) 
+      `INSERT INTO notifications (user_id, severity, summary, detail, icon, source, category)
        SELECT triggered_by, $1, $2, $3, $4, $5, $6 FROM execution_runs WHERE id = $7`,
       ['warn', 'Execution Stopped', `Run #${runId} was manually stopped.`, 'pi pi-stop-circle', 'Script Execution', 'Warning', runId]
     ).catch(e => logger.error('Notification error', e));
@@ -331,6 +358,11 @@ router.get('/runs', async (req: AuthRequest, res: Response): Promise<void> => {
     if (status) {
       sql += ` AND er.status = $${paramIdx++}`;
       params.push(status);
+    }
+
+    if (req.userRole === 'tester') {
+      sql += ` AND EXISTS (SELECT 1 FROM execution_results eres WHERE eres.run_id = er.id AND eres.script_id IN (SELECT sa.script_id FROM script_assignments sa WHERE sa.user_id = $${paramIdx++}))`;
+      params.push(req.userId!);
     }
 
     sql += ` ORDER BY er.created_at DESC LIMIT $${paramIdx++} OFFSET $${paramIdx++}`;
@@ -375,6 +407,19 @@ router.get('/runs/:id', async (req: AuthRequest, res: Response): Promise<void> =
     if (runs.length === 0) {
       res.status(404).json({ error: 'Run not found.' });
       return;
+    }
+
+    if (req.userRole === 'tester') {
+      const assignmentCheck = await query<{ count: string }>(
+        `SELECT COUNT(*)::text as count FROM execution_results eres
+         WHERE eres.run_id = $1
+         AND eres.script_id IN (SELECT sa.script_id FROM script_assignments sa WHERE sa.user_id = $2)`,
+        [req.params.id, req.userId!]
+      );
+      if (Number(assignmentCheck[0]?.count || 0) === 0) {
+        res.status(403).json({ error: 'Access denied: You are not assigned to any scripts in this execution run.' });
+        return;
+      }
     }
 
     const results = await query<ResultRow>(`
@@ -478,55 +523,77 @@ router.get('/runs/:id', async (req: AuthRequest, res: Response): Promise<void> =
 // GET /api/execution/stats - Dashboard statistics
 router.get('/stats', async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const [totalScripts] = await query<any>('SELECT COUNT(*) as count FROM scripts WHERE is_active = TRUE');
-    const [totalRuns] = await query<any>('SELECT COUNT(*) as count FROM execution_runs');
-    const [recentRuns] = await query<any>(
-      "SELECT COUNT(*) as count FROM execution_runs WHERE created_at >= NOW() - INTERVAL '7 days'"
+    const isTester = _req.userRole === 'tester';
+    const userId = _req.userId!;
+
+    const totalScripts = await query<any>(
+      `SELECT COUNT(*) as count FROM scripts WHERE is_active = TRUE ${isTester ? 'AND id IN (SELECT script_id FROM script_assignments WHERE user_id = $1)' : ''}`,
+      isTester ? [userId] : []
     );
-    const [passRate] = await query<any>(`
-      SELECT
-        ROUND(AVG(CASE WHEN status = 'passed' THEN 100 ELSE 0 END), 1) as rate
-      FROM execution_runs
-      WHERE status IN ('passed', 'failed') AND created_at >= NOW() - INTERVAL '30 days'
-    `);
+
+    const runFilter = isTester
+      ? `WHERE EXISTS (SELECT 1 FROM execution_results eres WHERE eres.run_id = er.id AND eres.script_id IN (SELECT sa.script_id FROM script_assignments sa WHERE sa.user_id = $1))`
+      : '';
+    const runParams = isTester ? [userId] : [];
+
+    const totalRuns = await query<any>(
+      `SELECT COUNT(*) as count FROM execution_runs er ${runFilter}`,
+      runParams
+    );
+
+    const recentRuns = await query<any>(
+      `SELECT COUNT(*) as count FROM execution_runs er ${runFilter ? runFilter + ' AND' : 'WHERE'} er.created_at >= NOW() - INTERVAL '7 days'`,
+      runParams
+    );
+
+    const passRate = await query<any>(
+      `SELECT ROUND(AVG(CASE WHEN er.status = 'passed' THEN 100 ELSE 0 END), 1) as rate
+       FROM execution_runs er
+       ${runFilter ? runFilter + ' AND' : 'WHERE'} er.status IN ('passed', 'failed') AND er.created_at >= NOW() - INTERVAL '30 days'`,
+      runParams
+    );
+
     const runningRuns = await query<any>(
-      "SELECT COUNT(*) as count FROM execution_runs WHERE status = 'running'"
+      `SELECT COUNT(*) as count FROM execution_runs er ${runFilter ? runFilter + ' AND' : 'WHERE'} er.status = 'running'`,
+      runParams
     );
+
     const recentHistory = await query<any>(`
-      SELECT 
-        created_at::date as date,
+      SELECT
+        er.created_at::date as date,
         'passed' as status,
-        SUM(passed_count)::int as count
-      FROM execution_runs
-      WHERE created_at >= NOW() - INTERVAL '30 days'
-      GROUP BY created_at::date
-      
+        SUM(er.passed_count)::int as count
+      FROM execution_runs er
+      ${runFilter ? runFilter + ' AND' : 'WHERE'} er.created_at >= NOW() - INTERVAL '30 days'
+      GROUP BY er.created_at::date
+
       UNION ALL
-      
-      SELECT 
-        created_at::date as date,
+
+      SELECT
+        er.created_at::date as date,
         'failed' as status,
-        SUM(failed_count + error_count)::int as count
-      FROM execution_runs
-      WHERE created_at >= NOW() - INTERVAL '30 days'
-      GROUP BY created_at::date
-      
+        SUM(er.failed_count + er.error_count)::int as count
+      FROM execution_runs er
+      ${runFilter ? runFilter + ' AND' : 'WHERE'} er.created_at >= NOW() - INTERVAL '30 days'
+      GROUP BY er.created_at::date
+
       ORDER BY date
-    `);
+    `, runParams);
 
     const categoryStats = await query<any>(`
       SELECT sc.name, sc.color, COUNT(s.id) as count
       FROM script_categories sc
       LEFT JOIN scripts s ON sc.id = s.category_id AND s.is_active = TRUE
+      ${isTester ? 'AND s.id IN (SELECT sa.script_id FROM script_assignments sa WHERE sa.user_id = $1)' : ''}
       GROUP BY sc.id, sc.name, sc.color, sc.sort_order
       ORDER BY sc.sort_order
-    `);
+    `, isTester ? [userId] : []);
 
     res.json({
-      totalScripts: totalScripts.count,
-      totalRuns: totalRuns.count,
-      recentRuns: recentRuns.count,
-      passRate: passRate.rate || 0,
+      totalScripts: totalScripts[0].count,
+      totalRuns: totalRuns[0].count,
+      recentRuns: recentRuns[0].count,
+      passRate: passRate[0].rate || 0,
       runningCount: runningRuns[0].count,
       recentHistory,
       categoryStats,
@@ -736,6 +803,20 @@ router.get('/global-logs', async (req: AuthRequest, res: Response): Promise<void
       params.push(to);
     }
 
+    if (req.userRole === 'tester') {
+      whereClauses.push(`
+        (
+          l.run_id IS NULL
+          OR EXISTS (
+            SELECT 1 FROM execution_results eres
+            WHERE eres.run_id = l.run_id
+            AND eres.script_id IN (SELECT sa.script_id FROM script_assignments sa WHERE sa.user_id = $${idx++})
+          )
+        )
+      `);
+      params.push(req.userId!);
+    }
+
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
     const unionSql = `
       WITH unified_logs AS (
@@ -771,6 +852,7 @@ router.get('/global-logs', async (req: AuthRequest, res: Response): Promise<void
           al.action::text AS action,
           al.status::text AS status
         FROM app_logs al
+        WHERE al.action != 'SCRIPT_ASSIGNMENT_UPDATE'
 
         UNION ALL
 
@@ -1660,7 +1742,7 @@ function hardenBrowserCertificateHandling(runId: number, stPath: string): { stat
 
     return {
       status: patchedCount > 0 ? 'patched' : 'already',
-      message: patchedCount > 0 
+      message: patchedCount > 0
         ? `Enabled insecure certificate handling in ${patchedCount} file(s).`
         : 'Certificate hardening already present in workspace.'
     };
@@ -1873,7 +1955,7 @@ async function executeScripts(runId: number, testngXml: string, scripts: any[], 
 
     const suiteFileName = `Testing-Config-Local-run-${runId}.xml`;
     tempXmlPath = path.join(stPath, suiteFileName);
-    
+
     // Write temporary TestNG XML
     fs.writeFileSync(tempXmlPath, testngXml, 'utf8');
 
@@ -2031,7 +2113,7 @@ async function executeScripts(runId: number, testngXml: string, scripts: any[], 
       const detail = `Suite "${runName}" finished executing with ${passed} passed, ${failed} failed, ${errors} errors, ${skipped} skipped.`;
       const icon = finalStatus === 'passed' ? 'pi pi-check-circle' : 'pi pi-times-circle';
       await execute(
-        `INSERT INTO notifications (user_id, severity, summary, detail, icon, source, category) 
+        `INSERT INTO notifications (user_id, severity, summary, detail, icon, source, category)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [userId, severity, summary, detail, icon, 'Script Execution', 'Test Run']
       ).catch(e => logger.error('Notification error', e));
@@ -2068,7 +2150,7 @@ async function executeScripts(runId: number, testngXml: string, scripts: any[], 
       }
 
       // Clean up temp file
-      try { if (tempXmlPath) fs.unlinkSync(tempXmlPath); } catch {} 
+      try { if (tempXmlPath) fs.unlinkSync(tempXmlPath); } catch {}
 
       logger.info(`Run ${runId} completed with status: ${finalStatus}`);
     });
@@ -2091,7 +2173,7 @@ async function executeScripts(runId: number, testngXml: string, scripts: any[], 
 
       // Log Crash Notification
       await execute(
-        `INSERT INTO notifications (user_id, severity, summary, detail, icon, source, category) 
+        `INSERT INTO notifications (user_id, severity, summary, detail, icon, source, category)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [userId, 'error', 'Execution Error', `Run "${runName}" failed to start or crashed.`, 'pi pi-exclamation-triangle', 'Script Execution', 'Error']
       ).catch(e => logger.error('Notification error', e));
@@ -2221,7 +2303,7 @@ async function captureReportArtifacts(runId: number, scripts: any[], executionWo
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
       [runId, scriptId, artifactType, file, destPath, stats.size, mimeType]
     );
-    
+
     capturedArtifacts.push({
       id: result.rows[0].id,
       runId,
@@ -2233,7 +2315,7 @@ async function captureReportArtifacts(runId: number, scripts: any[], executionWo
       createdAt: new Date()
     });
   }
-  
+
   return capturedArtifacts;
 }
 
@@ -2252,7 +2334,7 @@ router.get('/runs/:runId/artifacts', async (req: AuthRequest, res: Response): Pr
       'SELECT * FROM execution_artifacts WHERE run_id = $1 ORDER BY created_at ASC',
       [runId]
     );
-    
+
     res.json(rows.map(r => ({
       id: r.id,
       runId: r.run_id,
@@ -2277,19 +2359,19 @@ router.get('/artifacts/:id/download', async (req: AuthRequest, res: Response): P
       'SELECT * FROM execution_artifacts WHERE id = $1',
       [artifactId]
     );
-    
+
     if (rows.length === 0) {
       res.status(404).json({ error: 'Artifact not found.' });
       return;
     }
-    
+
     const artifact = rows[0];
     const fs = await import('fs');
     if (!fs.existsSync(artifact.stored_path)) {
       res.status(404).json({ error: 'Artifact file not found on disk.' });
       return;
     }
-    
+
     res.download(artifact.stored_path, artifact.file_name);
   } catch (error) {
     logger.error('Download artifact error:', error);
@@ -2317,6 +2399,23 @@ router.post('/schedule', authorize('admin', 'tester'), async (req: AuthRequest, 
     if ((!scriptIds || !Array.isArray(scriptIds) || scriptIds.length === 0) && !suiteId) {
       res.status(400).json({ error: 'Either script IDs or a suite ID is required.' });
       return;
+    }
+
+    if (req.userRole === 'tester') {
+      let idsToCheck = scriptIds || [];
+      if (suiteId) {
+        const suiteScripts = await query<{ script_id: number }>(
+          'SELECT script_id FROM suite_scripts WHERE suite_id = $1',
+          [suiteId]
+        );
+        idsToCheck = [...new Set([...idsToCheck, ...suiteScripts.map(s => s.script_id)])];
+      }
+
+      const hasAccess = await checkScriptAssignments(req.userId!, req.userRole!, idsToCheck);
+      if (!hasAccess) {
+        res.status(403).json({ error: 'Access denied: One or more scripts in this selection/suite are not assigned to you.' });
+        return;
+      }
     }
 
     const nextRunAt = computeNextRun(cronExpression);

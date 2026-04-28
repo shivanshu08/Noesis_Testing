@@ -9,6 +9,7 @@ import {
   ScriptConfigurationFileContent,
   ScriptConfigurationChangeLog,
   ScriptConfigurationChangeLogDetail,
+  UserAssignments,
 } from '../models/interfaces';
 
 @Injectable({ providedIn: 'root' })
@@ -127,6 +128,20 @@ export class ScriptService {
 
   deleteScripts(ids: number[]): Observable<any> {
     return this.http.post(`${this.apiUrl}/delete-multiple`, { ids });
+  }
+
+  // ---- Script Assignments (Admin) ----
+
+  getAllAssignments(): Observable<UserAssignments[]> {
+    return this.http.get<UserAssignments[]>(`${this.apiUrl}/assignments`);
+  }
+
+  getUserAssignments(userId: number): Observable<{ userId: number; scriptIds: number[] }> {
+    return this.http.get<{ userId: number; scriptIds: number[] }>(`${this.apiUrl}/assignments/${userId}`);
+  }
+
+  updateUserAssignments(userId: number, scriptIds: number[]): Observable<{ success: boolean; userId: number; assignedCount: number }> {
+    return this.http.put<{ success: boolean; userId: number; assignedCount: number }>(`${this.apiUrl}/assignments/${userId}`, { scriptIds });
   }
 
   notifyScriptRegistryUpdated(): void {

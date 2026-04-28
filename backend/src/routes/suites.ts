@@ -249,7 +249,8 @@ function extractChangedParts(metadata: Record<string, unknown> | null): string[]
 // GET /api/suites - List all suites with last run info
 router.get('/', async (_req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const suites = await query<SuiteRow>(`
+    const params: any[] = [];
+    let sql = `
       SELECT ts.*, u.full_name as created_by_name,
         (SELECT COUNT(*) FROM suite_scripts ss WHERE ss.suite_id = ts.id) as script_count,
         lr.status as last_run_status,
@@ -263,8 +264,24 @@ router.get('/', async (_req: AuthRequest, res: Response): Promise<void> => {
         ORDER BY er.created_at DESC
         LIMIT 1
       ) lr ON true
-      ORDER BY ts.name
-    `);
+      WHERE 1=1
+    `;
+
+    if (_req.userRole === 'tester') {
+      sql += `
+        AND NOT EXISTS (
+          SELECT 1 FROM suite_scripts ss
+          WHERE ss.suite_id = ts.id
+          AND ss.script_id NOT IN (SELECT sa.script_id FROM script_assignments sa WHERE sa.user_id = $1)
+        )
+        AND EXISTS (SELECT 1 FROM suite_scripts ss WHERE ss.suite_id = ts.id)
+      `;
+      params.push(_req.userId!);
+    }
+
+    sql += ` ORDER BY ts.name`;
+
+    const suites = await query<SuiteRow>(sql, params);
     res.json(suites.map(s => ({
       id: s.id,
       name: s.name,
@@ -417,6 +434,29 @@ router.get('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
       return;
     }
 
+    if (req.userRole === 'tester') {
+      const assignmentCheck = await query<{ count: string }>(
+        `SELECT COUNT(*)::text as count FROM suite_scripts ss
+         WHERE ss.suite_id = $1
+         AND ss.script_id NOT IN (SELECT sa.script_id FROM script_assignments sa WHERE sa.user_id = $2)`,
+        [req.params.id, req.userId!]
+      );
+      if (Number(assignmentCheck[0]?.count || 0) > 0) {
+        res.status(403).json({ error: 'Access denied: This suite contains scripts not assigned to you.' });
+        return;
+      }
+
+      // Also ensure it's not empty (matching list filter)
+      const countCheck = await query<{ count: string }>(
+        'SELECT COUNT(*)::text as count FROM suite_scripts WHERE suite_id = $1',
+        [req.params.id]
+      );
+      if (Number(countCheck[0]?.count || 0) === 0) {
+        res.status(403).json({ error: 'Access denied: This suite is empty or not accessible.' });
+        return;
+      }
+    }
+
     const scripts = await query<any>(`
       SELECT s.id, s.name, s.class_name, sc.name as category_name, sc.color as category_color, ss.execution_order
       FROM suite_scripts ss
@@ -482,6 +522,17 @@ router.post('/', authorize('admin', 'tester'), async (req: AuthRequest, res: Res
       return;
     }
 
+    if (req.userRole === 'tester') {
+      const assignmentCheck = await query<{ count: string }>(
+        'SELECT COUNT(*)::text as count FROM script_assignments WHERE user_id = $1 AND script_id = ANY($2::int[])',
+        [req.userId!, uniqueScriptIds]
+      );
+      if (Number(assignmentCheck[0]?.count || 0) !== uniqueScriptIds.length) {
+        res.status(403).json({ error: 'Access denied: One or more scripts are not assigned to you.' });
+        return;
+      }
+    }
+
     const client = await getConnection();
     const username = await resolveActorName(client, req.userId);
     try {
@@ -489,12 +540,12 @@ router.post('/', authorize('admin', 'tester'), async (req: AuthRequest, res: Res
 
       const result = await client.query(
         'INSERT INTO test_suites (name, description, is_parallel, thread_count, tags, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-        [name, description, isParallel, threadCount, tags ? JSON.stringify(tags) : null, req.userId]
+        [name, description, isParallel, threadCount, tags ? JSON.stringify(tags) : null, req.userId!]
       );
       const suiteId = result.rows[0].id;
 
       // Increment user suites_created statistic
-      await client.query('UPDATE users SET suites_created = COALESCE(suites_created, 0) + 1 WHERE id = $1', [req.userId]);
+      await client.query('UPDATE users SET suites_created = COALESCE(suites_created, 0) + 1 WHERE id = $1', [req.userId!]);
 
       for (let i = 0; i < uniqueScriptIds.length; i++) {
         await client.query(
@@ -584,6 +635,17 @@ router.put('/:id', authorize('admin', 'tester'), async (req: AuthRequest, res: R
         res.status(400).json({ error: 'At least one valid script is required.' });
         return;
       }
+
+      if (req.userRole === 'tester') {
+        const assignmentCheck = await query<{ count: string }>(
+          'SELECT COUNT(*)::text as count FROM script_assignments WHERE user_id = $1 AND script_id = ANY($2::int[])',
+          [req.userId!, uniqueScriptIds]
+        );
+        if (Number(assignmentCheck[0]?.count || 0) !== uniqueScriptIds.length) {
+          res.status(403).json({ error: 'Access denied: One or more scripts are not assigned to you.' });
+          return;
+        }
+      }
     }
 
     const client = await getConnection();
@@ -597,6 +659,20 @@ router.put('/:id', authorize('admin', 'tester'), async (req: AuthRequest, res: R
         await client.query('ROLLBACK');
         res.status(404).json({ error: 'Suite not found.' });
         return;
+      }
+
+      if (req.userRole! === 'tester') {
+        const assignmentCheck = await query<{ count: string }>(
+          `SELECT COUNT(*)::text as count FROM suite_scripts ss
+           WHERE ss.suite_id = $1
+           AND ss.script_id NOT IN (SELECT sa.script_id FROM script_assignments sa WHERE sa.user_id = $2)`,
+          [suiteId, req.userId!]
+        );
+        if (Number(assignmentCheck[0]?.count || 0) > 0) {
+          await client.query('ROLLBACK');
+          res.status(403).json({ error: 'Access denied: You do not have permission to modify this suite as it contains scripts not assigned to you.' });
+          return;
+        }
       }
 
       const updateResult = await client.query(
@@ -721,6 +797,19 @@ router.post('/:id/duplicate', authorize('admin', 'tester'), async (req: AuthRequ
 
     const source = sources[0];
 
+    if (req.userRole === 'tester') {
+      const assignmentCheck = await query<{ count: string }>(
+        `SELECT COUNT(*)::text as count FROM suite_scripts ss
+         WHERE ss.suite_id = $1
+         AND ss.script_id NOT IN (SELECT sa.script_id FROM script_assignments sa WHERE sa.user_id = $2)`,
+        [sourceId, req.userId!]
+      );
+      if (Number(assignmentCheck[0]?.count || 0) > 0) {
+        res.status(403).json({ error: 'Access denied: You cannot duplicate this suite as it contains scripts not assigned to you.' });
+        return;
+      }
+    }
+
     // Fetch source scripts
     const scripts = await query<any>(
       `SELECT script_id, execution_order FROM suite_scripts WHERE suite_id = $1 ORDER BY execution_order`,
@@ -741,7 +830,7 @@ router.post('/:id/duplicate', authorize('admin', 'tester'), async (req: AuthRequ
         const candidateName = buildDuplicateSuiteName(source.name, attempt);
         const result = await client.query(
           'INSERT INTO test_suites (name, description, is_parallel, thread_count, tags, created_by) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (name) DO NOTHING RETURNING id',
-          [candidateName, source.description, source.is_parallel, source.thread_count, tagsToInsert, req.userId]
+          [candidateName, source.description, source.is_parallel, source.thread_count, tagsToInsert, req.userId!]
         );
 
         if (result.rows.length > 0) {
@@ -758,7 +847,7 @@ router.post('/:id/duplicate', authorize('admin', 'tester'), async (req: AuthRequ
       }
 
       // Increment user suites_created statistic
-      await client.query('UPDATE users SET suites_created = COALESCE(suites_created, 0) + 1 WHERE id = $1', [req.userId]);
+      await client.query('UPDATE users SET suites_created = COALESCE(suites_created, 0) + 1 WHERE id = $1', [req.userId!]);
 
       for (const s of scripts) {
         await client.query(

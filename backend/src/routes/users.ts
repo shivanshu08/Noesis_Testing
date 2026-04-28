@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { query, execute } from '../database/connection';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { logger } from '../utils/logger';
+import { ensureScriptAssignmentsSchema } from '../database/schemaMaintenance';
 
 const router = Router();
 
@@ -26,7 +27,19 @@ function parseRouteId(idParam: string | string[] | undefined): number | null {
 
 router.get('/', async (_req: AuthRequest, res: Response) => {
   try {
-    const users = await query('SELECT id, username, email, full_name, role, is_active, avatar_url, last_login, run_count, suites_created, scripts_registered, created_at FROM users ORDER BY created_at DESC');
+    await ensureScriptAssignmentsSchema();
+    const users = await query(`
+      SELECT u.id, u.username, u.email, u.full_name, u.role, u.is_active, u.avatar_url, u.last_login,
+        u.run_count, u.suites_created, u.scripts_registered, u.created_at,
+        COALESCE(sa_counts.assigned_script_count, 0)::int AS assigned_script_count
+      FROM users u
+      LEFT JOIN (
+        SELECT user_id, COUNT(*)::int AS assigned_script_count
+        FROM script_assignments
+        GROUP BY user_id
+      ) sa_counts ON sa_counts.user_id = u.id
+      ORDER BY u.created_at DESC
+    `);
     res.json(users);
   } catch (error) {
     logger.error('List users error:', error);

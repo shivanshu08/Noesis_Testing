@@ -1113,3 +1113,23 @@
     grid-template-columns: repeat(2, minmax(120px, 1fr));
   }
 }
+
+/* Tester Assignment Context Banner */
+.tester-info-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  background: color-mix(in srgb, #6366f1 8%, var(--surface-card));
+  border: 1px solid color-mix(in srgb, #6366f1 25%, var(--surface-border));
+  color: var(--text-color);
+  font-size: 0.88rem;
+
+  i {
+    color: #6366f1;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+}

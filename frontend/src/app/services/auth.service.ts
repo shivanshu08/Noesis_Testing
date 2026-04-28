@@ -22,6 +22,8 @@ export class AuthService {
     const role = this.currentUser()?.role;
     return role === 'admin' || role === 'tester';
   });
+  readonly isTester = computed(() => this.currentUser()?.role === 'tester');
+  readonly assignedScriptCount = computed(() => this.currentUser()?.assignedScriptCount ?? null);
 
   constructor(private http: HttpClient, private router: Router) {}
 

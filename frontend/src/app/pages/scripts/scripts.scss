@@ -178,7 +178,7 @@
     width: 24px;
     color: var(--text-color-secondary);
   }
-  
+
   &:hover {
     border-color: color-mix(in srgb, var(--noesis-primary) 35%, var(--surface-border)) !important;
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--noesis-primary) 10%, transparent) !important;
@@ -214,7 +214,7 @@
   &.option-item {
     width: 100%;
     border-radius: 8px;
-    
+
     &.ready i { color: #059669; }
     &.maintenance i { color: #d97706; }
     &:hover { background: var(--surface-hover); }
@@ -224,7 +224,7 @@
 :host ::ng-deep {
   .p-datatable .p-datatable-tbody > tr {
     transition: all 0.2s ease;
-    
+
     &:hover {
       transform: translateY(-1px);
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
@@ -252,7 +252,7 @@
     margin-left: 4px;
     width: 2rem;
     height: 2rem;
-    
+
     &:hover {
       background: color-mix(in srgb, var(--noesis-primary) 15%, transparent);
       color: var(--noesis-primary);
@@ -337,7 +337,7 @@
     font-size: 0.9rem;
     color: var(--text-color);
     font-weight: 500;
-    
+
     i {
       font-size: 1.1rem;
     }
@@ -447,3 +447,551 @@
 }
 
 /* Paginator styling is now handled globally in styles.scss */
+
+/* Tester Assignment Context Banner */
+.tester-info-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  margin-bottom: 20px;
+  border-radius: 12px;
+  background: linear-gradient(to right, color-mix(in srgb, #6366f1 10%, var(--surface-card)), var(--surface-card));
+  border: 1px solid color-mix(in srgb, #6366f1 20%, var(--surface-border));
+  color: var(--text-color);
+  font-size: 0.9rem;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.05);
+
+  i {
+    color: #6366f1;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+  }
+
+  strong {
+    color: #6366f1;
+  }
+}
+
+/* Assignment Management Dialog */
+:host ::ng-deep .assignment-management-dialog {
+  .p-dialog {
+    overflow: hidden;
+  }
+
+  .p-dialog-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--surface-border);
+  }
+
+  .p-dialog-title {
+    font-size: 1rem;
+    font-weight: 700;
+  }
+}
+
+.assignee-cell {
+  display: inline-flex;
+  align-items: center;
+  max-width: 190px;
+  gap: 6px;
+  color: var(--text-color);
+  font-size: 0.82rem;
+
+  i {
+    color: var(--text-color-secondary);
+    font-size: 0.78rem;
+  }
+
+  .assignee-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+
+  .assignee-more {
+    color: var(--text-color-secondary);
+    font-size: 0.76rem;
+    font-weight: 700;
+  }
+}
+
+.assignee-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-color-secondary);
+  font-size: 0.8rem;
+
+  i {
+    color: #d97706;
+    font-size: 0.85rem;
+  }
+}
+
+.category-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  i { font-size: 1rem; }
+  span { font-weight: 500; }
+}
+
+/* Access console redesign */
+:host ::ng-deep .assignment-management-dialog {
+  .p-dialog {
+    border-radius: 8px;
+    overflow: hidden;
+    max-width: 96vw;
+  }
+
+  .p-dialog-header {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--surface-border);
+  }
+
+  .p-dialog-content {
+    overflow: hidden;
+  }
+
+  .p-dialog-title,
+  .access-console,
+  .access-console *:not(.pi) {
+    font-family: inherit;
+    letter-spacing: 0;
+  }
+}
+
+.access-console {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  width: 100%;
+  height: calc(86vh - 58px);
+  min-height: 560px;
+  background: var(--surface-card);
+  overflow: hidden;
+}
+
+.access-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--surface-border);
+  background: color-mix(in srgb, var(--surface-ground) 42%, var(--surface-card));
+  padding: 0.75rem;
+  overflow: hidden;
+}
+
+.access-sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+
+  h3 {
+    margin: 0;
+  }
+}
+
+.access-label,
+.access-subtitle,
+.access-user-copy span,
+.access-empty span {
+  color: var(--text-color-secondary);
+}
+
+:host ::ng-deep .access-search {
+  margin-top: 0.75rem;
+
+  .p-inputtext {
+    width: 100%;
+  }
+}
+
+.access-user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.access-user-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-color);
+  padding: 0.55rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+
+  &:hover {
+    background: var(--surface-card);
+    border-color: var(--surface-border);
+  }
+
+  &.active {
+    background: var(--surface-card);
+    border-color: color-mix(in srgb, var(--noesis-primary) 34%, var(--surface-border));
+    box-shadow: inset 3px 0 0 var(--noesis-primary);
+  }
+}
+
+:host ::ng-deep {
+  .access-avatar,
+  .access-hero-avatar {
+    background: color-mix(in srgb, var(--noesis-primary) 12%, var(--surface-card));
+    color: var(--noesis-primary);
+    font-weight: 700;
+  }
+
+  .access-avatar {
+    width: 1.75rem;
+    height: 1.75rem;
+    font-size: 0.78rem;
+  }
+
+  .access-hero-avatar {
+    width: 2.15rem;
+    height: 2.15rem;
+    font-size: 0.9rem;
+  }
+
+  .access-count-chip {
+    background: var(--surface-ground);
+    color: var(--text-color-secondary);
+    border-radius: 999px;
+
+    .p-chip {
+      padding: 0.125rem 0.4rem;
+    }
+  }
+}
+
+.access-user-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  strong,
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.access-workspace {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.access-hero {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) minmax(250px, auto) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--surface-border);
+  background: var(--surface-card);
+}
+
+.access-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+
+  h2 {
+    margin: 0;
+  }
+}
+
+.access-stat-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(58px, 1fr));
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.access-stat {
+  border: 1px solid var(--surface-border);
+  border-radius: 7px;
+  padding: 0.35rem 0.5rem;
+  background: color-mix(in srgb, var(--surface-ground) 44%, var(--surface-card));
+
+  strong,
+  span {
+    display: block;
+  }
+
+  span {
+    color: var(--text-color-secondary);
+  }
+
+  &.add strong {
+    color: #047857;
+  }
+
+  &.remove strong {
+    color: #b91c1c;
+  }
+
+  &.hot {
+    border-color: color-mix(in srgb, #f59e0b 42%, var(--surface-border));
+    background: color-mix(in srgb, #f59e0b 9%, var(--surface-card));
+
+    strong {
+      color: #b45309;
+    }
+  }
+}
+
+.access-hero-actions,
+.access-footer > div {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+:host ::ng-deep .access-tabs {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+
+  .p-tablist {
+    padding: 0 1rem;
+    border-bottom: 1px solid var(--surface-border);
+    overflow-x: hidden;
+  }
+
+  .p-tab {
+    gap: 0.35rem;
+    padding: 0.65rem 0.75rem;
+  }
+
+  .p-tabpanels,
+  .p-tabpanel {
+    flex: 1;
+    min-height: 0;
+    padding: 0;
+    background: var(--surface-card);
+  }
+}
+
+.access-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--surface-border);
+  background: color-mix(in srgb, var(--surface-ground) 32%, var(--surface-card));
+
+  p-iconfield {
+    flex: 1 1 220px;
+    min-width: 0;
+  }
+
+  p-select {
+    flex: 0 1 160px;
+    min-width: 0;
+  }
+
+  p-button {
+    flex: 0 0 auto;
+  }
+}
+
+:host ::ng-deep .access-toolbar {
+  .p-iconfield,
+  .p-inputtext,
+  .p-select {
+    width: 100%;
+  }
+}
+
+.catalog-intel {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 1rem;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+:host ::ng-deep .access-table {
+  width: 100%;
+  min-width: 0;
+
+  .p-datatable-wrapper {
+    overflow-x: hidden !important;
+  }
+
+  .p-datatable-table {
+    table-layout: fixed;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .p-datatable-thead > tr > th {
+    background: color-mix(in srgb, var(--surface-ground) 52%, var(--surface-card));
+  }
+
+  .p-datatable-thead > tr > th,
+  .p-datatable-tbody > tr > td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0.45rem 0.65rem;
+  }
+
+  .p-datatable-tbody > tr.catalog-muted-row {
+    opacity: 0.5;
+    background: color-mix(in srgb, var(--surface-ground) 56%, var(--surface-card));
+  }
+}
+
+.access-script-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+
+  strong,
+  small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  small {
+    color: var(--text-color-secondary);
+  }
+}
+
+.access-script-icon {
+  width: 1.55rem;
+  height: 1.55rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  flex-shrink: 0;
+
+  .pi {
+    font-size: 0.78rem;
+  }
+}
+
+.change-review {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 1.25rem;
+
+  section {
+    border: 1px solid var(--surface-border);
+    border-radius: 8px;
+    background: var(--surface-card);
+    padding: 1rem;
+
+    h3 {
+      margin: 0 0 1rem;
+    }
+  }
+}
+
+.change-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.access-empty,
+.access-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-height: 12rem;
+  text-align: center;
+  color: var(--text-color-secondary);
+
+  i {
+    color: var(--noesis-primary);
+  }
+
+  &.table-empty {
+    min-height: 14rem;
+  }
+
+  &.workspace-empty {
+    flex: 1;
+  }
+
+  &.small-empty {
+    min-height: 7rem;
+    border: 1px dashed var(--surface-border);
+    border-radius: 8px;
+  }
+}
+
+.access-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  border-top: 1px solid var(--surface-border);
+  background: var(--surface-card);
+
+  > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-color-secondary);
+  }
+}
+
+@media (max-width: 1100px) {
+  .access-console {
+    grid-template-columns: 1fr;
+  }
+
+  .access-sidebar {
+    max-height: 260px;
+    border-right: 0;
+    border-bottom: 1px solid var(--surface-border);
+  }
+
+  .access-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .access-stat-strip,
+  .change-review {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .access-toolbar,
+  .access-toolbar.catalog {
+    grid-template-columns: 1fr;
+  }
+}

@@ -20,7 +20,7 @@ import notificationRoutes from './routes/notifications';
 import logsRoutes from './routes/logs';
 import { appLogService } from './services/appLogService';
 import { initScheduler, shutdownScheduler } from './services/schedulerService';
-import { ensureTestSuitesSchema } from './database/schemaMaintenance';
+import { ensureScriptAssignmentsSchema, ensureTestSuitesSchema } from './database/schemaMaintenance';
 
 const app = express();
 const httpServer = createServer(app);
@@ -132,6 +132,7 @@ async function start() {
   } else {
     try {
       await ensureTestSuitesSchema();
+      await ensureScriptAssignmentsSchema();
       await appLogService.initialize();
       appLogService.logSystemEvent({
         action: 'SYSTEM_DB_READY',

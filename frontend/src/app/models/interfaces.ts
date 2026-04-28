@@ -7,11 +7,27 @@ export interface User {
   avatarUrl?: string;
   lastLogin?: string;
   createdAt?: string;
+  assignedScriptCount?: number;
 }
 
 export interface LoginRequest {
   username: string;
   password: string;
+}
+
+export interface ScriptAssignmentEntry {
+  scriptId: number;
+  scriptName: string;
+  assignedAt: string;
+  assignedByName: string | null;
+}
+
+export interface UserAssignments {
+  userId: number;
+  username: string;
+  fullName: string;
+  role: string;
+  assignments: ScriptAssignmentEntry[];
 }
 
 export interface LoginResponse {
@@ -43,6 +59,12 @@ export interface Script {
   createdAt: string;
   lastRunAt?: string;
   lastRunStatus?: string;
+  assignedUsers?: Array<{
+    id: number;
+    username: string;
+    fullName: string;
+  }>;
+  assignedUserCount?: number;
   dependencies?: number[];
   dependencyCount?: number;
   dependentCount?: number;

@@ -59,6 +59,20 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 
     logger.info(`User logged in: ${user.username}`);
 
+    // Fetch assigned script count for tester users
+    let assignedScriptCount: number | undefined;
+    if (user.role === 'tester') {
+      try {
+        const countResult = await query<{ count: string }>(
+          'SELECT COUNT(*)::text AS count FROM script_assignments WHERE user_id = $1',
+          [user.id]
+        );
+        assignedScriptCount = Number(countResult[0]?.count || 0);
+      } catch {
+        assignedScriptCount = 0;
+      }
+    }
+
     res.json({
       token,
       user: {
@@ -68,6 +82,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
         fullName: user.full_name,
         role: user.role,
         avatarUrl: user.avatar_url,
+        ...(assignedScriptCount !== undefined ? { assignedScriptCount } : {}),
       },
     });
   } catch (error) {

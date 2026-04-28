@@ -163,6 +163,26 @@ async function initDatabase() {
       // Ignore migration failures
     }
 
+    // Ensure script_assignments table exists (for tester role-based script filtering)
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS script_assignments (
+          id SERIAL PRIMARY KEY,
+          user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          script_id INT NOT NULL REFERENCES scripts(id) ON DELETE CASCADE,
+          assigned_by INT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
+          assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE (user_id, script_id)
+        )
+      `);
+
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_script_assignments_user ON script_assignments(user_id)');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_script_assignments_script ON script_assignments(script_id)');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_script_assignments_assigned_by ON script_assignments(assigned_by)');
+    } catch {
+      // Ignore migration failures
+    }
+
     // Create admin user with proper bcrypt hash
     const salt = await bcrypt.genSalt(12);
     const adminHash = await bcrypt.hash('admin123', salt);
