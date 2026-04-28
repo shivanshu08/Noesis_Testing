@@ -31,6 +31,17 @@ export const config = {
     reportsPath: process.env.ST_AUTOMATION_REPORTS_PATH || path.join(process.env.ST_AUTOMATION_PATH || 'D:\\ST Automation', 'noesis-reports'),
   },
 
+  mail: {
+    enabled: (process.env.MAIL_ENABLED || '').toLowerCase() === 'true',
+    host: process.env.SMTP_HOST || '',
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    secure: (process.env.SMTP_SECURE || '').toLowerCase() === 'true',
+    user: process.env.SMTP_USER || '',
+    password: process.env.SMTP_PASSWORD || '',
+    from: process.env.MAIL_FROM || process.env.SMTP_USER || 'no-reply@noesis.local',
+    appBaseUrl: process.env.APP_BASE_URL || process.env.CORS_ORIGIN || '',
+  },
+
   cors: {
     origin: process.env.CORS_ORIGIN || ['http://localhost:4200', 'http://localhost:4201'],
   },

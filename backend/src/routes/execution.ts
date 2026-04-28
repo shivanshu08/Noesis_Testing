@@ -9,6 +9,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { appLogService } from '../services/appLogService';
 import { computeNextRun, refreshSchedule, unregisterTask } from '../services/schedulerService';
 import { resolveScriptExecutionPlan } from '../services/scriptDependencyService';
+import { sendExecutionCompletionEmail } from '../services/emailNotificationService';
 import cron from 'node-cron';
 
 const router = Router();
@@ -1534,6 +1535,58 @@ async function persistRunMetadata(runId: number, metadata: Record<string, unknow
   }
 }
 
+async function notifyExecutionCompletionByEmail(
+  runId: number,
+  runName: string,
+  userId: number,
+  finalStatus: string,
+  summary: { passed: number; failed: number; errors: number; skipped: number },
+  errorMessage?: string | null
+): Promise<void> {
+  try {
+    const rows = await query<{
+      environment: string | null;
+      total_scripts: number;
+      started_at: Date | null;
+      completed_at: Date | null;
+      duration_ms: number | null;
+      triggered_by_name: string | null;
+    }>(
+      `SELECT er.environment,
+              er.total_scripts,
+              er.started_at,
+              er.completed_at,
+              er.duration_ms,
+              COALESCE(u.full_name, u.username) AS triggered_by_name
+       FROM execution_runs er
+       LEFT JOIN users u ON er.triggered_by = u.id
+       WHERE er.id = $1`,
+      [runId]
+    );
+
+    const run = rows[0];
+    await sendExecutionCompletionEmail({
+      runId,
+      runName,
+      finalStatus,
+      environment: run?.environment || 'local',
+      triggeredByUserId: userId,
+      triggeredByName: run?.triggered_by_name || null,
+      passed: summary.passed,
+      failed: summary.failed,
+      errors: summary.errors,
+      skipped: summary.skipped,
+      totalScripts: Number(run?.total_scripts || summary.passed + summary.failed + summary.errors + summary.skipped),
+      startedAt: run?.started_at || null,
+      completedAt: run?.completed_at || new Date(),
+      durationMs: run?.duration_ms || null,
+      errorMessage: errorMessage || null,
+    });
+  } catch (error) {
+    logger.error(`Failed to prepare execution email notification for run ${runId}:`, error);
+  }
+}
+
 function ensureGitRepository(runId: number, repoUrl: string, cachePath: string, branch: string): { success: boolean; error?: any } {
   try {
     const fs = require('fs');
@@ -2136,6 +2189,7 @@ async function executeScripts(runId: number, testngXml: string, scripts: any[], 
       };
 
       await persistRunMetadata(runId, completedMetadata);
+      await notifyExecutionCompletionByEmail(runId, runName, userId, finalStatus, { passed, failed, errors, skipped });
 
       if (io) {
         if (artifacts.length > 0) {
@@ -2178,6 +2232,15 @@ async function executeScripts(runId: number, testngXml: string, scripts: any[], 
         [userId, 'error', 'Execution Error', `Run "${runName}" failed to start or crashed.`, 'pi pi-exclamation-triangle', 'Script Execution', 'Error']
       ).catch(e => logger.error('Notification error', e));
 
+      await notifyExecutionCompletionByEmail(
+        runId,
+        runName,
+        userId,
+        'error',
+        { passed: 0, failed: 0, errors: 1, skipped: 0 },
+        err.message
+      );
+
       if (io) {
         io.to(`run-${runId}`).emit('run-error', { runId, error: err.message });
         io.emit('global-run-status', { runId, runName, status: 'error', error: err.message });
@@ -2198,6 +2261,15 @@ async function executeScripts(runId: number, testngXml: string, scripts: any[], 
     await execute(
       "UPDATE execution_runs SET status = 'error', completed_at = NOW() WHERE id = $1",
       [runId]
+    );
+
+    await notifyExecutionCompletionByEmail(
+      runId,
+      runName,
+      userId,
+      'error',
+      { passed: 0, failed: 0, errors: 1, skipped: 0 },
+      failureMessage
     );
 
     if (io) {
