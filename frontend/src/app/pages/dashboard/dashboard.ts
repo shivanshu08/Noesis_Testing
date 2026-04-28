@@ -13,6 +13,7 @@ import { AuthService } from '../../services/auth.service';
 import { ThemeService } from '../../services/theme.service';
 import { DashboardStats, ExecutionRun } from '../../models/interfaces';
 import { formatExecutionEnvironmentLabel } from '../../utils/execution-environment';
+import { clampPercentage, toPercentage } from '../../utils/percentage';
 import { Subscription } from 'rxjs';
 
 @Component({
@@ -101,8 +102,7 @@ export class Dashboard implements OnInit, OnDestroy {
   }
 
   getPercentage(count: number, total: number | undefined): number {
-    if (!total || total === 0) return 0;
-    return Math.round((count / total) * 100);
+    return toPercentage(Number(count || 0), Number(total || 0));
   }
 
   initCharts() {
@@ -283,7 +283,7 @@ export class Dashboard implements OnInit, OnDestroy {
   getPassRate(): number {
     const s = this.stats();
     if (!s) return 0;
-    return Math.round(s.passRate);
+    return clampPercentage(Math.round(Number(s.passRate || 0)));
   }
 
   formatDate(date: string): string {

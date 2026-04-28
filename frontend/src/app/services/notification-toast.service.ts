@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { MessageService } from 'primeng/api';
+import { toPercentage } from '../utils/percentage';
 
 export interface ToastNotification {
   severity: 'success' | 'info' | 'warn' | 'error';
@@ -99,7 +100,7 @@ export class NotificationToastService {
   }
 
   executionCompleted(total: number, passed: number, failed: number) {
-    const passRate = total > 0 ? Math.round((passed / total) * 100) : 0;
+    const passRate = toPercentage(Number(passed || 0), Number(total || 0));
     if (failed === 0) {
       this.success(
         `All scripts passed`,

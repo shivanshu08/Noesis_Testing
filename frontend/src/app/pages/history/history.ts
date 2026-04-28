@@ -15,6 +15,7 @@ import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { ExecutionService } from '../../services/execution.service';
 import { ExecutionRun } from '../../models/interfaces';
 import { formatExecutionEnvironmentLabel, resolveExecutionEnvironmentKey } from '../../utils/execution-environment';
+import { toPercentage } from '../../utils/percentage';
 
 type RunStatus = ExecutionRun['status'];
 type TimeRange = 'all' | '24h' | '7d' | '30d' | '90d';
@@ -257,10 +258,7 @@ export class History implements OnInit {
 
   getPassPercentage(run: ExecutionRun): number {
     const total = this.getTotalScripts(run);
-    if (total <= 0) {
-      return 0;
-    }
-    return Math.round(((run.passedCount || 0) / total) * 100);
+    return toPercentage(Number(run.passedCount || 0), total);
   }
 
   getRunDate(run: ExecutionRun): string | undefined {
@@ -480,7 +478,7 @@ export class History implements OnInit {
 
     const finished = runs.filter((run) => ['passed', 'failed', 'error', 'stopped'].includes(run.status));
     const passedCount = finished.filter((run) => run.status === 'passed').length;
-    this.overallPassRate.set(finished.length > 0 ? Math.round((passedCount / finished.length) * 100) : 0);
+    this.overallPassRate.set(toPercentage(passedCount, finished.length));
 
     const durationSeconds = runs
       .map((run) => (run.durationMs ? run.durationMs / 1000 : 0))
@@ -500,7 +498,7 @@ export class History implements OnInit {
   private refreshFilteredInsights(runs: ExecutionRun[]): void {
     const finished = runs.filter((run) => ['passed', 'failed', 'error', 'stopped'].includes(run.status));
     const passedCount = finished.filter((run) => run.status === 'passed').length;
-    this.filteredPassRate.set(finished.length > 0 ? Math.round((passedCount / finished.length) * 100) : 0);
+    this.filteredPassRate.set(toPercentage(passedCount, finished.length));
 
     const durationSeconds = runs
       .map((run) => (run.durationMs ? run.durationMs / 1000 : 0))

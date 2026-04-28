@@ -11,6 +11,7 @@ import { appLogService } from '../services/appLogService';
 import { computeNextRun, refreshSchedule, unregisterTask } from '../services/schedulerService';
 import { resolveScriptExecutionPlan } from '../services/scriptDependencyService';
 import { ExecutionArtifactEmailAttachment, isMailConfigured, sendExecutionArtifactsEmail, sendExecutionCompletionEmail } from '../services/emailNotificationService';
+import { clampPercentage } from '../utils/percentage';
 import cron from 'node-cron';
 
 const router = Router();
@@ -595,7 +596,7 @@ router.get('/stats', async (_req: AuthRequest, res: Response): Promise<void> => 
       totalScripts: totalScripts[0].count,
       totalRuns: totalRuns[0].count,
       recentRuns: recentRuns[0].count,
-      passRate: passRate[0].rate || 0,
+      passRate: clampPercentage(Number(passRate[0].rate || 0)),
       runningCount: runningRuns[0].count,
       recentHistory,
       categoryStats,

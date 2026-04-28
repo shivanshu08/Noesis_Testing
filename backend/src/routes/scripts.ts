@@ -8,6 +8,7 @@ import { promisify } from 'util';
 import { query, execute, getConnection } from '../database/connection';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth';
 import { logger } from '../utils/logger';
+import { toPercentage } from '../utils/percentage';
 import { config } from '../config';
 import { appLogService } from '../services/appLogService';
 import { ensureScriptAssignmentsSchema } from '../database/schemaMaintenance';
@@ -2952,9 +2953,9 @@ router.get('/:id/configuration', checkScriptAccess, async (req: AuthRequest, res
     const failedRuns = Number(summary.failed_runs || 0);
     const errorRuns = Number(summary.error_runs || 0);
     const skippedRuns = Number(summary.skipped_runs || 0);
-    const passRate = totalRuns > 0 ? Math.round((passedRuns / totalRuns) * 100) : 0;
+    const passRate = toPercentage(passedRuns, totalRuns);
     const stabilityScore = totalRuns > 0
-      ? Math.max(0, Math.min(100, Math.round(((passedRuns + (skippedRuns * 0.25)) / totalRuns) * 100)))
+      ? toPercentage(passedRuns + (skippedRuns * 0.25), totalRuns)
       : 0;
 
     const mappedRuns = recentRuns.map(run => ({

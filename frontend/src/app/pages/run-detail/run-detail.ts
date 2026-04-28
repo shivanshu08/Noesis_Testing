@@ -21,6 +21,7 @@ import { ExecutionService } from '../../services/execution.service';
 import { ExecutionRun, ExecutionLog, ExecutionArtifact, ExecutionResult } from '../../models/interfaces';
 import { AuthService } from '../../services/auth.service';
 import { inferEnvironmentFromUrl } from '../../utils/execution-environment';
+import { toPercentage } from '../../utils/percentage';
 import { environment } from '../../../environments/environment';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -170,8 +171,7 @@ export class RunDetail implements OnInit, OnDestroy {
   get passRate(): number {
     const passed = this.passedCountValue;
     const denominator = this.totalScriptsValue;
-    if (denominator <= 0) return 0;
-    return Math.round((passed / denominator) * 100);
+    return toPercentage(passed, denominator);
   }
 
   get hasResultFilters(): boolean {
