@@ -369,6 +369,18 @@
       <label for="run-name-input">Run Name (optional)</label>
       <input type="text" pInputText [(ngModel)]="runName" id="run-name-input" placeholder="Auto-generated if blank" class="w-full" />
     </div>
+
+    <div class="confirm-name-input">
+      <label for="run-env-select">Environment</label>
+      <p-select
+        [options]="environments"
+        [(ngModel)]="executionEnvironment"
+        optionLabel="label"
+        optionValue="value"
+        [style]="{ width: '100%' }"
+        id="run-env-select"
+      />
+    </div>
   </div>
 
   <ng-template #footer>

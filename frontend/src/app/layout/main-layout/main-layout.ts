@@ -21,6 +21,7 @@ import { AuthService } from '../../services/auth.service';
 import { ThemeService } from '../../services/theme.service';
 import { ExecutionService } from '../../services/execution.service';
 import { NotificationService } from '../../services/notification.service';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-main-layout',
@@ -212,7 +213,7 @@ export class MainLayout implements OnInit, OnDestroy {
       avatarUrl: this.profileForm.avatarUrl
     };
 
-    this.http.put('/api/auth/profile', payload).subscribe({
+    this.http.put(`${environment.apiUrl}/auth/profile`, payload).subscribe({
       next: () => {
         this.savingProfile = false;
         this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Profile updated successfully.' });
@@ -236,7 +237,7 @@ export class MainLayout implements OnInit, OnDestroy {
       return;
     }
     this.savingPassword = true;
-    this.http.put('/api/auth/change-password', { currentPassword: this.passwordForm.currentPassword, newPassword: this.passwordForm.newPassword }).subscribe({
+    this.http.put(`${environment.apiUrl}/auth/change-password`, { currentPassword: this.passwordForm.currentPassword, newPassword: this.passwordForm.newPassword }).subscribe({
       next: () => {
         this.savingPassword = false;
         this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Password changed successfully.' });

@@ -1,7 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, Subject, retry } from 'rxjs';
-import { io, Socket } from 'socket.io-client';
 import { environment } from '../../environments/environment';
 import { ExecutionRun, ExecutionLog, DashboardStats, ScheduledRun, ExecutionArtifact } from '../models/interfaces';
 
@@ -9,8 +8,10 @@ import { ExecutionRun, ExecutionLog, DashboardStats, ScheduledRun, ExecutionArti
 export class ExecutionService {
   private readonly apiUrl = `${environment.apiUrl}/execution`;
   private readonly logsApiUrl = `${environment.apiUrl}/logs`;
-  private socket: Socket | null = null;
-  private globalSocket: Socket | null = null;
+  private runPollHandle: number | null = null;
+  private globalPollHandle: number | null = null;
+  private lastRunLogId = 0;
+  private seenRunLogKeys = new Set<string>();
 
   readonly liveLogs = signal<ExecutionLog[]>([]);
   readonly activeRunStatus = signal<string | null>(null);
@@ -21,15 +22,21 @@ export class ExecutionService {
   constructor(private http: HttpClient) {}
 
   initGlobalSocket(): void {
-    if (!this.globalSocket) {
-      this.globalSocket = io(environment.wsUrl, { transports: ['websocket', 'polling'] });
-      this.globalSocket.on('global-run-status', (data) => {
-        this.globalRunUpdates.next(data);
-      });
+    if (this.globalPollHandle === null) {
+      this.globalPollHandle = window.setInterval(() => {
+        this.getRuns({ status: 'running', limit: 10 }).subscribe({
+          next: (runs) => runs.forEach(run => this.globalRunUpdates.next({
+            runId: run.id,
+            runName: run.runName,
+            status: run.status,
+          })),
+          error: () => {},
+        });
+      }, 5000);
     }
   }
 
-  runScripts(scriptIds: number[], suiteName?: string): Observable<{
+  runScripts(scriptIds: number[], suiteName?: string, environmentName = 'local'): Observable<{
     runId: number;
     message: string;
     totalScripts: number;
@@ -45,6 +52,7 @@ export class ExecutionService {
     }>(`${this.apiUrl}/run`, {
       scriptIds,
       suiteName,
+      environment: environmentName,
     });
   }
 
@@ -229,49 +237,60 @@ export class ExecutionService {
     return this.http.delete(`${this.apiUrl}/schedules/${id}`);
   }
 
-  // WebSocket for live log streaming
+  // Live run updates are polled from the Java API.
   connectToRun(runId: number): void {
     this.liveLogs.set([]);
     this.artifactsReady.set([]);
     this.activeRunStatus.set('running');
+    this.lastRunLogId = 0;
+    this.seenRunLogKeys.clear();
 
-    if (this.socket) {
-      this.socket.disconnect();
-    }
+    this.disconnectFromRun();
 
-    this.socket = io(environment.wsUrl, {
-      transports: ['websocket', 'polling'],
-    });
+    const poll = () => {
+      this.getLogs(runId).subscribe({
+        next: logs => {
+          const fresh = logs.filter(log => {
+            if (typeof log.id === 'number') {
+              if (log.id <= this.lastRunLogId) return false;
+              this.lastRunLogId = Math.max(this.lastRunLogId, log.id);
+              return true;
+            }
+            const key = `${log.timestamp}|${log.level}|${log.message}`;
+            if (this.seenRunLogKeys.has(key)) return false;
+            this.seenRunLogKeys.add(key);
+            return true;
+          });
+          if (fresh.length > 0) this.liveLogs.set(fresh);
+        },
+        error: () => {},
+      });
 
-    this.socket.on('connect', () => {
-      this.socket?.emit('join-run', runId);
-    });
+      this.getRunDetails(runId).subscribe({
+        next: run => {
+          this.activeRunStatus.set(run.status);
+          if (run.status !== 'queued' && run.status !== 'running') {
+            this.getArtifacts(runId).subscribe({
+              next: artifacts => this.artifactsReady.set(artifacts),
+              error: () => {},
+            });
+            this.disconnectFromRun();
+          }
+        },
+        error: () => {},
+      });
+    };
 
-    this.socket.on('run-log', (log: ExecutionLog) => {
-      this.liveLogs.update(logs => [...logs, log]);
-    });
-
-    this.socket.on('run-completed', (data: any) => {
-      this.activeRunStatus.set(data.status);
-    });
-
-    this.socket.on('run-artifacts-ready', (artifacts: ExecutionArtifact[]) => {
-      this.artifactsReady.set(artifacts);
-    });
-
-    this.socket.on('run-stopped', () => {
-      this.activeRunStatus.set('stopped');
-    });
-
-    this.socket.on('run-error', (data: any) => {
-      this.activeRunStatus.set('error');
-    });
+    poll();
+    this.runPollHandle = window.setInterval(poll, 2000);
   }
 
   disconnectFromRun(): void {
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
+    if (this.runPollHandle !== null) {
+      window.clearInterval(this.runPollHandle);
+      this.runPollHandle = null;
     }
+    this.lastRunLogId = 0;
+    this.seenRunLogKeys.clear();
   }
 }

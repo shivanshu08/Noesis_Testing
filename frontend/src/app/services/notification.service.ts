@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { environment } from '../../environments/environment';
 
 export interface AppNotification {
   id: string;
@@ -22,8 +23,7 @@ export class NotificationService {
 
   constructor(private http: HttpClient) {}
   
-  // Relative URL ensures Angular Auth Interceptors attach the JWT token properly!
-  private readonly apiUrl = '/api/notifications';
+  private readonly apiUrl = `${environment.apiUrl}/notifications`;
 
   load(days: number = 30) {
     this.loading.set(true);
@@ -37,12 +37,12 @@ export class NotificationService {
           severity: n.severity || 'info',
           summary: n.summary,
           detail: n.detail,
-          time: new Date(n.created_at),
+          time: new Date(n.created_at || n.createdAt),
           icon: n.icon,
-          read: n.is_read,
+          read: n.is_read ?? n.isRead,
           source: n.source || 'System',
           category: n.category || 'General',
-          actionUrl: n.action_url
+          actionUrl: n.action_url || n.actionUrl
         } as AppNotification));
         this.notifications.set(mapped);
         this.unreadCount.set(mapped.filter(n => !n.read).length);
@@ -61,7 +61,7 @@ export class NotificationService {
         const newNotif: AppNotification = {
           ...notif,
           id: savedNotif.id.toString(),
-          time: new Date(savedNotif.created_at),
+          time: new Date(savedNotif.created_at || savedNotif.createdAt),
           read: false
         };
         this.notifications.update(n => [newNotif, ...n]);

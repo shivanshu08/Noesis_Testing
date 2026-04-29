@@ -19,6 +19,7 @@ import { FileUploadModule } from 'primeng/fileupload';
 import { TooltipModule } from 'primeng/tooltip';
 import { AlertOverlayComponent } from '../../components/alert-overlay/alert-overlay';
 import { AuthService } from '../../services/auth.service';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-users',
@@ -29,6 +30,7 @@ import { AuthService } from '../../services/auth.service';
   styleUrls: ['./users.scss']
 })
 export class Users implements OnInit {
+  private readonly apiUrl = `${environment.apiUrl}/users`;
   users = signal<any[]>([]);
   loading = signal(true);
   userDialog = false;
@@ -65,16 +67,26 @@ export class Users implements OnInit {
 
   loadUsers() {
     this.loading.set(true);
-    this.http.get<any[]>('http://localhost:3000/api/users', { headers: this.getHeaders() }).subscribe({
+    this.http.get<any[]>(this.apiUrl, { headers: this.getHeaders() }).subscribe({
       next: (data) => {
-        this.users.set(data);
+        const users = data.map((user) => ({
+          ...user,
+          full_name: user.full_name ?? user.fullName,
+          is_active: user.is_active ?? user.isActive,
+          is_locked: user.is_locked ?? user.isLocked,
+          avatar_url: user.avatar_url ?? user.avatarUrl,
+          run_count: user.run_count ?? user.runCount ?? 0,
+          suites_created: user.suites_created ?? user.suitesCreated ?? 0,
+          scripts_registered: user.scripts_registered ?? user.scriptsRegistered ?? 0
+        }));
+        this.users.set(users);
         
         // Calculate Statistics
-        this.totalRuns.set(data.reduce((acc, user) => acc + (user.run_count || 0), 0));
-        this.totalSuites.set(data.reduce((acc, user) => acc + (user.suites_created || 0), 0));
-        this.totalScripts.set(data.reduce((acc, user) => acc + (user.scripts_registered || 0), 0));
-        this.activeCount.set(data.filter(user => user.is_active).length);
-        this.lockedCount.set(data.filter(user => user.is_locked).length);
+        this.totalRuns.set(users.reduce((acc, user) => acc + (user.run_count || 0), 0));
+        this.totalSuites.set(users.reduce((acc, user) => acc + (user.suites_created || 0), 0));
+        this.totalScripts.set(users.reduce((acc, user) => acc + (user.scripts_registered || 0), 0));
+        this.activeCount.set(users.filter(user => user.is_active).length);
+        this.lockedCount.set(users.filter(user => user.is_locked).length);
         
         this.loading.set(false);
       },
@@ -134,8 +146,8 @@ export class Users implements OnInit {
   saveUser() {
     const headers = this.getHeaders();
     const request = this.isEdit 
-      ? this.http.put(`http://localhost:3000/api/users/${this.userForm.id}`, this.userForm, { headers })
-      : this.http.post('http://localhost:3000/api/users', this.userForm, { headers });
+      ? this.http.put(`${this.apiUrl}/${this.userForm.id}`, this.userForm, { headers })
+      : this.http.post(this.apiUrl, this.userForm, { headers });
 
     request.subscribe({
       next: () => {
@@ -150,7 +162,7 @@ export class Users implements OnInit {
   toggleUserLock(user: any) {
     const nextLockedState = !user.is_locked;
     this.http.put(
-      `http://localhost:3000/api/users/${user.id}/lock`,
+      `${this.apiUrl}/${user.id}/lock`,
       { isLocked: nextLockedState },
       { headers: this.getHeaders() }
     ).subscribe({
@@ -183,7 +195,7 @@ export class Users implements OnInit {
       acceptButtonStyleClass: 'p-button-sm p-button-danger',
       rejectButtonStyleClass: 'p-button-sm p-button-text p-button-secondary',
       accept: () => {
-        this.http.delete(`http://localhost:3000/api/users/${user.id}`, { headers: this.getHeaders() }).subscribe({
+        this.http.delete(`${this.apiUrl}/${user.id}`, { headers: this.getHeaders() }).subscribe({
           next: () => {
             this.messageService.add({ severity: 'success', summary: 'Successful', detail: 'User Deleted' });
             this.loadUsers();

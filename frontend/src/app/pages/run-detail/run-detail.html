@@ -130,7 +130,7 @@
 
       <article class="kpi-card">
         <span class="kpi-label">Artifacts</span>
-        <strong class="kpi-value">{{ artifacts().length + 1 }}</strong>
+        <strong class="kpi-value">{{ artifacts().length }}</strong>
       </article>
     </section>
 
@@ -376,7 +376,7 @@
               </div>
               <div class="info-row">
                 <span class="key"><i class="pi pi-github"></i>Git Repository</span>
-                <span class="val">{{ getRunMetadataValue('gitRepoUrl') }}</span>
+                <span class="val">{{ gitRepositoryDisplay }}</span>
               </div>
               <div class="info-row">
                 <span class="key"><i class="pi pi-file"></i>Suite XML</span>
@@ -407,7 +407,7 @@
                 (onClick)="openMailArtifactsDialog()"
                 id="btn-mail-artifacts-detail"
               />
-              <span class="count-pill">{{ artifacts().length + 1 }}</span>
+              <span class="count-pill">{{ artifacts().length }}</span>
             </div>
           </div>
 
@@ -415,32 +415,19 @@
             <div class="hub-metrics">
               <div class="hub-metric">
                 <span class="label">PDF</span>
-                <strong class="value">Ready</strong>
+                <strong class="value">{{ artifacts().length ? 'Ready' : '--' }}</strong>
               </div>
               <div class="hub-metric">
                 <span class="label">Artifacts</span>
-                <strong class="value">{{ artifacts().length + 1 }}</strong>
+                <strong class="value">{{ artifacts().length }}</strong>
               </div>
               <div class="hub-metric">
                 <span class="label">Downloads</span>
-                <strong class="value">{{ artifacts().length + 1 }}</strong>
+                <strong class="value">{{ artifacts().length }}</strong>
               </div>
             </div>
 
             <div class="artifact-items">
-              <div class="artifact-box report-artifact feature" (click)="downloadPdf()">
-                <div class="artifact-icon pdf">
-                  <i class="pi pi-file-pdf"></i>
-                </div>
-                <div class="artifact-details">
-                  <span class="name">Noesis Run Report</span>
-                  <span class="size">Download PDF</span>
-                </div>
-                <div class="artifact-link">
-                  <i class="pi pi-download"></i>
-                </div>
-              </div>
-
               @if (artifacts().length > 0) {
                 @for (artifact of artifacts(); track artifact.id) {
                   <div class="artifact-box" (click)="downloadArtifact(artifact)">

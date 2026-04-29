@@ -102,6 +102,7 @@ export interface ScriptConfigurationRun {
   runDurationMs?: number | null;
   scriptDurationMs?: number | null;
   triggeredBy?: string | null;
+  runMetadata?: ExecutionRun['runMetadata'];
 }
 
 export interface ScriptConfigurationEditableFile {
@@ -296,6 +297,7 @@ export interface ExecutionRun {
   runMetadata?: {
     executionSource?: 'git' | 'local';
     gitRepoUrl?: string | null;
+    gitRepoName?: string | null;
     gitBranch?: string | null;
     appUrl?: string | null;
     workspacePath?: string;
@@ -303,6 +305,7 @@ export interface ExecutionRun {
     suiteFileName?: string;
     mavenCommand?: string;
     reportsDirectory?: string;
+    environment?: string | null;
     certificateHardeningStatus?: string;
     certificateHardeningMessage?: string;
     startedAt?: string;
@@ -338,6 +341,7 @@ export interface ExecutionResult {
 }
 
 export interface ExecutionLog {
+  id?: number;
   runId: number;
   level: string;
   message: string;

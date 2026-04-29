@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { environment } from '../../environments/environment';
 
 export interface AppLog {
   id: string;
@@ -22,7 +23,7 @@ export class LogService {
 
   constructor(private http: HttpClient) {}
 
-  private readonly apiUrl = '/api/logs';
+  private readonly apiUrl = `${environment.apiUrl}/logs`;
 
   load() {
     this.loading.set(true);
@@ -34,13 +35,13 @@ export class LogService {
         const mapped = data.map(l => ({
           id: l.id?.toString() || Math.random().toString(),
           severity: l.severity || 'info',
-          summary: l.summary,
-          detail: l.detail,
-          timestamp: new Date(l.created_at || l.timestamp),
+          summary: l.summary || l.action || l.module || 'Log',
+          detail: l.detail || l.message || '',
+          timestamp: new Date(l.created_at || l.createdAt || l.timestamp),
           icon: l.icon || 'pi pi-info-circle',
-          source: l.source || 'System',
-          category: l.category || 'General',
-          userId: l.user_id,
+          source: l.source || l.module || 'System',
+          category: l.category || l.status || 'General',
+          userId: l.user_id ?? l.userId,
         } as AppLog));
 
         this.logs.set(mapped);

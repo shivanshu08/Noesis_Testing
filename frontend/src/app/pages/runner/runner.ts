@@ -98,11 +98,13 @@ export class Runner implements OnInit, OnDestroy {
   minScheduleDate: Date = new Date();
   scheduleDescription = '';
   scheduleEnvironment = 'local';
+  executionEnvironment = 'local';
   savingSchedule = false;
 
   // Timer
   elapsedSeconds = 0;
   private timerInterval: any = null;
+  private executionCheckInterval: ReturnType<typeof setInterval> | null = null;
 
   // Scheduled Runs Panel
   showSchedulesPanel = false;
@@ -156,6 +158,7 @@ export class Runner implements OnInit, OnDestroy {
     if (this.currentRunId()) {
       this.executionService.disconnectFromRun();
     }
+    this.clearExecutionCheckInterval();
     this.scriptRegistrySubscription?.unsubscribe();
     this.stopTimer();
   }
@@ -376,6 +379,7 @@ export class Runner implements OnInit, OnDestroy {
     const plan = this.computeLocalDependencyPlan(selectedIds);
 
     this.runName = `Run ${new Date().toISOString().replace('T', ' ').substring(0, 19)}`;
+    this.executionEnvironment = 'local';
     this.plannedScriptOrderIds = plan.orderedScriptIds.length > 0 ? plan.orderedScriptIds : selectedIds;
     this.autoIncludedDependencyIds = plan.autoIncludedDependencyIds;
     this.dependencyCyclePathIds = plan.cyclePath;
@@ -454,7 +458,7 @@ export class Runner implements OnInit, OnDestroy {
         : `Running ${optimisticTotalScripts} script(s)...`,
     });
 
-    this.executionService.runScripts(selectedScriptIds, this.runName || undefined).subscribe({
+    this.executionService.runScripts(selectedScriptIds, this.runName || undefined, this.executionEnvironment).subscribe({
       next: (res) => {
         const backendResolvedIds = Array.isArray(res.resolvedScriptIds) ? res.resolvedScriptIds : [];
         const resolvedScriptIds = backendResolvedIds.length > 0
@@ -499,7 +503,8 @@ export class Runner implements OnInit, OnDestroy {
 
         this.executionService.connectToRun(res.runId);
 
-        const checkInterval = setInterval(() => {
+        this.clearExecutionCheckInterval();
+        this.executionCheckInterval = setInterval(() => {
           const serviceLogs = this.executionService.liveLogs();
           if (serviceLogs.length > 0) {
             const newLines = serviceLogs.map(l => l.message);
@@ -534,7 +539,7 @@ export class Runner implements OnInit, OnDestroy {
             this.stopTimer();
             this.executionProgress.set(100);
             this.currentExecutingScript.set('');
-            clearInterval(checkInterval);
+            this.clearExecutionCheckInterval();
 
             if (status === 'completed' || status === 'passed' || status === 'failed') {
               const logText = this.logs().join('\n');
@@ -587,6 +592,7 @@ export class Runner implements OnInit, OnDestroy {
         this.runStatus.set('stopped');
         this.stopTimer();
         this.executionService.disconnectFromRun();
+        this.clearExecutionCheckInterval();
         this.messageService.add({ severity: 'warn', summary: 'Execution Stopped', detail: 'The test run was manually stopped' });
       },
       error: () => {
@@ -601,6 +607,7 @@ export class Runner implements OnInit, OnDestroy {
     this.running.set(false);
     this.runStatus.set('');
     this.currentRunId.set(null);
+    this.clearExecutionCheckInterval();
     this.elapsedSeconds = 0;
     this.artifacts.set([]);
     this.latestRunDetails.set(null);
@@ -973,6 +980,13 @@ export class Runner implements OnInit, OnDestroy {
 
   getCategoryName(catId: number): string {
     return this.categories().find(c => c.id === catId)?.name || 'Unknown';
+  }
+
+  private clearExecutionCheckInterval() {
+    if (this.executionCheckInterval) {
+      clearInterval(this.executionCheckInterval);
+      this.executionCheckInterval = null;
+    }
   }
 
   getScriptNameById(scriptId: number): string {

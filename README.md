@@ -54,7 +54,7 @@ The platform bridges the gap between test automation frameworks (Maven + TestNG)
 ### ▶️ Execution Engine
 - **On-demand execution** — select scripts or suites and run instantly
 - **Scheduled execution** — cron-based recurring runs and one-time scheduled runs via date picker
-- **Live log streaming** — real-time execution output via WebSocket (Socket.IO)
+- **Live log updates** — execution output is polled from the Java API while a run is active
 - **Stop running executions** — graceful termination of active runs
 - Maven + TestNG integration with dynamic `testng.xml` generation
 
@@ -106,10 +106,10 @@ The platform bridges the gap between test automation frameworks (Maven + TestNG)
 └──────────────────────────┼───────────────────────────────────┘
                            │
 ┌──────────────────────────┼───────────────────────────────────┐
-│                     Backend (Node.js + Express)              │
+│                     Backend (Plain Java 17 HTTP Server)      │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────────┐  │
 │  │ Auth API │ │Script API│ │Exec API  │ │ Scheduler     │  │
-│  │  (JWT)   │ │          │ │+Socket.IO│ │  (node-cron)  │  │
+│  │  (JWT)   │ │          │ │+Polling  │ │   (Java)      │  │
 │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └──────┬────────┘  │
 │       │             │            │               │           │
 │       └─────────────┴────────────┴───────────────┘           │
@@ -132,15 +132,15 @@ The platform bridges the gap between test automation frameworks (Maven + TestNG)
 | Layer         | Technology                                           |
 |:--------------|:-----------------------------------------------------|
 | **Frontend**  | Angular 21, PrimeNG (Aura theme), Chart.js, SCSS     |
-| **Backend**   | Node.js, Express, TypeScript, Socket.IO              |
+| **Backend**   | Java 17, JDK HttpServer, JDBC                        |
 | **Database**  | PostgreSQL 14+                                       |
 | **Auth**      | JWT (JSON Web Tokens), bcrypt password hashing       |
 | **Execution** | Maven, TestNG, dynamic XML generation                |
-| **Scheduler** | node-cron for recurring and one-time scheduled runs   |
-| **Logging**   | Winston (server-side), centralized app_logs table     |
-| **Security**  | Helmet, CORS, rate limiting, role-based access control|
+| **Scheduler** | Java-backed scheduled run persistence                 |
+| **Logging**   | Plain Java logging, centralized app_logs table        |
+| **Security**  | CORS, JWT, role-based access control                  |
 | **Reporting** | jsPDF, jspdf-autotable, CSV export                   |
-| **Real-time** | Socket.IO (WebSocket with fallback)                  |
+| **Live updates** | REST polling while executions are running         |
 
 ---
 
@@ -150,11 +150,11 @@ Before setting up the project, ensure the following software is installed:
 
 | Software          | Version    | Purpose                            |
 |:------------------|:-----------|:-----------------------------------|
-| **Node.js**       | 18+        | Backend runtime & frontend tooling |
+| **Node.js**       | 18+        | Frontend tooling only              |
 | **npm**           | 10+        | Package management                 |
 | **PostgreSQL**    | 14+        | Primary database                   |
 | **Angular CLI**   | 21+        | Frontend build & serve             |
-| **Java JDK**      | 17+        | TestNG test execution              |
+| **Java JDK**      | 17         | Backend runtime and TestNG execution |
 | **Apache Maven**  | 3.8+       | Test project build tool            |
 
 ---
@@ -182,7 +182,7 @@ This will create all required tables, indexes, triggers, enum types, and seed da
 
 ```bash
 cd backend
-npm install
+mvn -v
 ```
 
 Create a `.env` file based on the provided `.env.example` template. Update all placeholder values with your actual configuration:
@@ -195,7 +195,7 @@ cp .env.example .env
 Initialize the database (creates initial admin user if not already present):
 
 ```bash
-npx ts-node src/database/init.ts
+mvn -Dexec.mainClass=com.noesis.NoesisTestingApplication exec:java
 ```
 
 Start the development server:
@@ -227,30 +227,18 @@ Noesis_Testing/
 │   └── schema.sql                  # PostgreSQL schema, enums, triggers & seed data
 │
 ├── backend/
-│   ├── src/
-│   │   ├── config/                 # Environment configuration loader
-│   │   ├── database/               # PostgreSQL connection pool & initialization
-│   │   ├── middleware/
-│   │   │   ├── auth.ts             # JWT authentication middleware
-│   │   │   ├── errorHandler.ts     # Global error & 404 handlers
-│   │   │   └── requestAudit.ts     # HTTP request lifecycle auditing
-│   │   ├── routes/
-│   │   │   ├── auth.ts             # Authentication (login, register, profile)
-│   │   │   ├── scripts.ts          # Script CRUD, sync, categories
-│   │   │   ├── execution.ts        # Run management, live streaming, stats
-│   │   │   ├── suites.ts           # Test suite CRUD & script mapping
-│   │   │   ├── users.ts            # User management (admin)
-│   │   │   ├── notifications.ts    # Notification CRUD & read status
-│   │   │   └── logs.ts             # Application log querying
-│   │   ├── services/
-│   │   │   ├── appLogService.ts    # Centralized application logging
-│   │   │   └── schedulerService.ts # Cron-based job scheduling
-│   │   ├── utils/
-│   │   │   └── logger.ts           # Winston logger configuration
-│   │   └── server.ts               # Express + Socket.IO entry point
+│   ├── src/main/java/com/noesis/
+│   │   ├── config/                 # CORS and .env bootstrap
+│   │   ├── NoesisTestingApplication.java # Plain Java API server
+│   │   ├── db/                     # JDBC helpers
+│   │   ├── security/               # JWT auth interceptor
+│   │   ├── service/                # Schema and execution services
+│   │   └── web/                    # API helpers and exception handling
+│   ├── src/main/resources/
+│   │   └── noesis.properties       # Plain Java backend marker
 │   ├── .env.example                # Environment variable template
-│   ├── tsconfig.json               # TypeScript configuration
-│   └── package.json                # Dependencies & scripts
+│   ├── pom.xml                     # Java dependencies & build
+│   └── package.json                # Optional Maven command aliases
 │
 ├── frontend/
 │   └── src/app/
@@ -273,7 +261,7 @@ Noesis_Testing/
 │       ├── services/
 │       │   ├── auth.service.ts     # Authentication state & API
 │       │   ├── script.service.ts   # Script data API
-│       │   ├── execution.service.ts# Execution API & Socket.IO client
+│       │   ├── execution.service.ts# Execution API & polling client
 │       │   ├── suite.service.ts    # Test suite API
 │       │   ├── log.service.ts      # Application log API
 │       │   ├── theme.service.ts    # Dark/light mode management
@@ -310,7 +298,7 @@ Discovered scripts are automatically categorized based on naming conventions and
 1. User selects scripts or a test suite
 2. Backend generates a dynamic `testng.xml` configuration
 3. Maven process is spawned with the generated configuration
-4. Real-time log output is streamed to the frontend via Socket.IO
+4. Live log output is polled from the Java API while the run is active
 5. Results (pass/fail/error/skipped) are parsed and persisted per-script
 6. Notifications are generated upon completion
 7. Dashboard statistics are updated
@@ -318,7 +306,7 @@ Discovered scripts are automatically categorized based on naming conventions and
 ### Scheduling System
 - **Recurring runs** — define cron expressions for automated periodic execution
 - **One-time runs** — schedule a specific date/time for a single execution
-- Managed by `node-cron` with database persistence for state tracking
+- Managed by the Java backend with database persistence for state tracking
 
 ---
 
@@ -377,7 +365,7 @@ The platform implements multiple layers of security:
 - **Authentication** — Stateless JWT tokens with configurable expiration
 - **Password Security** — bcrypt hashing with salt rounds
 - **Rate Limiting** — General API rate limiting (500 requests/15 min) and stricter auth endpoint limiting (20 requests/15 min)
-- **HTTP Security Headers** — Helmet middleware for XSS, MIME-type, and other protections
+- **HTTP/API Security** — CORS, JWT validation, and role checks in plain Java
 - **CORS** — Configurable origin allowlist
 - **Role-Based Access** — Three-tier permission model (Admin > Tester > Viewer)
 - **Request Auditing** — Full HTTP lifecycle logging for compliance and debugging
@@ -392,7 +380,6 @@ The backend is configured via `backend/.env` (copy from `backend/.env.example`).
 | Feature                     | Env var(s)                                                                 | Example value (default)                                           |
 |:----------------------------|:---------------------------------------------------------------------------|:------------------------------------------------------------------|
 | **Backend port**            | `PORT`                                                                     | `3000`                                                            |
-| **Node environment**        | `NODE_ENV`                                                                 | `development`                                                     |
 | **Postgres host/port**      | `DB_HOST`, `DB_PORT`                                                       | `localhost`, `5432`                                               |
 | **Postgres credentials**    | `DB_USER`, `DB_PASSWORD`                                                   | `postgres`, `your_postgres_password`                              |
 | **Postgres database**       | `DB_NAME`                                                                  | `noesis_testing`                                                  |
@@ -423,10 +410,11 @@ The backend is configured via `backend/.env` (copy from `backend/.env.example`).
 
 | Command          | Description                              |
 |:-----------------|:-----------------------------------------|
-| `npm run dev`    | Start development server with hot-reload |
-| `npm run build`  | Compile TypeScript to JavaScript         |
-| `npm start`      | Run compiled production build            |
-| `npm run db:init`| Initialize database with seed data       |
+| `mvn -Dexec.mainClass=com.noesis.NoesisTestingApplication exec:java` | Start the Java backend on the configured port |
+| `mvn -DskipTests package` | Build the Java backend jar             |
+| `npm run dev`    | Alias for the Maven exec Java command     |
+| `npm run build`  | Alias for `mvn -DskipTests package`       |
+| `npm start`      | Run the packaged Java jar                 |
 
 ### Frontend
 

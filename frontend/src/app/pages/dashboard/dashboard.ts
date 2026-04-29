@@ -15,6 +15,7 @@ import { DashboardStats, ExecutionRun } from '../../models/interfaces';
 import { formatExecutionEnvironmentLabel } from '../../utils/execution-environment';
 import { clampPercentage, toPercentage } from '../../utils/percentage';
 import { Subscription } from 'rxjs';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-dashboard',
@@ -85,7 +86,7 @@ export class Dashboard implements OnInit, OnDestroy {
     });
 
     // Fetch system health
-    this.http.get<any>('/api/health').subscribe({
+    this.http.get<any>(`${environment.apiUrl}/health`).subscribe({
       next: (data) => this.systemHealth.set(data),
       error: () => this.systemHealth.set({ api: 'degraded', db: 'unknown', uptime: 0, memoryMB: 0, status: 'degraded' }),
     });

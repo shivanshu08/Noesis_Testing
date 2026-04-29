@@ -77,14 +77,24 @@ export class ScriptConfiguration implements OnInit, OnDestroy {
   readonly resourceTotal = computed(() => {
     const detail = this.details();
     if (!detail) return 0;
-    return detail.resources.javaConfigs.length + this.attachmentResources().length;
+    return this.coreConfigurationResources().length + this.attachmentResources().length;
+  });
+  readonly coreConfigurationResources = computed(() => {
+    const detail = this.details();
+    if (!detail) return [] as ScriptConfigurationResource[];
+    const byKey = new Map<string, ScriptConfigurationResource>();
+    for (const resource of [...(detail.resources.javaConfigs || []), ...(detail.resources.jsonFiles || [])]) {
+      const key = String(resource.resolvedPath || resource.reference || '').toLowerCase();
+      if (key) byKey.set(key, resource);
+    }
+    return Array.from(byKey.values()).sort((a, b) => this.coreResourcePriority(a) - this.coreResourcePriority(b));
   });
   readonly attachmentResources = computed(() => {
     const detail = this.details();
     if (!detail) return [] as ScriptConfigurationResource[];
     return (detail.resources.attachments || []).filter(resource => {
       const sourceValue = String(resource.resolvedPath || resource.reference || '').trim().toLowerCase();
-      return !!sourceValue && !sourceValue.endsWith('.json');
+      return !!sourceValue;
     });
   });
   readonly hasUnsavedEditorChanges = computed(() =>
@@ -282,7 +292,7 @@ export class ScriptConfiguration implements OnInit, OnDestroy {
   }
 
   formatRunEnvironment(run: ScriptConfigurationRun): string {
-    return formatExecutionEnvironmentLabel(null, run.environment);
+    return formatExecutionEnvironmentLabel(run.runMetadata?.appUrl, run.runMetadata?.environment || run.environment);
   }
 
   setRunStatusFilter(filter: 'all' | 'passed' | 'failed' | 'running' | 'queued' | 'skipped'): void {
@@ -429,6 +439,13 @@ export class ScriptConfiguration implements OnInit, OnDestroy {
   getSelectedEditableFileLabel(): string {
     const selected = this.editableFiles().find(file => file.path === this.selectedEditablePath());
     return selected ? this.getFileOptionLabel(selected) : 'Configuration File';
+  }
+
+  getScriptMethod(detail: ScriptConfigurationDetail): string {
+    const configured = String(detail.script.methodName || '').trim();
+    if (configured && configured !== '-') return configured;
+    const methods = detail.java?.methods || [];
+    return methods.length > 0 ? methods[0] : '-';
   }
 
   getChangedLines(change: ScriptConfigurationChangeLog): number {
@@ -703,12 +720,21 @@ export class ScriptConfiguration implements OnInit, OnDestroy {
 
     const displayName = this.getResourceDisplayName(resource);
     const lowerName = displayName.toLowerCase();
-    if (lowerName.endsWith('.json')) return 'Script Configuration JSON';
+    if (lowerName.endsWith('.json')) return 'script json';
     if (lowerName === 'htmlpath.java') return 'HTML Path Locators';
-    if (lowerName === 'baseconfig.java') return 'Base Configuration';
+    if (lowerName === 'baseconfig.java') return 'Base Config';
     if (lowerName.includes('common') && lowerName.includes('config')) return 'Common Configuration';
     if (lowerName.endsWith('.java')) return 'Java Configuration';
     return 'Configuration File';
+  }
+
+  private coreResourcePriority(resource: ScriptConfigurationResource): number {
+    const logicalName = this.getResourceLogicalName(resource).trim().toLowerCase();
+    if (logicalName === 'script java file') return 10;
+    if (logicalName === 'script java config file') return 20;
+    if (logicalName === 'script json') return 30;
+    if (logicalName === 'base config') return 40;
+    return 100;
   }
 
   getResourceKindLabel(resource: ScriptConfigurationResource): string {

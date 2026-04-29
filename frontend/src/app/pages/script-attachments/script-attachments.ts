@@ -36,7 +36,7 @@ export class ScriptAttachments implements OnInit {
     return (detail.resources.attachments || [])
       .filter(resource => {
         const sourceValue = String(resource.resolvedPath || resource.reference || '').trim().toLowerCase();
-        return !!sourceValue && !sourceValue.endsWith('.json');
+        return !!sourceValue;
       })
       .sort((a, b) => this.getResourceDisplayName(a).localeCompare(this.getResourceDisplayName(b)));
   });
@@ -160,6 +160,7 @@ export class ScriptAttachments implements OnInit {
 
   getResourceKindLabel(resource: ScriptConfigurationResource): string {
     const sourceValue = String(resource.resolvedPath || resource.reference || '').trim().toLowerCase();
+    if (sourceValue.endsWith('.json')) return 'JSON';
     if (sourceValue.endsWith('.xml')) return 'XML';
     if (sourceValue.endsWith('.pdf')) return 'PDF';
     if (sourceValue.endsWith('.png') || sourceValue.endsWith('.jpg') || sourceValue.endsWith('.jpeg')) return 'IMAGE';
@@ -169,4 +170,3 @@ export class ScriptAttachments implements OnInit {
     return 'FILE';
   }
 }
-

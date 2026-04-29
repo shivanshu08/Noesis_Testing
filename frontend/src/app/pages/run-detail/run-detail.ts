@@ -138,8 +138,17 @@ export class RunDetail implements OnInit, OnDestroy {
 
   get executionEnvironmentLabel(): string {
     const url = this.executionAppUrl;
-    if (url === '-') return '-';
+    if (url === '-') return this.run()?.environment ? String(this.run()?.environment) : '-';
+    if (!/^https?:\/\//i.test(url)) return url;
     return inferEnvironmentFromUrl(url);
+  }
+
+  get gitRepositoryDisplay(): string {
+    const metadata = this.run()?.runMetadata;
+    const name = String(metadata?.gitRepoName || '').trim();
+    const url = String(metadata?.gitRepoUrl || '').trim();
+    if (name && url) return `${name} (${url})`;
+    return name || url || '-';
   }
 
   get resultTotalCount(): number {
@@ -244,11 +253,10 @@ export class RunDetail implements OnInit, OnDestroy {
   }
 
   private filterArtifacts(artifacts: ExecutionArtifact[]): ExecutionArtifact[] {
-    const excludedFileNames = new Set(['emailable-report.html', 'index.html']);
+    const allowedTypes = new Set(['html', 'pdf']);
     return artifacts.filter((artifact) => {
-      const fileName = artifact.fileName || '';
-      const baseName = fileName.split(/[/\\]/).pop()?.toLowerCase() || '';
-      return !excludedFileNames.has(baseName);
+      const type = String(artifact.artifactType || '').toLowerCase();
+      return allowedTypes.has(type);
     });
   }
 
