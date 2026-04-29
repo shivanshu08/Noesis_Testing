@@ -17,7 +17,7 @@
       </div>
       <div class="stat-info">
         <span class="stat-value">{{ stats()?.totalScripts || 0 }}</span>
-        <span class="stat-label">Total Scripts</span>
+        <span class="stat-label">{{ auth.isTester() ? 'Assigned Scripts' : 'Total Scripts' }}</span>
       </div>
     </div>
 
@@ -98,7 +98,7 @@
         <div class="pie-legend-wrapper">
           <div class="total-indicator">
             <span class="total-val">{{ stats()?.totalScripts || 0 }}</span>
-            <span class="total-lbl">Total Scripts</span>
+            <span class="total-lbl">{{ auth.isTester() ? 'Assigned Scripts' : 'Total Scripts' }}</span>
           </div>
           <div class="legend-list">
             @for (cat of stats()?.categoryStats; track cat.name) {

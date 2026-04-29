@@ -443,6 +443,11 @@ export class ScriptConfiguration implements OnInit, OnDestroy {
 
   getScriptMethod(detail: ScriptConfigurationDetail): string {
     const configured = String(detail.script.methodName || '').trim();
+    const testMethods = detail.java?.testMethods || [];
+    if (testMethods.length > 0) {
+      const primary = configured && testMethods.includes(configured) ? configured : testMethods[0];
+      return testMethods.length === 1 ? primary : `${primary} + ${testMethods.length - 1} tests`;
+    }
     if (configured && configured !== '-') return configured;
     const methods = detail.java?.methods || [];
     return methods.length > 0 ? methods[0] : '-';

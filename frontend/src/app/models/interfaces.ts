@@ -191,6 +191,7 @@ export interface ScriptConfigurationDetail {
     imports: string[];
     annotations: string[];
     methods: string[];
+    testMethods?: string[];
     previewLines: string[];
     lineCount: number;
     fileSizeBytes?: number;
