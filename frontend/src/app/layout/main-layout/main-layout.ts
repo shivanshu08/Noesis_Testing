@@ -96,9 +96,12 @@ export class MainLayout implements OnInit, OnDestroy {
 
     this.executionService.initGlobalSocket();
     this.executionService.globalRunUpdates.subscribe((data) => {
-      const severity = data.status === 'passed' ? 'success' : (data.status === 'error' || data.status === 'failed' ? 'error' : 'warn');
-      const summary = `Execution ${data.status === 'passed' ? 'Passed' : 'Failed'}`;
-      const detail = `Suite "${data.runName}" finished.`;
+      const normalizedStatus = String(data.status || '').toLowerCase();
+      const severity = normalizedStatus === 'passed' ? 'success' : (normalizedStatus === 'stopped' ? 'warn' : 'error');
+      const summary = normalizedStatus === 'passed'
+        ? 'Execution Passed'
+        : (normalizedStatus === 'stopped' ? 'Execution Stopped' : 'Execution Failed');
+      const detail = `Suite "${data.runName}" ${normalizedStatus === 'stopped' ? 'was stopped' : 'finished'}.`;
       const currentUrl = this.router.url || '';
       const isExecutionScreen = currentUrl.startsWith('/runner') || currentUrl.startsWith('/run/');
       if (!isExecutionScreen) {

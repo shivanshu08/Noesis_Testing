@@ -331,18 +331,33 @@ class BackendSupport {
     int count = intValue(db.one("SELECT COUNT(*)::int AS count FROM script_assignments WHERE user_id = ? AND script_id = ?", auth.userId, scriptId).get("count"), 0);
     if (count == 0) throw new ApiException(403, "Access denied: This script is not assigned to you.");
   }
-  protected List<Integer> resolveScriptExecutionPlan(List<Integer> requested) {
-    LinkedHashSet<Integer> expanded = new LinkedHashSet<>();
-    LinkedHashSet<Integer> visiting = new LinkedHashSet<>();
-    for (Integer id : requested) resolveScriptDependencies(id, expanded, visiting);
-    return new ArrayList<>(expanded);
+  protected ScriptExecutionPlan resolveScriptExecutionPlan(List<Integer> requested) throws SQLException {
+    List<Integer> normalized = requested.stream().filter(id -> id != null && id > 0).distinct().toList();
+    if (normalized.isEmpty()) return new ScriptExecutionPlan(List.of(), List.of(), List.of(), null);
+    LinkedHashSet<Integer> ordered = new LinkedHashSet<>();
+    LinkedHashSet<Integer> missing = new LinkedHashSet<>();
+    List<Integer> stack = new ArrayList<>();
+    for (Integer id : normalized) resolveScriptDependencies(id, ordered, missing, stack);
+    if (!missing.isEmpty()) return new ScriptExecutionPlan(normalized, List.of(), new ArrayList<>(missing), null);
+    List<Integer> autoIncluded = ordered.stream().filter(id -> !normalized.contains(id)).toList();
+    return new ScriptExecutionPlan(new ArrayList<>(ordered), autoIncluded, List.of(), null);
   }
-  protected void resolveScriptDependencies(Integer id, LinkedHashSet<Integer> expanded, LinkedHashSet<Integer> visiting) {
-    if (id == null || id <= 0 || expanded.contains(id) || visiting.contains(id)) return;
-    visiting.add(id);
-    for (Integer dep : dependencyIds(id)) resolveScriptDependencies(dep, expanded, visiting);
-    visiting.remove(id);
-    expanded.add(id);
+  protected void resolveScriptDependencies(Integer id, LinkedHashSet<Integer> ordered, LinkedHashSet<Integer> missing, List<Integer> stack) throws SQLException {
+    if (id == null || id <= 0 || ordered.contains(id)) return;
+    if (stack.contains(id)) {
+      List<Integer> cycle = new ArrayList<>(stack.subList(stack.indexOf(id), stack.size()));
+      cycle.add(id);
+      throw new ApiException(400, "Circular script dependency detected. Path: " + cycle);
+    }
+    Map<String, Object> script = db.one("SELECT id FROM scripts WHERE id = ? AND is_active = TRUE", id);
+    if (script == null) {
+      missing.add(id);
+      return;
+    }
+    stack.add(id);
+    for (Integer dep : dependencyIds(id)) resolveScriptDependencies(dep, ordered, missing, stack);
+    stack.remove(stack.size() - 1);
+    ordered.add(id);
   }
   protected Map<String, Object> userDto(Map<String, Object> u) {
     Map<String, Object> out = new LinkedHashMap<>();
@@ -464,11 +479,29 @@ class BackendSupport {
     return m.find() ? m.group(1) : null;
   }
   protected String buildTestNgXml(String runName, List<Map<String, Object>> scripts) {
-    StringBuilder xml = new StringBuilder("<!DOCTYPE suite SYSTEM \"https://testng.org/testng-1.0.dtd\">\n<suite name=\"").append(escapeXml(runName)).append("\">\n  <test name=\"Noesis Test\">\n    <classes>\n");
-    for (Map<String, Object> script : scripts) xml.append("      <class name=\"").append(escapeXml(str(script.get("className")))).append("\"/>\n");
+    StringBuilder xml = new StringBuilder("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+        .append("<!DOCTYPE suite SYSTEM \"https://testng.org/testng-1.0.dtd\">\n")
+        .append("<suite name=\"").append(escapeXml(runName)).append("\" parallel=\"false\">\n")
+        .append("  <listeners>\n")
+        .append("    <listener class-name=\"org.example.utility.CustomHtmlReporter\"/>\n")
+        .append("    <listener class-name=\"org.example.utility.PreExecutionReviewListener\"/>\n")
+        .append("    <listener class-name=\"org.example.utility.ExecutionOrderListener\"/>\n")
+        .append("  </listeners>\n")
+        .append("  <test name=\"Noesis Test\">\n    <classes>\n");
+    for (Map<String, Object> script : scripts) {
+      xml.append("      <class name=\"").append(escapeXml(str(script.get("className")))).append("\"");
+      String method = str(script.get("methodName")).trim();
+      if (method.isBlank()) {
+        xml.append("/>\n");
+      } else {
+        xml.append(">\n        <methods>\n          <include name=\"")
+            .append(escapeXml(method))
+            .append("\"/>\n        </methods>\n      </class>\n");
+      }
+    }
     return xml.append("    </classes>\n  </test>\n</suite>\n").toString();
   }
-  protected String escapeXml(String s) { return s.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;"); }
+  protected String escapeXml(String s) { return s.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;").replace("'", "&apos;"); }
 
   static final class Auth {
     final int userId;
@@ -508,6 +541,20 @@ class BackendSupport {
     int total() { return passed + failed + errors + skipped; }
   }
 
+  static final class ScriptExecutionPlan {
+    final List<Integer> orderedScriptIds;
+    final List<Integer> autoIncludedDependencyIds;
+    final List<Integer> missingScriptIds;
+    final List<Integer> cyclePath;
+
+    ScriptExecutionPlan(List<Integer> orderedScriptIds, List<Integer> autoIncludedDependencyIds, List<Integer> missingScriptIds, List<Integer> cyclePath) {
+      this.orderedScriptIds = orderedScriptIds;
+      this.autoIncludedDependencyIds = autoIncludedDependencyIds;
+      this.missingScriptIds = missingScriptIds;
+      this.cyclePath = cyclePath;
+    }
+  }
+
   static final class ApiException extends RuntimeException {
     final int status;
     ApiException(int status, String message) { super(message); this.status = status; }
@@ -527,7 +574,7 @@ class BackendSupport {
     String dbUser() { return value("DB_USER", "postgres"); }
     String dbPassword() { return value("DB_PASSWORD", ""); }
     String jwtSecret() { return value("JWT_SECRET", "fallback-secret-change-me"); }
-    String jwtExpiresIn() { return value("JWT_EXPIRES_IN", "24h"); }
+    String jwtExpiresIn() { return value("JWT_EXPIRES_IN", "2h"); }
     static void loadDotenv() {
       Path env = Files.exists(Path.of(".env")) ? Path.of(".env") : Path.of("backend", ".env");
       if (!Files.exists(env)) return;

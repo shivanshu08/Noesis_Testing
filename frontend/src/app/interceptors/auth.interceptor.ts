@@ -22,8 +22,8 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     catchError(error => {
       // Trigger session timeout alert on 401 (expired/invalid token)
       // Skip for login requests — those have their own error handling
-      if (error.status === 401 && !isLoginRequest) {
-        authService.sessionExpired();
+      if ((error.status === 401 || error.status === 423) && !isLoginRequest) {
+        authService.handleSessionError();
       }
       return throwError(() => error);
     })

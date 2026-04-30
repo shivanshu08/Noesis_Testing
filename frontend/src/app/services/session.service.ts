@@ -37,4 +37,9 @@ export class SessionService {
     this.showTimeoutAlert.set(false);
     this._handling = false;
   }
+
+  reset(): void {
+    this.showTimeoutAlert.set(false);
+    this._handling = false;
+  }
 }

@@ -317,16 +317,24 @@
   [(visible)]="showRunConfirm"
   [modal]="true"
   [closable]="true"
-  [style]="{ width: '480px' }"
+  [style]="{ width: '640px', maxWidth: 'calc(100vw - 32px)' }"
+  [contentStyle]="{ overflow: 'visible' }"
   [dismissableMask]="true"
+  [draggable]="false"
+  [resizable]="false"
   styleClass="run-confirm-dialog"
   id="dialog-run-confirm"
 >
   <div class="confirm-body">
-    <div class="confirm-icon-wrap">
-      <i class="pi pi-bolt"></i>
+    <div class="confirm-hero">
+      <div class="confirm-icon-wrap">
+        <i class="pi pi-bolt"></i>
+      </div>
+      <div>
+        <p class="confirm-kicker">Execution Preview</p>
+        <p class="confirm-title">Ready to run this selection?</p>
+      </div>
     </div>
-    <p class="confirm-title">Ready to execute?</p>
 
     <div class="confirm-details">
       <div class="confirm-stat">
@@ -377,6 +385,9 @@
         [(ngModel)]="executionEnvironment"
         optionLabel="label"
         optionValue="value"
+        appendTo="body"
+        styleClass="centered-env-select"
+        panelStyleClass="centered-env-select-panel"
         [style]="{ width: '100%' }"
         id="run-env-select"
       />
@@ -604,6 +615,9 @@
         [(ngModel)]="scheduleEnvironment"
         optionLabel="label"
         optionValue="value"
+        appendTo="body"
+        styleClass="centered-env-select"
+        panelStyleClass="centered-env-select-panel"
         [style]="{ width: '100%' }"
         id="schedule-env-select"
       />

@@ -515,8 +515,8 @@ export class Runner implements OnInit, OnDestroy {
             for (const line of newLines) {
               if (line.includes('PASSED') || line.includes('FAILED') || line.includes('BUILD SUCCESS') || line.includes('BUILD FAILURE')) {
                 this.completedScripts.update(c => {
-                  const next = c + 1;
                   const total = this.totalExecutionScripts();
+                  const next = total > 0 ? Math.min(c + 1, total) : c + 1;
                   this.executionProgress.set(total > 0 ? Math.min(Math.round((next / total) * 100), 100) : 0);
                   return next;
                 });
@@ -531,41 +531,16 @@ export class Runner implements OnInit, OnDestroy {
             if (this.autoScroll) {
               setTimeout(() => this.scrollToBottom(), 50);
             }
+
+            const terminalLogStatus = this.inferTerminalStatusFromLogs(newLines);
+            if (terminalLogStatus) {
+              this.completeCurrentExecution(terminalLogStatus, res.runId);
+              return;
+            }
           }
           const status = this.executionService.activeRunStatus();
-          if (status && status !== 'running') {
-            this.running.set(false);
-            this.runStatus.set(status);
-            this.stopTimer();
-            this.executionProgress.set(100);
-            this.currentExecutingScript.set('');
-            this.clearExecutionCheckInterval();
-
-            if (status === 'completed' || status === 'passed' || status === 'failed') {
-              const logText = this.logs().join('\n');
-              const passedMatch = logText.match(/(\d+)\s+passed/i);
-              const failedMatch = logText.match(/(\d+)\s+failed/i);
-              const passed = passedMatch ? parseInt(passedMatch[1]) : 0;
-              const plannedTotal = this.totalExecutionScripts();
-              const failed = failedMatch ? parseInt(failedMatch[1]) : Math.max(plannedTotal - passed, 0);
-              const total = Math.max(passed + failed, plannedTotal);
-              this.messageService.add({ severity: status === 'failed' ? 'error' : 'success', summary: 'Execution Completed', detail: `Total: ${total}, Passed: ${passed}, Failed: ${failed}` });
-
-              const readyArtifacts = this.executionService.artifactsReady();
-              if (readyArtifacts.length > 0) {
-                this.artifacts.set(readyArtifacts);
-              } else {
-                this.executionService.getArtifacts(res.runId).subscribe(data => this.artifacts.set(data));
-              }
-
-              this.loadLatestRunDetails(res.runId);
-            } else if (status === 'error') {
-              this.messageService.add({ severity: 'error', summary: 'Execution Failed', detail: 'An error occurred during execution' });
-              this.loadLatestRunDetails(res.runId);
-            } else if (status === 'stopped') {
-              this.messageService.add({ severity: 'warn', summary: 'Execution Stopped', detail: 'The execution was manually stopped' });
-              this.loadLatestRunDetails(res.runId);
-            }
+          if (status && !this.isActiveExecutionStatus(status)) {
+            this.completeCurrentExecution(status, res.runId);
           }
         }, 500);
       },
@@ -976,6 +951,66 @@ export class Runner implements OnInit, OnDestroy {
     this.executionService.getRunDetails(runId).subscribe({
       next: (details) => this.latestRunDetails.set(details),
     });
+  }
+
+  private inferTerminalStatusFromLogs(lines: string[]): string | null {
+    for (const line of lines) {
+      const normalized = line.toLowerCase();
+      if (normalized.includes('build success')) return 'passed';
+      if (normalized.includes('build failure')) return 'failed';
+    }
+    return null;
+  }
+
+  private isActiveExecutionStatus(status: string): boolean {
+    const normalized = status.toLowerCase();
+    return normalized === 'queued' || normalized === 'running';
+  }
+
+  private normalizeFinalStatus(status: string): string {
+    return status === 'completed' ? 'passed' : status;
+  }
+
+  private completeCurrentExecution(status: string, runId: number): void {
+    const finalStatus = this.normalizeFinalStatus(status);
+    if (!this.running() && this.runStatus() === finalStatus) return;
+
+    this.running.set(false);
+    this.runStatus.set(finalStatus);
+    this.stopTimer();
+    this.executionProgress.set(100);
+    this.completedScripts.set(this.totalExecutionScripts());
+    this.currentExecutingScript.set('');
+    this.executionService.disconnectFromRun();
+    this.clearExecutionCheckInterval();
+
+    if (finalStatus === 'passed' || finalStatus === 'failed') {
+      const logText = this.logs().join('\n');
+      const passedMatch = logText.match(/(\d+)\s+passed/i);
+      const failedMatch = logText.match(/(\d+)\s+failed/i);
+      const passed = passedMatch ? parseInt(passedMatch[1], 10) : (finalStatus === 'passed' ? this.totalExecutionScripts() : 0);
+      const plannedTotal = this.totalExecutionScripts();
+      const failed = failedMatch ? parseInt(failedMatch[1], 10) : Math.max(plannedTotal - passed, 0);
+      const total = Math.max(passed + failed, plannedTotal);
+      this.messageService.add({ severity: finalStatus === 'failed' ? 'error' : 'success', summary: 'Execution Completed', detail: `Total: ${total}, Passed: ${passed}, Failed: ${failed}` });
+
+      const readyArtifacts = this.executionService.artifactsReady();
+      if (readyArtifacts.length > 0) {
+        this.artifacts.set(readyArtifacts);
+      } else {
+        this.executionService.getArtifacts(runId).subscribe(data => this.artifacts.set(data));
+        setTimeout(() => this.executionService.getArtifacts(runId).subscribe(data => this.artifacts.set(data)), 2000);
+      }
+
+      this.loadLatestRunDetails(runId);
+      setTimeout(() => this.loadLatestRunDetails(runId), 1000);
+    } else if (finalStatus === 'error') {
+      this.messageService.add({ severity: 'error', summary: 'Execution Failed', detail: 'An error occurred during execution' });
+      this.loadLatestRunDetails(runId);
+    } else if (finalStatus === 'stopped') {
+      this.messageService.add({ severity: 'warn', summary: 'Execution Stopped', detail: 'The execution was manually stopped' });
+      this.loadLatestRunDetails(runId);
+    }
   }
 
   getCategoryName(catId: number): string {

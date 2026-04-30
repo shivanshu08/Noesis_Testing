@@ -12,8 +12,10 @@ export class AuthService {
   private readonly tokenKey = 'noesis_token';
   private readonly userKey = 'noesis_user';
   private readonly sessionService = inject(SessionService);
+  private sessionExpiryTimer: ReturnType<typeof setTimeout> | null = null;
+  private suppressSessionErrorsUntil = 0;
 
-  private currentUser = signal<User | null>(this.loadUser());
+  private currentUser = signal<User | null>(this.loadValidUser());
   readonly user = this.currentUser.asReadonly();
   readonly isLoggedIn = computed(() => !!this.currentUser());
   readonly isAdmin = computed(() => this.currentUser()?.role === 'admin');
@@ -27,7 +29,9 @@ export class AuthService {
   readonly canViewSystemLogs = computed(() => this.canEdit());
   readonly assignedScriptCount = computed(() => this.currentUser()?.assignedScriptCount ?? null);
 
-  constructor(private http: HttpClient, private router: Router) {}
+  constructor(private http: HttpClient, private router: Router) {
+    this.scheduleSessionExpiry();
+  }
 
   login(credentials: LoginRequest): Observable<LoginResponse> {
     return this.http.post<LoginResponse>(`${this.apiUrl}/login`, credentials).pipe(
@@ -35,15 +39,20 @@ export class AuthService {
         localStorage.setItem(this.tokenKey, response.token);
         localStorage.setItem(this.userKey, JSON.stringify(response.user));
         this.currentUser.set(response.user);
+        this.sessionService.reset();
+        this.scheduleSessionExpiry();
       }),
       catchError(err => throwError(() => err))
     );
   }
 
   logout(): void {
+    this.suppressSessionErrorsUntil = Date.now() + 5000;
+    this.clearSessionExpiryTimer();
     localStorage.removeItem(this.tokenKey);
     localStorage.removeItem(this.userKey);
     this.currentUser.set(null);
+    this.sessionService.reset();
     this.router.navigate(['/login']);
   }
 
@@ -58,11 +67,23 @@ export class AuthService {
     localStorage.removeItem(this.tokenKey);
     localStorage.removeItem(this.userKey);
     this.currentUser.set(null);
+    this.clearSessionExpiryTimer();
     this.router.navigate(['/login']);
   }
 
+  handleSessionError(): void {
+    if (!this.shouldHandleSessionError()) return;
+    this.sessionExpired();
+  }
+
   getToken(): string | null {
-    return localStorage.getItem(this.tokenKey);
+    const token = localStorage.getItem(this.tokenKey);
+    if (!token) return null;
+    if (this.isTokenExpired(token)) {
+      this.sessionExpired();
+      return null;
+    }
+    return token;
   }
 
   changePassword(currentPassword: string, newPassword: string): Observable<any> {
@@ -82,11 +103,58 @@ export class AuthService {
     );
   }
 
-  private loadUser(): User | null {
+  private loadValidUser(): User | null {
+    const token = localStorage.getItem(this.tokenKey);
+    if (!token || this.isTokenExpired(token)) {
+      localStorage.removeItem(this.tokenKey);
+      localStorage.removeItem(this.userKey);
+      return null;
+    }
     const stored = localStorage.getItem(this.userKey);
     if (stored) {
       try { return JSON.parse(stored); } catch { return null; }
     }
     return null;
+  }
+
+  private scheduleSessionExpiry(): void {
+    this.clearSessionExpiryTimer();
+    const token = localStorage.getItem(this.tokenKey);
+    const expiresAt = token ? this.getTokenExpiryMs(token) : null;
+    if (!expiresAt) return;
+
+    const delay = expiresAt - Date.now();
+    if (delay <= 0) {
+      this.sessionExpired();
+      return;
+    }
+    this.sessionExpiryTimer = setTimeout(() => this.sessionExpired(), delay);
+  }
+
+  private clearSessionExpiryTimer(): void {
+    if (this.sessionExpiryTimer) {
+      clearTimeout(this.sessionExpiryTimer);
+      this.sessionExpiryTimer = null;
+    }
+  }
+
+  private shouldHandleSessionError(): boolean {
+    if (Date.now() < this.suppressSessionErrorsUntil) return false;
+    return !!localStorage.getItem(this.tokenKey) || !!this.currentUser();
+  }
+
+  private isTokenExpired(token: string): boolean {
+    const expiresAt = this.getTokenExpiryMs(token);
+    return !expiresAt || expiresAt <= Date.now();
+  }
+
+  private getTokenExpiryMs(token: string): number | null {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      const exp = Number(payload.exp);
+      return Number.isFinite(exp) ? exp * 1000 : null;
+    } catch {
+      return null;
+    }
   }
 }

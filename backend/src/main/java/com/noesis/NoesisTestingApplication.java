@@ -16,11 +16,16 @@ public class NoesisTestingApplication extends ApiRouter {
 
   void start() throws IOException {
     ensureSchema();
+    reconcileAbandonedRunningRuns();
     int port = env.intValue("PORT", 3000);
     HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
     server.createContext("/", this::handle);
     server.setExecutor(Executors.newCachedThreadPool());
-    Runtime.getRuntime().addShutdownHook(new Thread(() -> activeProcesses.values().forEach(Process::destroy)));
+    initScheduler();
+    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+      shutdownScheduler();
+      activeProcesses.values().forEach(Process::destroy);
+    }));
     server.start();
     System.out.println("Noesis plain Java API running on port " + port);
   }

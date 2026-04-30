@@ -41,6 +41,10 @@ export class Login implements OnInit, OnDestroy {
   error = signal('');
   successMsg = signal('');
   currentYear = new Date().getFullYear();
+  rotatingWords = ['Precision', 'Excellence', 'Compliance', 'You', 'Safety'];
+  activeWordIndex = signal(0);
+  wordChanging = signal(false);
+  private wordTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private auth: AuthService,
@@ -53,9 +57,20 @@ export class Login implements OnInit, OnDestroy {
   ngOnInit() {
     // Force Light Mode strictly for the Login page
     this.document.documentElement.classList.remove('dark-mode', 'p-dark');
+    this.wordTimer = setInterval(() => {
+      this.wordChanging.set(true);
+      setTimeout(() => {
+        this.activeWordIndex.update(index => (index + 1) % this.rotatingWords.length);
+        this.wordChanging.set(false);
+      }, 420);
+    }, 2200);
   }
 
   ngOnDestroy() {
+    if (this.wordTimer) {
+      clearInterval(this.wordTimer);
+      this.wordTimer = null;
+    }
     // Restore global dark mode preference when leaving login
     if (this.themeService.isDarkMode()) {
       this.document.documentElement.classList.add('dark-mode', 'p-dark');

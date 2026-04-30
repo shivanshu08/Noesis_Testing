@@ -12,6 +12,8 @@ export class ExecutionService {
   private globalPollHandle: number | null = null;
   private lastRunLogId = 0;
   private seenRunLogKeys = new Set<string>();
+  private seenGlobalTerminalRunIds = new Set<number>();
+  private globalPollInitialized = false;
 
   readonly liveLogs = signal<ExecutionLog[]>([]);
   readonly activeRunStatus = signal<string | null>(null);
@@ -23,17 +25,35 @@ export class ExecutionService {
 
   initGlobalSocket(): void {
     if (this.globalPollHandle === null) {
-      this.globalPollHandle = window.setInterval(() => {
-        this.getRuns({ status: 'running', limit: 10 }).subscribe({
-          next: (runs) => runs.forEach(run => this.globalRunUpdates.next({
-            runId: run.id,
-            runName: run.runName,
-            status: run.status,
-          })),
+      const poll = () => {
+        this.getRuns({ limit: 20 }).subscribe({
+          next: (runs) => {
+            const terminalRuns = runs.filter(run => this.isTerminalRunStatus(run.status));
+            if (!this.globalPollInitialized) {
+              terminalRuns.forEach(run => this.seenGlobalTerminalRunIds.add(run.id));
+              this.globalPollInitialized = true;
+              return;
+            }
+            terminalRuns.forEach(run => {
+              if (this.seenGlobalTerminalRunIds.has(run.id)) return;
+              this.seenGlobalTerminalRunIds.add(run.id);
+              this.globalRunUpdates.next({
+                runId: run.id,
+                runName: run.runName,
+                status: run.status,
+              });
+            });
+          },
           error: () => {},
         });
-      }, 5000);
+      };
+      poll();
+      this.globalPollHandle = window.setInterval(poll, 5000);
     }
+  }
+
+  private isTerminalRunStatus(status: string | null | undefined): boolean {
+    return ['passed', 'failed', 'error', 'stopped'].includes(String(status || '').toLowerCase());
   }
 
   runScripts(scriptIds: number[], suiteName?: string, environmentName = 'local'): Observable<{

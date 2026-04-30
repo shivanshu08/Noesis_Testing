@@ -1,52 +1,101 @@
 <app-alert-overlay [showConfirm]="false" toastPosition="top-center" />
 
 <div class="login-page">
-  <div class="login-container">
-    <!-- Left Illustration Panel -->
-    <div class="login-left">
-      <div class="illustration-content">
-        <img src="assets/images/login/login-illustration.png" alt="Secure Login" class="login-illustration" />
+  <header class="login-topbar">
+    <div class="brand">
+      <div class="brand-mark">N</div>
+      <div class="brand-name">
+        NOESIS
+        <sup class="brand-module">Manager</sup>
       </div>
+      <div class="brand-divider"></div>
+      <div class="brand-sub">BY DROGEVATE</div>
     </div>
+  </header>
 
-    <!-- Right Form Panel -->
-    <div class="login-right">
-      <p-card styleClass="login-card">
-        <!-- Login Form -->
-        <div class="card-header">
-          <h2>Noesis Login</h2>
+  <main class="login-shell">
+    <section class="story-panel">
+      <div class="panel-orbit orbit-lg"></div>
+      <div class="panel-orbit orbit-md"></div>
+      <div class="panel-orbit orbit-sm"></div>
+
+      <i class="pi pi-shield bg-icon bg-shield"></i>
+      <i class="pi pi-file bg-icon bg-file"></i>
+      <i class="pi pi-heart-pulse bg-icon bg-pulse"></i>
+      <i class="pi pi-circle bg-icon bg-pill"></i>
+      <span class="pv-watermark">PV</span>
+
+      <div class="story-content">
+        <div class="eyebrow">PHARMACOVIGILANCE</div>
+        <h1>
+          Reimagined<br />
+          for
+          <span class="rotating-word" [class.word-changing]="wordChanging()">
+            {{ rotatingWords[activeWordIndex()] }}
+          </span>
+        </h1>
+        <p class="story-lead">The Best-in-Class Case Management Automation Solution</p>
+        <p class="story-copy">
+          Streamline your pharmacovigilance operations with our highly accurate intake automation solution.
+          Intake from any form, in any language, reduces manual burden and case processing cost.
+        </p>
+        <a class="know-more" href="https://drogevate.com/" target="_blank" rel="noopener noreferrer">
+          <span>Know More</span>
+          <i class="pi pi-external-link"></i>
+        </a>
+      </div>
+    </section>
+
+    <section class="form-panel">
+      <div class="form-card">
+        <div class="form-header">
+          <h2>Sign In</h2>
+          <p>Enter your credentials to continue.</p>
         </div>
 
-        <div class="form-field">
-          <label for="username">Username</label>
-          <p-inputgroup>
-            <p-inputgroup-addon>
+        <form class="login-form" (ngSubmit)="onLogin()">
+          <div class="form-field">
+            <label for="username">Username</label>
+            <div class="field-control">
               <i class="pi pi-user"></i>
-            </p-inputgroup-addon>
-            <input pInputText id="username" [(ngModel)]="username" placeholder="User login ID" (keydown.enter)="onLogin()" />
-          </p-inputgroup>
-        </div>
+              <input
+                pInputText
+                id="username"
+                name="username"
+                [(ngModel)]="username"
+                autocomplete="username"
+                placeholder="Enter your username"
+              />
+            </div>
+          </div>
 
-        <div class="form-field">
-          <label for="password">Password</label>
-          <p-inputgroup>
-            <p-inputgroup-addon>
+          <div class="form-field">
+            <label for="password">Password</label>
+            <div class="field-control">
               <i class="pi pi-lock"></i>
-            </p-inputgroup-addon>
-            <input pInputText id="password" [(ngModel)]="password" [type]="showPassword ? 'text' : 'password'" placeholder="Password" (keydown.enter)="onLogin()" />
-            <p-inputgroup-addon class="toggle-pw" (click)="showPassword = !showPassword">
-              <i [class]="showPassword ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
-            </p-inputgroup-addon>
-          </p-inputgroup>
-        </div>
+              <input
+                pInputText
+                id="password"
+                name="password"
+                [(ngModel)]="password"
+                [type]="showPassword ? 'text' : 'password'"
+                autocomplete="current-password"
+                placeholder="Enter your password"
+              />
+              <button type="button" class="password-toggle" (click)="showPassword = !showPassword" aria-label="Toggle password visibility">
+                <i [class]="showPassword ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
+              </button>
+            </div>
+          </div>
 
-        <p-button label="Log in" [loading]="loading()" (onClick)="onLogin()" styleClass="w-full login-btn" />
-      </p-card>
-    </div>
-  </div>
+          <button type="submit" class="sign-in-btn" [disabled]="loading()">
+            <span>{{ loading() ? 'Signing in...' : 'Log in' }}</span>
+            <i class="pi pi-sign-in"></i>
+          </button>
+        </form>
+      </div>
+    </section>
+  </main>
 
-  <!-- Footer -->
-  <footer class="login-footer">
-    <span>Drogevate &copy; {{ currentYear }}. All rights reserved.</span>
-  </footer>
+  <footer class="login-footer">&copy; {{ currentYear }} Drogevate. All rights reserved.</footer>
 </div>

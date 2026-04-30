@@ -64,7 +64,7 @@ class ApiRouter extends AuditLogFeature {
       else if (match(path, "/api/scripts/(\\d+)") && method.equals("DELETE")) deleteScript(ex, auth, id(path));
       else if (path.equals("/api/suites") && method.equals("GET")) suites(ex, auth);
       else if (path.equals("/api/suites") && method.equals("POST")) createSuite(ex, auth);
-      else if (path.equals("/api/suites/audit") && method.equals("GET")) send(ex, 200, List.of());
+      else if (path.equals("/api/suites/audit") && method.equals("GET")) suiteAudit(ex, query);
       else if (match(path, "/api/suites/(\\d+)") && method.equals("GET")) suite(ex, auth, id(path));
       else if (match(path, "/api/suites/(\\d+)") && method.equals("PUT")) updateSuite(ex, auth, id(path));
       else if (match(path, "/api/suites/(\\d+)/duplicate") && method.equals("POST")) duplicateSuite(ex, auth, id(path));
@@ -83,8 +83,8 @@ class ApiRouter extends AuditLogFeature {
       else if (path.equals("/api/execution/global-logs/delete-multiple") && method.equals("POST")) deleteGlobalLogs(ex);
       else if (path.equals("/api/execution/schedule") && method.equals("POST")) createSchedule(ex, auth);
       else if (path.equals("/api/execution/schedules") && method.equals("GET")) schedules(ex);
-      else if (match(path, "/api/execution/schedules/(\\d+)") && method.equals("PUT")) updateSchedule(ex, lastId(path));
-      else if (match(path, "/api/execution/schedules/(\\d+)") && method.equals("DELETE")) deleteSchedule(ex, lastId(path));
+      else if (match(path, "/api/execution/schedules/(\\d+)") && method.equals("PUT")) updateSchedule(ex, auth, lastId(path));
+      else if (match(path, "/api/execution/schedules/(\\d+)") && method.equals("DELETE")) deleteSchedule(ex, auth, lastId(path));
       else if (path.equals("/api/notifications") && method.equals("GET")) notifications(ex, auth, query);
       else if (path.equals("/api/notifications") && method.equals("POST")) createNotification(ex, auth);
       else if (path.equals("/api/notifications/read") && method.equals("PUT")) readNotifications(ex, auth);
@@ -95,8 +95,8 @@ class ApiRouter extends AuditLogFeature {
       else if (path.equals("/api/notifications") && method.equals("DELETE")) clearNotifications(ex, auth);
       else if (path.equals("/api/logs") && method.equals("GET")) logs(ex, auth);
       else if (path.equals("/api/logs") && method.equals("POST")) createLog(ex, auth);
-      else if (path.equals("/api/logs/modules") && method.equals("GET")) logModules(ex);
-      else if (path.equals("/api/logs/actions") && method.equals("GET")) logActions(ex);
+      else if (path.equals("/api/logs/modules") && method.equals("GET")) logModules(ex, query);
+      else if (path.equals("/api/logs/actions") && method.equals("GET")) logActions(ex, query);
       else send(ex, 404, error("API endpoint not found."));
     } catch (ApiException api) {
       send(ex, api.status, error(api.getMessage()));

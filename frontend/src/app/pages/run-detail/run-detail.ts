@@ -242,6 +242,7 @@ export class RunDetail implements OnInit, OnDestroy {
         const orderedLogs = [...data].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
         this.logs.set(orderedLogs);
         this.refreshLogView();
+        this.applyTerminalLogStatus(orderedLogs);
       },
     });
   }
@@ -766,6 +767,37 @@ export class RunDetail implements OnInit, OnDestroy {
 
     this.stopAutoRefresh();
     this.disconnectLiveConnection();
+  }
+
+  private applyTerminalLogStatus(logs: ExecutionLog[]): void {
+    const current = this.run();
+    if (!current || this.normalizeStatus(current.status) !== 'running') return;
+
+    const terminalStatus = this.inferTerminalStatusFromLogs(logs);
+    if (!terminalStatus) return;
+
+    const summary = this.buildSummaryCounts({ ...current, status: terminalStatus });
+    this.run.set({
+      ...current,
+      status: terminalStatus,
+      passedCount: terminalStatus === 'passed' && summary.passed === 0 ? summary.total : summary.passed,
+      failedCount: terminalStatus === 'failed' && summary.failed + summary.error === 0 ? Math.max(1, summary.total - summary.passed - summary.skipped) : summary.failed,
+      errorCount: summary.error,
+      skippedCount: summary.skipped,
+    });
+    this.refreshResultView();
+    this.handleRealtimeState(terminalStatus);
+    this.loadArtifacts();
+    setTimeout(() => this.refreshRunData(false), 1000);
+  }
+
+  private inferTerminalStatusFromLogs(logs: ExecutionLog[]): 'passed' | 'failed' | null {
+    for (const log of logs) {
+      const message = String(log.message || '').toLowerCase();
+      if (message.includes('build success')) return 'passed';
+      if (message.includes('build failure')) return 'failed';
+    }
+    return null;
   }
 
   private connectLiveConnectionIfNeeded(): void {

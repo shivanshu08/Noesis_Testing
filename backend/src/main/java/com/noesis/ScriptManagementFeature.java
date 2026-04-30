@@ -107,11 +107,50 @@ class ScriptManagementFeature extends ExecutionSupportFeature {
 
   protected void updateScriptDependencies(HttpExchange ex, Auth auth, int id) throws IOException, SQLException {
     edit(auth);
+    requireScriptAccess(auth, id);
     ensureDependencies();
-    List<Integer> ids = intList(body(ex).get("dependencyIds"));
+    List<Integer> ids = intList(body(ex).get("dependencyIds")).stream().filter(dep -> dep != id).distinct().toList();
+    if ("tester".equals(auth.role) && !hasAssignedScripts(auth.userId, ids)) {
+      throw new ApiException(403, "Access denied: One or more dependency scripts are not assigned to you.");
+    }
+    if (!ids.isEmpty()) {
+      int active = intValue(db.one("SELECT COUNT(*)::int AS count FROM scripts WHERE is_active = TRUE AND id IN (" + placeholders(ids.size()) + ")", ids.toArray()).get("count"), 0);
+      if (active != ids.size()) throw new ApiException(400, "Inactive scripts cannot be added as dependencies.");
+    }
+    List<Integer> cycle = dependencyCycleFor(id, ids);
+    if (!cycle.isEmpty()) throw new ApiException(400, "Dependency cycle detected. Remove circular links before saving. Path: " + cycle);
     db.update("DELETE FROM script_dependencies WHERE script_id = ?", id);
     for (Integer dep : ids) if (dep != id) db.update("INSERT INTO script_dependencies (script_id, dependency_script_id) VALUES (?, ?) ON CONFLICT DO NOTHING", id, dep);
     send(ex, 200, Map.of("message", "Script dependencies updated.", "scriptId", id, "dependencyIds", ids));
+  }
+
+  protected List<Integer> dependencyCycleFor(int scriptId, List<Integer> proposedDependencies) throws SQLException {
+    Map<Integer, List<Integer>> graph = new LinkedHashMap<>();
+    for (Map<String, Object> row : db.rows("SELECT script_id, dependency_script_id FROM script_dependencies WHERE script_id <> ?", scriptId)) {
+      int from = intValue(row.get("scriptId"), 0);
+      int to = intValue(row.get("dependencyScriptId"), 0);
+      if (from > 0 && to > 0) graph.computeIfAbsent(from, k -> new ArrayList<>()).add(to);
+    }
+    graph.put(scriptId, proposedDependencies);
+    List<Integer> stack = new ArrayList<>();
+    return findDependencyCycle(scriptId, graph, stack, new LinkedHashSet<>());
+  }
+
+  protected List<Integer> findDependencyCycle(int node, Map<Integer, List<Integer>> graph, List<Integer> stack, LinkedHashSet<Integer> done) {
+    if (stack.contains(node)) {
+      List<Integer> cycle = new ArrayList<>(stack.subList(stack.indexOf(node), stack.size()));
+      cycle.add(node);
+      return cycle;
+    }
+    if (done.contains(node)) return List.of();
+    stack.add(node);
+    for (Integer next : graph.getOrDefault(node, List.of())) {
+      List<Integer> cycle = findDependencyCycle(next, graph, stack, done);
+      if (!cycle.isEmpty()) return cycle;
+    }
+    stack.remove(stack.size() - 1);
+    done.add(node);
+    return List.of();
   }
 
   protected void deleteScript(HttpExchange ex, Auth auth, int id) throws IOException, SQLException {
