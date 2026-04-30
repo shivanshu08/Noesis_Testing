@@ -164,8 +164,10 @@ class ExecutionSupportFeature extends UserManagementFeature {
       } else {
         logExecution(runId, "INFO", "Fetching latest automation repository changes.");
         runCommand(runId, cache, "git", "fetch", "origin", "--prune", "--depth", "1");
+        runCommand(runId, cache, "git", "reset", "--hard");
+        runCommand(runId, cache, "git", "clean", "-fd");
         if (!branch.isBlank()) {
-          runCommand(runId, cache, "git", "checkout", "-B", branch, "origin/" + branch);
+          runCommand(runId, cache, "git", "checkout", "-f", "-B", branch, "origin/" + branch);
           runCommand(runId, cache, "git", "reset", "--hard", "origin/" + branch);
         }
       }
@@ -196,8 +198,10 @@ class ExecutionSupportFeature extends UserManagementFeature {
       runPlainCommand(cache.getParent(), "git", "clone", "--depth", "1", repo, cache.toString());
     } else {
       runPlainCommand(cache, "git", "fetch", "origin", "--prune", "--depth", "1");
+      runPlainCommand(cache, "git", "reset", "--hard");
+      runPlainCommand(cache, "git", "clean", "-fd");
       if (!branch.isBlank()) {
-        runPlainCommand(cache, "git", "checkout", "-B", branch, "origin/" + branch);
+        runPlainCommand(cache, "git", "checkout", "-f", "-B", branch, "origin/" + branch);
         runPlainCommand(cache, "git", "reset", "--hard", "origin/" + branch);
       }
     }
