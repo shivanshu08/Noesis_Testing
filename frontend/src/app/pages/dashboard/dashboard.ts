@@ -34,6 +34,7 @@ export class Dashboard implements OnInit, OnDestroy {
   categoryChartData: any;
   historyChartData: any;
   chartOptions: any;
+  trendSummary = { total: 0, passed: 0, failed: 0, activeDays: 0 };
 
   doughnutChartOptions: any;
   
@@ -136,12 +137,16 @@ export class Dashboard implements OnInit, OnDestroy {
         interaction: { mode: 'index', intersect: false },
         plugins: {
             legend: {
+                position: 'top',
+                align: 'end',
                 labels: {
                     color: textColor,
                     usePointStyle: true,
-                    boxWidth: 8,
-                    padding: 20,
-                    font: { weight: '500', family: 'Inter, sans-serif' }
+                    pointStyle: 'rectRounded',
+                    boxWidth: 10,
+                    boxHeight: 10,
+                    padding: 18,
+                    font: { weight: '700', family: 'Inter, sans-serif' }
                 }
             },
             tooltip: tooltipConfig
@@ -150,7 +155,10 @@ export class Dashboard implements OnInit, OnDestroy {
             x: {
                 ticks: {
                     color: textColorSecondary,
-                    font: { weight: '500', family: 'Inter, sans-serif' }
+                    maxRotation: 0,
+                    autoSkip: true,
+                    autoSkipPadding: 18,
+                    font: { weight: '600', family: 'Inter, sans-serif' }
                 },
                 grid: {
                     display: false // Removing vertical grid lines for a cleaner look
@@ -163,14 +171,13 @@ export class Dashboard implements OnInit, OnDestroy {
                 border: { display: false }, // Hide the solid y-axis spine
                 ticks: {
                     color: textColorSecondary,
-                    stepSize: 2,
                     precision: 0,
-                    font: { weight: '500', family: 'Inter, sans-serif' }
+                    font: { weight: '600', family: 'Inter, sans-serif' }
                 },
                 grid: {
-                    color: surfaceBorder,
+                    color: isDark ? 'rgba(148, 163, 184, 0.18)' : 'rgba(148, 163, 184, 0.22)',
                     drawBorder: false,
-                    borderDash: [4, 4] // Professional subtle dashed lines
+                    borderDash: [3, 5]
                 }
             }
         }
@@ -216,54 +223,44 @@ export class Dashboard implements OnInit, OnDestroy {
       });
 
       const labels = Array.from(dateMap.keys());
+      const values = Array.from(dateMap.values());
+      this.trendSummary = values.reduce<{ total: number; passed: number; failed: number; activeDays: number }>((summary, day) => ({
+        passed: summary.passed + day.passed,
+        failed: summary.failed + day.failed,
+        total: summary.total + day.total,
+        activeDays: summary.activeDays + (day.total > 0 ? 1 : 0),
+      }), { total: 0, passed: 0, failed: 0, activeDays: 0 });
 
       this.historyChartData = {
           labels: labels.length ? labels : ['No Data'],
           datasets: [
               {
-                  type: 'line',
-                  label: '  Total Executions',
-                  borderColor: '#6366f1', // Premium Indigo
-                  backgroundColor: 'rgba(99, 102, 241, 0.12)', // Richer subtle glow
-                  borderWidth: 3, // Bolder, more prominent trend line
-                  fill: true,
-                  tension: 0.4,
-                  data: labels.length ? Array.from(dateMap.values()).map(v => v.total) : [0],
-                  pointRadius: 0, // Hide points until hover for an ultra-clean look
-                  pointHoverRadius: 6,
-                  pointBackgroundColor: surfaceCard, // Hollow ring effect on hover
-                  pointHoverBackgroundColor: surfaceCard,
-                  pointBorderColor: '#6366f1',
-                  pointHoverBorderColor: '#6366f1',
-                  pointHoverBorderWidth: 3
-              },
-              {
                   type: 'bar',
-                  label: '  Passed',
-                  backgroundColor: 'rgba(16, 185, 129, 0.9)', // 90% opacity for better pop
+                  label: 'Passed Scripts',
+                  backgroundColor: 'rgba(16, 185, 129, 0.88)',
                   hoverBackgroundColor: '#10b981',
-                  borderColor: 'rgba(16, 185, 129, 1)',
-                  borderWidth: 1,
-                  data: labels.length ? Array.from(dateMap.values()).map(v => v.passed) : [0],
-                  borderRadius: 3, // Smoother modern corners
-                  barPercentage: 0.5, // Increased thickness
-                  categoryPercentage: 0.6,
-                  maxBarThickness: 20, // Perfect medium width on large screens
-                  stack: 'volume' // Stacks underneath the trend line
+                  borderColor: '#059669',
+                  borderWidth: 0,
+                  data: labels.length ? values.map(v => v.passed) : [0],
+                  borderRadius: { topLeft: 8, topRight: 8, bottomLeft: 2, bottomRight: 2 },
+                  borderSkipped: false,
+                  barPercentage: 0.7,
+                  categoryPercentage: 0.64,
+                  maxBarThickness: 16
               },
               {
                   type: 'bar',
-                  label: '  Failed',
-                  backgroundColor: 'rgba(244, 63, 94, 0.9)',
+                  label: 'Failed Scripts',
+                  backgroundColor: 'rgba(244, 63, 94, 0.86)',
                   hoverBackgroundColor: '#f43f5e',
-                  borderColor: 'rgba(244, 63, 94, 1)',
-                  borderWidth: 1,
-                  data: labels.length ? Array.from(dateMap.values()).map(v => v.failed) : [0],
-                  borderRadius: 3,
-                  barPercentage: 0.5, // Increased thickness
-                  categoryPercentage: 0.6,
-                  maxBarThickness: 20,
-                  stack: 'volume' // Stacks underneath the trend line
+                  borderColor: '#e11d48',
+                  borderWidth: 0,
+                  data: labels.length ? values.map(v => v.failed) : [0],
+                  borderRadius: { topLeft: 8, topRight: 8, bottomLeft: 2, bottomRight: 2 },
+                  borderSkipped: false,
+                  barPercentage: 0.7,
+                  categoryPercentage: 0.64,
+                  maxBarThickness: 16
               }
           ]
       };

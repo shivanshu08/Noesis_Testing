@@ -24,6 +24,7 @@ public class NoesisTestingApplication extends ApiRouter {
     initScheduler();
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       shutdownScheduler();
+      executionExecutor.shutdownNow();
       activeProcesses.values().forEach(Process::destroy);
     }));
     server.start();

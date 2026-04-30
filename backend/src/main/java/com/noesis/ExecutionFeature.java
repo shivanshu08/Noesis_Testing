@@ -12,7 +12,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -155,7 +154,7 @@ class ExecutionFeature extends SuiteManagementFeature {
         : "";
     String andOrWhere = runFilter.isBlank() ? " WHERE " : " AND ";
     boolean tester = "tester".equals(auth.role);
-    Object[] historyParams = tester ? new Object[]{auth.userId, auth.userId} : userParam;
+    Object[] historyParams = tester ? new Object[]{auth.userId} : userParam;
 
     Number totalScripts = tester
         ? (Number) db.one("""
@@ -170,13 +169,17 @@ class ExecutionFeature extends SuiteManagementFeature {
     Number running = (Number) db.one("SELECT COUNT(*)::int AS count FROM execution_runs er" + runFilter + andOrWhere + "er.status = 'running'", userParam).get("count");
     Object passRate = db.one("SELECT COALESCE(ROUND(AVG(CASE WHEN er.status = 'passed' THEN 100 ELSE 0 END), 1), 0) AS rate FROM execution_runs er" + runFilter + andOrWhere + "er.status IN ('passed','failed') AND er.created_at >= NOW() - INTERVAL '30 days'", userParam).get("rate");
     List<Map<String, Object>> recentHistory = db.rows("""
-        SELECT er.created_at::date AS date, 'passed' AS status, COALESCE(SUM(er.passed_count), 0)::int AS count
+        SELECT er.created_at::date AS date,
+          CASE WHEN eres.status = 'passed'::result_status THEN 'passed' ELSE 'failed' END AS status,
+          COUNT(*)::int AS count
         FROM execution_runs er
-        """ + runFilter + andOrWhere + "er.created_at >= NOW() - INTERVAL '30 days' GROUP BY er.created_at::date " + """
-        UNION ALL
-        SELECT er.created_at::date AS date, 'failed' AS status, COALESCE(SUM(er.failed_count + er.error_count), 0)::int AS count
-        FROM execution_runs er
-        """ + runFilter + andOrWhere + "er.created_at >= NOW() - INTERVAL '30 days' GROUP BY er.created_at::date ORDER BY date", historyParams);
+        JOIN execution_results eres ON eres.run_id = er.id
+        WHERE er.created_at >= NOW() - INTERVAL '30 days'
+          AND eres.status IN ('passed'::result_status, 'failed'::result_status, 'error'::result_status)
+          """ + (tester ? "AND eres.script_id IN (SELECT script_id FROM script_assignments WHERE user_id = ?) " : "") + """
+        GROUP BY er.created_at::date, CASE WHEN eres.status = 'passed'::result_status THEN 'passed' ELSE 'failed' END
+        ORDER BY date
+        """, historyParams);
     List<Map<String, Object>> categoryStats = db.rows("""
         SELECT sc.name, sc.color, COUNT(s.id)::int AS count
         FROM script_categories sc
@@ -380,95 +383,8 @@ class ExecutionFeature extends SuiteManagementFeature {
               "Execution artifact mail failed: " + e.getMessage(), json(Map.of("runId", runId, "artifactCount", artifacts.size(), "recipientCount", recipients.size())));
         } catch (Exception ignored) {}
       }
-    });
+    }, executionExecutor);
     send(ex, 202, Map.of("message", "Selected artifacts are being mailed in the background.", "artifactCount", artifacts.size(), "recipientCount", recipients.size()));
-  }
-
-  protected void globalLogs(HttpExchange ex, Map<String, String> q) throws IOException, SQLException {
-    int limit = Math.max(1, Math.min(500, intValue(q.get("limit"), 200)));
-    int offset = Math.max(0, intValue(q.get("offset"), 0));
-    List<Object> params = new ArrayList<>();
-    StringBuilder where = new StringBuilder("WHERE 1=1");
-    if (q.containsKey("severity") && !q.get("severity").isBlank()) {
-      where.append(" AND LOWER(severity) = LOWER(?)");
-      params.add(q.get("severity"));
-    }
-    if (q.containsKey("runId") && !q.get("runId").isBlank()) {
-      where.append(" AND run_id = ?");
-      params.add(intValue(q.get("runId"), 0));
-    }
-    if (q.containsKey("module") && !q.get("module").isBlank()) {
-      where.append(" AND LOWER(module) = LOWER(?)");
-      params.add(q.get("module"));
-    }
-    if (q.containsKey("action") && !q.get("action").isBlank()) {
-      where.append(" AND action = ?");
-      params.add(q.get("action"));
-    }
-    if (q.containsKey("status") && !q.get("status").isBlank()) {
-      where.append(" AND LOWER(status) = LOWER(?)");
-      params.add(q.get("status"));
-    }
-    if (q.containsKey("q") && !q.get("q").isBlank()) {
-      where.append(" AND (message ILIKE ? OR COALESCE(detail,'') ILIKE ? OR COALESCE(action,'') ILIKE ? OR COALESCE(module,'') ILIKE ?)");
-      String term = "%" + q.get("q").trim() + "%";
-      params.add(term); params.add(term); params.add(term); params.add(term);
-    }
-    if (q.containsKey("from") && !q.get("from").isBlank()) {
-      where.append(" AND timestamp >= ?::timestamp");
-      params.add(q.get("from"));
-    } else if (q.containsKey("days") && !q.get("days").isBlank()) {
-      where.append(" AND timestamp >= NOW() - (? || ' days')::interval");
-      params.add(Math.max(1, Math.min(365, intValue(q.get("days"), 30))));
-    }
-    if (q.containsKey("to") && !q.get("to").isBlank()) {
-      where.append(" AND timestamp <= ?::timestamp");
-      params.add(q.get("to"));
-    }
-    String sortBy = Set.of("timestamp", "severity", "module", "action", "status").contains(q.get("sortBy")) ? q.get("sortBy") : "timestamp";
-    String sortOrder = "asc".equalsIgnoreCase(q.get("sortOrder")) ? "ASC" : "DESC";
-    String base = """
-        WITH unified_logs AS (
-          SELECT id, NULL::int AS run_id, NULL::int AS result_id, UPPER(COALESCE(severity, 'INFO')) AS severity,
-            message, message AS summary, message AS detail, COALESCE(module, 'application') AS module,
-            action, status, username, timestamp, metadata, 'application' AS source
-          FROM app_logs
-          UNION ALL
-          SELECT id, run_id, result_id, UPPER(COALESCE(log_level::text, 'INFO')) AS severity,
-            message, message AS summary, COALESCE(detailed_description, message) AS detail,
-            COALESCE(source_component, 'execution-engine') AS module,
-            NULL::text AS action, NULL::text AS status, NULL::text AS username, timestamp,
-            jsonb_build_object('sourceComponent', source_component, 'context', log_context) AS metadata, 'execution' AS source
-          FROM execution_logs
-        )
-        """;
-    Number total = (Number) db.one(base + "SELECT COUNT(*)::int AS count FROM unified_logs " + where, params.toArray()).get("count");
-    Number errorCount = (Number) db.one(base + "SELECT COUNT(*)::int AS count FROM unified_logs " + where + " AND LOWER(severity) = 'error'", params.toArray()).get("count");
-    Number warnCount = (Number) db.one(base + "SELECT COUNT(*)::int AS count FROM unified_logs " + where + " AND LOWER(severity) = 'warn'", params.toArray()).get("count");
-    Number infoCount = (Number) db.one(base + "SELECT COUNT(*)::int AS count FROM unified_logs " + where + " AND LOWER(severity) = 'info'", params.toArray()).get("count");
-    Number debugCount = (Number) db.one(base + "SELECT COUNT(*)::int AS count FROM unified_logs " + where + " AND LOWER(severity) = 'debug'", params.toArray()).get("count");
-    Number uniqueRunCount = (Number) db.one(base + "SELECT COUNT(DISTINCT run_id)::int AS count FROM unified_logs " + where + " AND run_id IS NOT NULL", params.toArray()).get("count");
-    List<Object> dataParams = new ArrayList<>(params);
-    dataParams.add(limit); dataParams.add(offset);
-    List<Map<String, Object>> data = db.rows(base + """
-        SELECT id, run_id, result_id, LOWER(severity) AS severity, message, summary, detail, module, action, status, username, timestamp, timestamp AS time, metadata, source
-        FROM unified_logs
-        """ + where + " ORDER BY " + sortBy + " " + sortOrder + ", id " + sortOrder + " LIMIT ? OFFSET ?", dataParams.toArray());
-    send(ex, 200, Map.of(
-        "data", data,
-        "summary", Map.of("total", total, "errorCount", errorCount, "warnCount", warnCount, "infoCount", infoCount, "debugCount", debugCount, "uniqueRunCount", uniqueRunCount),
-        "meta", Map.of("total", total, "limit", limit, "offset", offset)));
-  }
-
-  protected void deleteGlobalLog(HttpExchange ex, int id) throws IOException, SQLException {
-    db.update("DELETE FROM app_logs WHERE id = ?", id);
-    send(ex, 200, Map.of("success", true));
-  }
-
-  protected void deleteGlobalLogs(HttpExchange ex) throws IOException, SQLException {
-    List<Integer> ids = intList(body(ex).get("ids"));
-    if (!ids.isEmpty()) db.update("DELETE FROM app_logs WHERE id IN (" + placeholders(ids.size()) + ")", ids.toArray());
-    send(ex, 200, Map.of("success", true));
   }
 
   protected void createSchedule(HttpExchange ex, Auth auth) throws IOException, SQLException {

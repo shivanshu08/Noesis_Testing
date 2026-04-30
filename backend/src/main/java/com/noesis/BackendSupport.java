@@ -32,6 +32,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.crypto.Mac;
@@ -47,6 +49,7 @@ class BackendSupport {
   protected final Db db;
   protected final Jwt jwt;
   protected final Map<Integer, Process> activeProcesses = new ConcurrentHashMap<>();
+  protected final ExecutorService executionExecutor = Executors.newCachedThreadPool();
 
   BackendSupport() {
     this.env = new Env();

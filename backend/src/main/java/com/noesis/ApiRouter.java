@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-class ApiRouter extends AuditLogFeature {
+class ApiRouter extends NotificationFeature {
   protected void handle(HttpExchange ex) throws IOException {
     try {
       addCors(ex);
@@ -78,9 +78,6 @@ class ApiRouter extends AuditLogFeature {
       else if (match(path, "/api/execution/runs/(\\d+)/artifacts") && method.equals("GET")) artifacts(ex, lastId(path));
       else if (match(path, "/api/execution/artifacts/(\\d+)/download") && method.equals("GET")) artifactDownload(ex, lastId(path));
       else if (match(path, "/api/execution/runs/(\\d+)/artifacts/mail") && method.equals("POST")) mailArtifacts(ex);
-      else if (path.equals("/api/execution/global-logs") && method.equals("GET")) globalLogs(ex, query);
-      else if (match(path, "/api/execution/global-logs/(\\d+)") && method.equals("DELETE")) deleteGlobalLog(ex, lastId(path));
-      else if (path.equals("/api/execution/global-logs/delete-multiple") && method.equals("POST")) deleteGlobalLogs(ex);
       else if (path.equals("/api/execution/schedule") && method.equals("POST")) createSchedule(ex, auth);
       else if (path.equals("/api/execution/schedules") && method.equals("GET")) schedules(ex);
       else if (match(path, "/api/execution/schedules/(\\d+)") && method.equals("PUT")) updateSchedule(ex, auth, lastId(path));
@@ -93,10 +90,6 @@ class ApiRouter extends AuditLogFeature {
       else if (match(path, "/api/notifications/(\\d+)/read") && method.equals("PUT")) readNotification(ex, lastId(path));
       else if (match(path, "/api/notifications/(\\d+)") && method.equals("DELETE")) deleteNotification(ex, lastId(path));
       else if (path.equals("/api/notifications") && method.equals("DELETE")) clearNotifications(ex, auth);
-      else if (path.equals("/api/logs") && method.equals("GET")) logs(ex, auth);
-      else if (path.equals("/api/logs") && method.equals("POST")) createLog(ex, auth);
-      else if (path.equals("/api/logs/modules") && method.equals("GET")) logModules(ex, query);
-      else if (path.equals("/api/logs/actions") && method.equals("GET")) logActions(ex, query);
       else send(ex, 404, error("API endpoint not found."));
     } catch (ApiException api) {
       send(ex, api.status, error(api.getMessage()));

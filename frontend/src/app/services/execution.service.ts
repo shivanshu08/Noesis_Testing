@@ -7,7 +7,6 @@ import { ExecutionRun, ExecutionLog, DashboardStats, ScheduledRun, ExecutionArti
 @Injectable({ providedIn: 'root' })
 export class ExecutionService {
   private readonly apiUrl = `${environment.apiUrl}/execution`;
-  private readonly logsApiUrl = `${environment.apiUrl}/logs`;
   private runPollHandle: number | null = null;
   private globalPollHandle: number | null = null;
   private lastRunLogId = 0;
@@ -134,101 +133,6 @@ export class ExecutionService {
       },
       error: (err) => console.error('Artifact download failed', err),
     });
-  }
-
-  getGlobalLogs(filters?: {
-    days?: number;
-    severity?: string;
-    runId?: number;
-    q?: string;
-    module?: string;
-    action?: string;
-    status?: string;
-    from?: string;
-    to?: string;
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
-    limit?: number;
-    offset?: number;
-  }): Observable<{
-    data: any[];
-    summary?: {
-      total: number;
-      errorCount: number;
-      warnCount: number;
-      infoCount: number;
-      debugCount: number;
-      uniqueRunCount: number;
-    };
-    meta?: { total: number; limit: number; offset: number };
-  }> {
-    let params = new HttpParams();
-    if (filters?.days !== undefined) params = params.set('days', filters.days.toString());
-    if (filters?.severity) params = params.set('severity', filters.severity);
-    if (filters?.runId !== undefined) params = params.set('runId', filters.runId.toString());
-    if (filters?.q) params = params.set('q', filters.q);
-    if (filters?.module) params = params.set('module', filters.module);
-    if (filters?.action) params = params.set('action', filters.action);
-    if (filters?.status) params = params.set('status', filters.status);
-    if (filters?.from) params = params.set('from', filters.from);
-    if (filters?.to) params = params.set('to', filters.to);
-    if (filters?.sortBy) params = params.set('sortBy', filters.sortBy);
-    if (filters?.sortOrder) params = params.set('sortOrder', filters.sortOrder);
-    if (filters?.limit !== undefined) params = params.set('limit', filters.limit.toString());
-    if (filters?.offset !== undefined) params = params.set('offset', filters.offset.toString());
-
-    return this.http.get<{
-      data: any[];
-      summary?: {
-        total: number;
-        errorCount: number;
-        warnCount: number;
-        infoCount: number;
-        debugCount: number;
-        uniqueRunCount: number;
-      };
-      meta?: { total: number; limit: number; offset: number };
-    }>(`${this.apiUrl}/global-logs`, { params });
-  }
-
-  getLogModules(filters?: {
-    from?: string;
-    to?: string;
-    q?: string;
-  }): Observable<Array<{ value: string; label: string; count: number }>> {
-    let params = new HttpParams();
-    if (filters?.from) params = params.set('from', filters.from);
-    if (filters?.to) params = params.set('to', filters.to);
-    if (filters?.q) params = params.set('q', filters.q);
-    return this.http.get<Array<{ value: string; label: string; count: number }>>(
-      `${this.logsApiUrl}/modules`,
-      { params }
-    );
-  }
-
-  getLogActions(filters?: {
-    from?: string;
-    to?: string;
-    q?: string;
-    module?: string;
-  }): Observable<Array<{ value: string; label: string; count: number }>> {
-    let params = new HttpParams();
-    if (filters?.from) params = params.set('from', filters.from);
-    if (filters?.to) params = params.set('to', filters.to);
-    if (filters?.q) params = params.set('q', filters.q);
-    if (filters?.module) params = params.set('module', filters.module);
-    return this.http.get<Array<{ value: string; label: string; count: number }>>(
-      `${this.logsApiUrl}/actions`,
-      { params }
-    );
-  }
-
-  deleteGlobalLog(id: number | string): Observable<{ success: boolean }> {
-    return this.http.delete<{ success: boolean }>(`${this.apiUrl}/global-logs/${id}`);
-  }
-
-  deleteGlobalLogs(ids: Array<number | string>): Observable<{ success: boolean }> {
-    return this.http.post<{ success: boolean }>(`${this.apiUrl}/global-logs/delete-multiple`, { ids });
   }
 
   // ---- Schedule Methods ----

@@ -115,13 +115,34 @@
   </div>
 
   <!-- Execution Trend -->
-  <div style="margin-bottom: 24px;">
-    <p-card styleClass="chart-card">
-      <h3 class="mb-4" style="font-size: 1.1rem; font-weight: 600;">Execution Trend (Last 30 Days)</h3>
+  <div class="trend-section">
+    <p-card styleClass="chart-card execution-trend-card">
+      <div class="trend-card-header">
+        <div>
+          <h3>Script Execution Volume</h3>
+          <p>Passed and failed script executions across the last 30 days</p>
+        </div>
+        <div class="trend-summary">
+          <span class="trend-chip total">
+            <i class="pi pi-chart-bar"></i>
+            {{ trendSummary.total }} Total
+          </span>
+          <span class="trend-chip passed">
+            <i class="pi pi-check-circle"></i>
+            {{ trendSummary.passed }} Passed
+          </span>
+          <span class="trend-chip failed">
+            <i class="pi pi-times-circle"></i>
+            {{ trendSummary.failed }} Failed
+          </span>
+        </div>
+      </div>
       @if (historyChartData) {
-        <p-chart type="line" [data]="historyChartData" [options]="chartOptions" height="300px" />
+        <div class="trend-chart-shell">
+          <p-chart type="bar" [data]="historyChartData" [options]="chartOptions" height="320px" />
+        </div>
       } @else {
-        <div class="empty-state" style="height: 260px; display: flex; align-items: center; justify-content: center; color: var(--text-color-secondary);">Insufficient data to render chart</div>
+        <div class="empty-state trend-empty">Insufficient data to render chart</div>
       }
     </p-card>
   </div>

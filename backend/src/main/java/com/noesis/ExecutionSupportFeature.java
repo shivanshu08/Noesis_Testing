@@ -14,6 +14,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -39,6 +40,8 @@ import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
 
 class ExecutionSupportFeature extends UserManagementFeature {
+  private static final Object AUTOMATION_WORKSPACE_LOCK = new Object();
+
   protected void startExecution(int runId, String runName, String testngXml, List<Map<String, Object>> scripts) {
     CompletableFuture.runAsync(() -> {
       StringBuilder out = new StringBuilder();
@@ -115,7 +118,7 @@ class ExecutionSupportFeature extends UserManagementFeature {
           sendExecutionCompletionMail(runId, runName, "error", new ResultSummary(0, scripts.size(), 0, 0), e.getMessage());
         } catch (Exception ignored) {}
       }
-    });
+    }, executionExecutor);
   }
 
   protected void logExecution(int runId, String severity, String detail) throws SQLException {
@@ -137,28 +140,47 @@ class ExecutionSupportFeature extends UserManagementFeature {
 
   protected Path resolveExecutionWorkspace(int runId) throws IOException, InterruptedException, SQLException {
     if (!env.value("ST_AUTOMATION_SOURCE", "git").equalsIgnoreCase("git")) {
-      return Path.of(env.value("ST_AUTOMATION_PATH", "automation-scripts"));
+      Path source = Path.of(env.value("ST_AUTOMATION_PATH", "automation-scripts"));
+      Path workspace = executionWorkspaceRoot(source).resolve("run-" + runId);
+      recreateDirectory(workspace);
+      copyDirectory(source, workspace);
+      return workspace;
     }
     Path cache = Path.of(env.value("ST_AUTOMATION_GIT_CACHE_PATH", env.value("ST_AUTOMATION_PATH", "automation-scripts")));
     String repo = env.value("ST_AUTOMATION_GIT_REPO_URL", "").trim();
     String branch = env.value("ST_AUTOMATION_GIT_BRANCH", "main").trim();
-    if (repo.isBlank()) {
-      logExecution(runId, "WARN", "ST_AUTOMATION_GIT_REPO_URL is not configured. Using existing git cache: " + cache);
-      return cache;
-    }
-    Files.createDirectories(cache.getParent());
-    if (!Files.exists(cache.resolve(".git"))) {
-      logExecution(runId, "INFO", "Cloning automation repository: " + repo);
-      runCommand(runId, cache.getParent(), "git", "clone", "--depth", "1", repo, cache.toString());
-    } else {
-      logExecution(runId, "INFO", "Fetching latest automation repository changes.");
-      runCommand(runId, cache, "git", "fetch", "origin", "--prune", "--depth", "1");
-      if (!branch.isBlank()) {
-        runCommand(runId, cache, "git", "checkout", "-B", branch, "origin/" + branch);
-        runCommand(runId, cache, "git", "reset", "--hard", "origin/" + branch);
+    Path workspace = executionWorkspaceRoot(cache).resolve("run-" + runId);
+    synchronized (AUTOMATION_WORKSPACE_LOCK) {
+      if (repo.isBlank()) {
+        logExecution(runId, "WARN", "ST_AUTOMATION_GIT_REPO_URL is not configured. Isolating execution from existing git cache: " + cache);
+        recreateDirectory(workspace);
+        copyDirectory(cache, workspace);
+        return workspace;
+      }
+      Files.createDirectories(parentOrCurrent(cache));
+      if (!Files.exists(cache.resolve(".git"))) {
+        logExecution(runId, "INFO", "Cloning automation repository: " + repo);
+        runCommand(runId, parentOrCurrent(cache), "git", "clone", "--depth", "1", repo, cache.toString());
+      } else {
+        logExecution(runId, "INFO", "Fetching latest automation repository changes.");
+        runCommand(runId, cache, "git", "fetch", "origin", "--prune", "--depth", "1");
+        if (!branch.isBlank()) {
+          runCommand(runId, cache, "git", "checkout", "-B", branch, "origin/" + branch);
+          runCommand(runId, cache, "git", "reset", "--hard", "origin/" + branch);
+        }
+      }
+      deleteDirectory(workspace);
+      try {
+        String ref = branch.isBlank() ? "HEAD" : "origin/" + branch;
+        runCommand(runId, cache, "git", "worktree", "prune");
+        runCommand(runId, cache, "git", "worktree", "add", "--detach", "--force", workspace.toString(), ref);
+      } catch (Exception worktreeError) {
+        logExecution(runId, "WARN", "Git worktree isolation failed. Falling back to directory copy: " + worktreeError.getMessage());
+        recreateDirectory(workspace);
+        copyDirectory(cache, workspace);
       }
     }
-    return cache;
+    return workspace;
   }
 
   protected Path resolveSyncWorkspace() throws IOException, InterruptedException {
@@ -211,6 +233,65 @@ class ExecutionSupportFeature extends UserManagementFeature {
     }
     int exit = p.waitFor();
     if (exit != 0) throw new IOException("Command failed (" + String.join(" ", command) + "): " + output);
+  }
+
+  protected Path executionWorkspaceRoot(Path source) throws IOException {
+    String configured = env.value("ST_AUTOMATION_RUN_WORKSPACE_ROOT", "").trim();
+    if (!configured.isBlank()) {
+      Path root = Path.of(configured);
+      Files.createDirectories(root);
+      return root;
+    }
+    Path parent = parentOrCurrent(source);
+    Path root = parent.resolve("noesis-execution-workspaces");
+    Files.createDirectories(root);
+    return root;
+  }
+
+  protected Path parentOrCurrent(Path path) {
+    Path absolute = path.toAbsolutePath().normalize();
+    Path parent = absolute.getParent();
+    return parent == null ? Path.of(".").toAbsolutePath().normalize() : parent;
+  }
+
+  protected void recreateDirectory(Path directory) throws IOException {
+    deleteDirectory(directory);
+    Files.createDirectories(directory);
+  }
+
+  protected void deleteDirectory(Path directory) throws IOException {
+    if (!Files.exists(directory)) return;
+    try (var paths = Files.walk(directory)) {
+      for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+        Files.deleteIfExists(path);
+      }
+    }
+  }
+
+  protected void copyDirectory(Path source, Path target) throws IOException {
+    Path normalizedSource = source.toAbsolutePath().normalize();
+    Set<String> skipDirs = Set.of(".git", "target", "node_modules", "bin", "obj", "dist", "build", ".cache");
+    try (var paths = Files.walk(normalizedSource)) {
+      for (Path current : paths.toList()) {
+        if (current.equals(normalizedSource)) continue;
+        Path relative = normalizedSource.relativize(current);
+        boolean skip = false;
+        for (Path part : relative) {
+          if (skipDirs.contains(part.toString().toLowerCase(Locale.ROOT))) {
+            skip = true;
+            break;
+          }
+        }
+        if (skip) continue;
+        Path destination = target.resolve(relative.toString());
+        if (Files.isDirectory(current)) {
+          Files.createDirectories(destination);
+        } else {
+          Files.createDirectories(destination.getParent());
+          Files.copy(current, destination, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
+        }
+      }
+    }
   }
 
   protected List<Path> javaFiles(Path root) throws IOException {

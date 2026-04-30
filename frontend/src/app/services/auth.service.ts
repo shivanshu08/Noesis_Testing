@@ -26,7 +26,6 @@ export class AuthService {
     return role === 'admin' || role === 'tester';
   });
   readonly canRun = computed(() => this.canEdit());
-  readonly canViewSystemLogs = computed(() => this.canEdit());
   readonly assignedScriptCount = computed(() => this.currentUser()?.assignedScriptCount ?? null);
 
   constructor(private http: HttpClient, private router: Router) {

@@ -34,7 +34,6 @@ import { environment } from '../../../environments/environment';
 export class MainLayout implements OnInit, OnDestroy {
   sidebarCollapsed = signal(false);
   showThemeMenu = false;
-  currentYear = new Date().getFullYear();
   showNotifications = false;
   showCommandPalette = false;
   searchQuery = '';
@@ -55,10 +54,6 @@ export class MainLayout implements OnInit, OnDestroy {
 
     if (this.auth.isAdmin()) {
       items.push({ label: 'User Management', icon: 'pi pi-users', route: '/users' });
-    }
-
-    if (this.auth.canViewSystemLogs()) {
-      items.push({ label: 'Logs', icon: 'pi pi-list', route: '/logs' });
     }
 
     return items;

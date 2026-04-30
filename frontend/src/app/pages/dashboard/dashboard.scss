@@ -192,6 +192,95 @@
 }
 
 // Custom Charts Styling
+.trend-section {
+  margin-bottom: 24px;
+}
+
+.execution-trend-card {
+  overflow: hidden;
+}
+
+.trend-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
+
+  h3 {
+    margin: 0;
+    color: var(--noesis-text);
+    font-size: 1.08rem;
+    font-weight: 800;
+    letter-spacing: 0;
+  }
+
+  p {
+    margin: 6px 0 0;
+    color: var(--noesis-text-secondary);
+    font-size: 0.88rem;
+    font-weight: 500;
+  }
+}
+
+.trend-summary {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.trend-chip {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--surface-border);
+  background: var(--surface-ground);
+  color: var(--text-color-secondary);
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+
+  i {
+    font-size: 0.82rem;
+  }
+
+  &.total {
+    color: #2563eb;
+    background: rgba(37, 99, 235, 0.08);
+    border-color: rgba(37, 99, 235, 0.18);
+  }
+
+  &.passed {
+    color: #059669;
+    background: rgba(16, 185, 129, 0.1);
+    border-color: rgba(16, 185, 129, 0.22);
+  }
+
+  &.failed {
+    color: #e11d48;
+    background: rgba(244, 63, 94, 0.1);
+    border-color: rgba(244, 63, 94, 0.22);
+  }
+}
+
+.trend-chart-shell {
+  min-height: 320px;
+  padding-top: 4px;
+}
+
+.trend-empty {
+  height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-color-secondary);
+}
+
 .report-sources-card {
   height: 100%;
   
@@ -278,4 +367,11 @@
 
 @media (max-width: 640px) {
   .stats-grid { grid-template-columns: 1fr; }
+  .trend-card-header {
+    flex-direction: column;
+  }
+
+  .trend-summary {
+    justify-content: flex-start;
+  }
 }
