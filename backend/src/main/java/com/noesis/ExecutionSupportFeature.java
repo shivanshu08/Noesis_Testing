@@ -69,11 +69,13 @@ class ExecutionSupportFeature extends UserManagementFeature {
         db.update("UPDATE execution_results SET status = 'running'::result_status, started_at = NOW() WHERE run_id = ?", runId);
         List<String> command = mavenCommand();
         command.add("test");
+        applyBrowserVisibilityDefaults(command);
         command.add("-Dsurefire.suiteXmlFiles=" + suiteFile.toAbsolutePath());
         logExecution(runId, "INFO", "Command: " + String.join(" ", command));
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(workspace.toFile());
         if (!env.value("MAVEN_HOME", "").isBlank()) pb.environment().put("MAVEN_HOME", env.value("MAVEN_HOME", ""));
+        applyBrowserVisibilityEnvironment(pb);
         pb.redirectErrorStream(true);
         Process p = pb.start();
         activeProcesses.put(runId, p);
@@ -101,8 +103,13 @@ class ExecutionSupportFeature extends UserManagementFeature {
         db.update("UPDATE execution_results SET status = ?::result_status, completed_at = NOW(), log_output = ? WHERE run_id = ?", status, out.toString(), runId);
         logExecution(runId, exit == 0 ? "INFO" : "ERROR", "Execution completed with status: " + status + ".");
         try {
-          createExecutionOutputArtifacts(runId, runName, status, summary, out.toString());
           int artifactCount = collectExecutionArtifacts(runId, workspace, scripts);
+          if (artifactCount == 0) {
+            createExecutionOutputArtifacts(runId, runName, status, summary, out.toString());
+            artifactCount = countHtmlPdfArtifacts(runId);
+          } else {
+            publishRunArtifactsToGit(runId);
+          }
           db.update("UPDATE execution_runs SET run_metadata = COALESCE(run_metadata, '{}'::jsonb) || ?::jsonb WHERE id = ?",
               json(Map.of("artifactCount", artifactCount)), runId);
         } catch (Exception artifactError) {
@@ -132,6 +139,22 @@ class ExecutionSupportFeature extends UserManagementFeature {
       if (Files.exists(mvn)) return new ArrayList<>(List.of(mvn.toString()));
     }
     return new ArrayList<>(List.of(isWindows() ? "mvn.cmd" : "mvn"));
+  }
+
+  protected void applyBrowserVisibilityDefaults(List<String> command) {
+    boolean visible = Boolean.parseBoolean(env.value("ST_AUTOMATION_BROWSER_VISIBLE", "true"));
+    String headless = visible ? "false" : "true";
+    command.add("-Dheadless=" + headless);
+    command.add("-DHEADLESS=" + headless);
+    command.add("-Dnoesis.browser.visible=" + visible);
+  }
+
+  protected void applyBrowserVisibilityEnvironment(ProcessBuilder pb) {
+    boolean visible = Boolean.parseBoolean(env.value("ST_AUTOMATION_BROWSER_VISIBLE", "true"));
+    String headless = visible ? "false" : "true";
+    pb.environment().putIfAbsent("HEADLESS", headless);
+    pb.environment().putIfAbsent("headless", headless);
+    pb.environment().putIfAbsent("NOESIS_BROWSER_VISIBLE", String.valueOf(visible));
   }
 
   protected boolean isWindows() {
@@ -344,7 +367,8 @@ class ExecutionSupportFeature extends UserManagementFeature {
         try { logExecution(runId, "WARN", "Could not scan report artifacts: " + e.getMessage()); } catch (Exception ignored) {}
       }
     }
-    for (Path candidate : candidates) {
+    List<Path> selected = primaryHtmlPdfPair(candidates, scripts);
+    for (Path candidate : selected) {
       try {
         if (Files.isRegularFile(candidate)) saveArtifact(runId, scriptIdForArtifact(candidate, scripts), artifactType(candidate), candidate);
       } catch (Exception e) {
@@ -355,6 +379,67 @@ class ExecutionSupportFeature extends UserManagementFeature {
       int after = intValue(db.one("SELECT COUNT(*)::int AS count FROM execution_artifacts WHERE run_id = ?", runId).get("count"), before);
       return Math.max(0, after - before);
     } catch (Exception ignored) { return 0; }
+  }
+
+  protected List<Path> primaryHtmlPdfPair(List<Path> candidates, List<Map<String, Object>> scripts) {
+    List<Path> html = candidates.stream()
+        .filter(path -> artifactType(path).equals("html"))
+        .filter(this::isPrimaryReportCandidate)
+        .sorted((a, b) -> Integer.compare(reportCandidateScore(b, scripts), reportCandidateScore(a, scripts)))
+        .toList();
+    List<Path> pdf = candidates.stream()
+        .filter(path -> artifactType(path).equals("pdf"))
+        .filter(this::isPrimaryReportCandidate)
+        .sorted((a, b) -> Integer.compare(reportCandidateScore(b, scripts), reportCandidateScore(a, scripts)))
+        .toList();
+    for (Path candidateHtml : html) {
+      String base = reportBaseName(candidateHtml.getFileName().toString());
+      Path matchingPdf = pdf.stream()
+          .filter(path -> reportBaseName(path.getFileName().toString()).equalsIgnoreCase(base))
+          .findFirst()
+          .orElse(null);
+      if (matchingPdf != null) return List.of(candidateHtml, matchingPdf);
+    }
+    List<Path> selected = new ArrayList<>();
+    if (!html.isEmpty()) selected.add(html.get(0));
+    if (!pdf.isEmpty()) selected.add(pdf.get(0));
+    return selected;
+  }
+
+  protected boolean isPrimaryReportCandidate(Path path) {
+    String fileName = path.getFileName().toString().toLowerCase(Locale.ROOT);
+    if (fileName.equals("execution-output.html") || fileName.equals("execution-output.pdf")) return false;
+    if (fileName.equals("index.html") || fileName.equals("emailable-report.html")) return false;
+    if (fileName.startsWith("testng-") || fileName.startsWith("surefire")) return false;
+    return !fileName.startsWith("report-convert.");
+  }
+
+  protected String reportBaseName(String fileName) {
+    String name = Path.of(fileName).getFileName().toString();
+    int dot = name.lastIndexOf('.');
+    return dot > 0 ? name.substring(0, dot) : name;
+  }
+
+  protected int reportCandidateScore(Path path, List<Map<String, Object>> scripts) {
+    String fileName = path.getFileName().toString().toLowerCase(Locale.ROOT);
+    int score = 0;
+    for (Map<String, Object> script : scripts) {
+      String scriptName = str(script.get("name")).toLowerCase(Locale.ROOT);
+      String className = str(script.get("className")).toLowerCase(Locale.ROOT);
+      String simpleClass = className.contains(".") ? className.substring(className.lastIndexOf('.') + 1) : className;
+      if (!scriptName.isBlank() && fileName.contains(scriptName)) score += 1000;
+      if (!simpleClass.isBlank() && fileName.contains(simpleClass)) score += 500;
+    }
+    try { score += Math.min(250, (int) (Files.size(path) / 1024)); } catch (Exception ignored) {}
+    return score;
+  }
+
+  protected int countHtmlPdfArtifacts(int runId) {
+    try {
+      return intValue(db.one("SELECT COUNT(*)::int AS count FROM execution_artifacts WHERE run_id = ? AND artifact_type IN ('html','pdf')", runId).get("count"), 0);
+    } catch (Exception ignored) {
+      return 0;
+    }
   }
 
   protected boolean isReportArtifact(Path path) {
@@ -384,6 +469,43 @@ class ExecutionSupportFeature extends UserManagementFeature {
         INSERT INTO execution_artifacts (run_id, script_id, artifact_type, file_name, stored_path, file_size_bytes, mime_type)
         VALUES (?, ?, ?, ?, ?, ?, ?)
         """, runId, scriptId, type, fileName, stored.toString(), Files.size(stored), mimeType(stored));
+  }
+
+  protected void publishRunArtifactsToGit(int runId) {
+    if (!Boolean.parseBoolean(env.value("ST_AUTOMATION_REPORTS_GIT_PUBLISH", "true"))) return;
+    Path runDir = reportsDirectory(runId).toAbsolutePath().normalize();
+    Path gitRoot = findGitRoot(runDir);
+    if (gitRoot == null) return;
+    try {
+      Path relative = gitRoot.relativize(runDir);
+      runCommand(runId, gitRoot, "git", "add", "--", relative.toString());
+      if (gitHasStagedChanges(gitRoot)) {
+        runCommand(runId, gitRoot, "git", "commit", "-m", "Add Noesis reports for run " + runId);
+        if (Boolean.parseBoolean(env.value("ST_AUTOMATION_REPORTS_GIT_PUSH", "true"))) {
+          runCommand(runId, gitRoot, "git", "push");
+        }
+      }
+    } catch (Exception e) {
+      try { logExecution(runId, "WARN", "Report artifacts were saved locally but could not be published to git: " + e.getMessage()); } catch (Exception ignored) {}
+    }
+  }
+
+  protected Path findGitRoot(Path start) {
+    Path current = start;
+    while (current != null) {
+      if (Files.exists(current.resolve(".git"))) return current;
+      current = current.getParent();
+    }
+    return null;
+  }
+
+  protected boolean gitHasStagedChanges(Path gitRoot) throws IOException, InterruptedException {
+    ProcessBuilder pb = new ProcessBuilder("git", "diff", "--cached", "--quiet");
+    pb.directory(gitRoot.toFile());
+    pb.redirectErrorStream(true);
+    Process p = pb.start();
+    int exit = p.waitFor();
+    return exit == 1;
   }
 
   protected Path reportsDirectory(int runId) {
