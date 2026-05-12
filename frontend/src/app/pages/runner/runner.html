@@ -5,46 +5,113 @@
   </div>
 }
 <div class="runner-page">
-  <!-- Page Header -->
-  <div class="page-header">
-    <div>
-      <h1>Script Execution Console</h1>
-      <p class="subtitle">Select and execute your ST automation scripts</p>
+  <div class="runner-shell">
+    <div class="page-header runner-command-header">
+      <div class="page-title-block">
+        <span class="page-kicker">Automation Runner</span>
+        <h1>Script Execution Console</h1>
+        <p class="subtitle">Select scripts, run TestNG, and control active Surefire executions.</p>
+      </div>
+      <div class="header-actions">
+        @if (!running() && runStatus() !== 'paused') {
+          <p-button
+            label="Scheduled Runs"
+            icon="pi pi-calendar-clock"
+            severity="secondary"
+            [outlined]="true"
+            styleClass="command-btn"
+            (onClick)="toggleSchedulesPanel()"
+            id="btn-view-schedules"
+          />
+          <p-button
+            label="Schedule"
+            icon="pi pi-calendar-plus"
+            severity="secondary"
+            [outlined]="true"
+            styleClass="command-btn"
+            [disabled]="selectedCount === 0"
+            (onClick)="openScheduleDialog()"
+            id="btn-schedule-run"
+          />
+          <p-button
+            label="Run Selected"
+            icon="pi pi-bolt"
+            styleClass="command-primary-btn"
+            [disabled]="selectedCount === 0"
+            (onClick)="runSelected()"
+            id="btn-run-selected"
+          />
+        } @else {
+          <div class="execution-toolbar" [class.paused]="runStatus() === 'paused'">
+            <div class="execution-state">
+              <span class="state-dot"></span>
+              <span class="state-label">{{ runStatus() === 'paused' ? 'Paused' : 'Running' }}</span>
+              <span class="state-divider"></span>
+              <span class="elapsed-badge">
+                <i class="pi pi-stopwatch"></i>
+                {{ formatElapsed(elapsedSeconds) }}
+              </span>
+            </div>
+            <div class="execution-actions">
+              @if (runStatus() === 'running') {
+                <p-button
+                  label="Pause"
+                  icon="pi pi-pause"
+                  severity="warn"
+                  [outlined]="true"
+                  styleClass="execution-secondary-btn"
+                  (onClick)="pauseExecution()"
+                  id="btn-pause-execution"
+                />
+              }
+              @if (runStatus() === 'paused') {
+                <p-button
+                  label="Resume"
+                  icon="pi pi-play"
+                  severity="success"
+                  styleClass="execution-primary-btn"
+                  (onClick)="resumeExecution()"
+                  id="btn-resume-execution"
+                />
+              }
+              <p-button
+                icon="pi pi-wrench"
+                severity="info"
+                [outlined]="true"
+                pTooltip="Rebuild paused workspace"
+                [disabled]="runStatus() !== 'paused'"
+                styleClass="execution-action-btn"
+                (onClick)="rebuildExecution()"
+                id="btn-rebuild-execution"
+              />
+              <p-button
+                label="Stop"
+                icon="pi pi-stop"
+                severity="danger"
+                [outlined]="true"
+                styleClass="execution-secondary-btn"
+                (onClick)="stopExecution()"
+                id="btn-stop-execution"
+              />
+            </div>
+          </div>
+        }
+      </div>
     </div>
-    <div class="header-actions">
-      @if (!running()) {
-        <p-button
-          label="Scheduled Runs"
-          icon="pi pi-calendar-clock"
-          severity="info"
-          [outlined]="true"
-          (onClick)="toggleSchedulesPanel()"
-          id="btn-view-schedules"
-        />
-        <p-button
-          label="Schedule Run"
-          icon="pi pi-calendar"
-          severity="secondary"
-          [disabled]="selectedCount === 0"
-          (onClick)="openScheduleDialog()"
-          id="btn-schedule-run"
-        />
-        <p-button
-          label="Run Selected ({{ selectedCount }})"
-          icon="pi pi-bolt"
-          [disabled]="selectedCount === 0"
-          (onClick)="runSelected()"
-          id="btn-run-selected"
-        />
-      } @else {
-        <div class="running-indicator">
-          <span class="elapsed-badge">
-            <i class="pi pi-stopwatch"></i>
-            {{ formatElapsed(elapsedSeconds) }}
-          </span>
-        </div>
-        <p-button label="Stop Execution" icon="pi pi-stop" severity="danger" (onClick)="stopExecution()" id="btn-stop-execution" />
-      }
+
+    <div class="runner-status-strip">
+      <div class="status-metric">
+        <span>{{ filteredScripts.length }}</span>
+        <small>Visible Scripts</small>
+      </div>
+      <div class="status-metric accent">
+        <span>{{ selectedCount }}</span>
+        <small>Selected</small>
+      </div>
+      <div class="status-workflow">
+        <strong>Pause, edit, rebuild, resume</strong>
+        <span>Paused runs stop the active Surefire process. Rebuild compiles the saved workspace before resume.</span>
+      </div>
     </div>
   </div>
 
@@ -190,6 +257,11 @@
                   <i class="pi pi-stopwatch"></i>
                   {{ formatElapsed(elapsedSeconds) }}
                 </span>
+              } @else if (runStatus() === 'paused') {
+                <p-tag value="PAUSED" severity="info" />
+                @if (elapsedSeconds > 0) {
+                  <span class="elapsed-final">{{ formatElapsed(elapsedSeconds) }}</span>
+                }
               } @else if (runStatus() === 'stopped') {
                 <p-tag value="STOPPED" severity="secondary" />
                 @if (elapsedSeconds > 0) {
@@ -272,11 +344,13 @@
   [(visible)]="showRunConfirm"
   [modal]="true"
   [closable]="true"
-  [style]="{ width: '640px', maxWidth: 'calc(100vw - 32px)' }"
+  [style]="{ width: '560px', maxWidth: 'calc(100vw - 32px)' }"
   [contentStyle]="{ overflow: 'visible' }"
   [dismissableMask]="true"
   [draggable]="false"
   [resizable]="false"
+  [position]="'center'"
+  appendTo="body"
   styleClass="run-confirm-dialog"
   id="dialog-run-confirm"
 >

@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, signal, ViewChild, ElementRef, HostListener, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { CardModule } from 'primeng/card';
 import { ButtonModule } from 'primeng/button';
@@ -52,6 +52,7 @@ interface CronPreset {
 })
 export class Runner implements OnInit, OnDestroy {
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
   @ViewChild('logContainer') logContainer!: ElementRef;
 
   scripts = signal<SelectableScript[]>([]);
@@ -69,6 +70,7 @@ export class Runner implements OnInit, OnDestroy {
   searchTerm = '';
   autoScroll = true;
   private scriptRegistrySubscription?: Subscription;
+  private querySelectionApplied = false;
 
   // Execution Progress
   executionProgress = signal(0);
@@ -449,13 +451,12 @@ export class Runner implements OnInit, OnDestroy {
     this.artifacts.set([]);
     this.latestRunDetails.set(null);
 
-    const localDependencyCount = localPlan.autoIncludedDependencyIds.length;
     this.messageService.add({
       severity: 'info',
       summary: 'Execution Started',
-      detail: localDependencyCount > 0
-        ? `Running ${optimisticTotalScripts} script(s) including ${localDependencyCount} dependency script${localDependencyCount === 1 ? '' : 's'}.`
-        : `Running ${optimisticTotalScripts} script(s)...`,
+      detail: localPlan.autoIncludedDependencyIds.length > 0
+        ? `Running script(s) including ${localPlan.autoIncludedDependencyIds.length} dependency script(s).`
+        : `Running script(s)...`,
     });
 
     this.executionService.runScripts(selectedScriptIds, this.runName || undefined, this.executionEnvironment).subscribe({
@@ -964,7 +965,7 @@ export class Runner implements OnInit, OnDestroy {
 
   private isActiveExecutionStatus(status: string): boolean {
     const normalized = status.toLowerCase();
-    return normalized === 'queued' || normalized === 'running';
+    return normalized === 'queued' || normalized === 'running' || normalized === 'paused';
   }
 
   private normalizeFinalStatus(status: string): string {
@@ -1009,6 +1010,9 @@ export class Runner implements OnInit, OnDestroy {
       this.loadLatestRunDetails(runId);
     } else if (finalStatus === 'stopped') {
       this.messageService.add({ severity: 'warn', summary: 'Execution Stopped', detail: 'The execution was manually stopped' });
+      this.loadLatestRunDetails(runId);
+    } else if (finalStatus === 'paused') {
+      this.messageService.add({ severity: 'info', summary: 'Execution Paused', detail: 'The execution is paused and can be resumed from Running Now.' });
       this.loadLatestRunDetails(runId);
     }
   }
@@ -1204,9 +1208,94 @@ export class Runner implements OnInit, OnDestroy {
             })
         );
         this.recalculateDependentCounts();
+        this.applyQuerySelection();
         this.loading.set(false);
       },
       error: () => this.loading.set(false),
     });
+  }
+
+  pauseExecution() {
+    if (!this.auth.canEdit()) return;
+    const runId = this.currentRunId();
+    if (!runId) return;
+
+    this.executionService.pauseRun(runId).subscribe({
+      next: () => {
+        this.logs.update(l => [...l, '', '⏸ Execution paused by user']);
+        this.runStatus.set('paused');
+        this.stopTimer();
+        this.messageService.add({ severity: 'info', summary: 'Execution Paused', detail: 'Surefire has been stopped. Edit, rebuild, then resume from this workspace.' });
+      },
+      error: () => {
+        this.logs.update(l => [...l, '✗ Failed to pause execution']);
+        this.messageService.add({ severity: 'error', summary: 'Failed to Pause', detail: 'Could not pause the test run' });
+      },
+    });
+  }
+
+  resumeExecution() {
+    if (!this.auth.canEdit()) return;
+    const runId = this.currentRunId();
+    if (!runId) return;
+
+    this.executionService.resumeRun(runId).subscribe({
+      next: () => {
+        this.logs.update(l => [...l, '', '▶ Execution resumed by user']);
+        this.runStatus.set('running');
+        this.running.set(true);
+        this.startTimer();
+        this.messageService.add({ severity: 'success', summary: 'Execution Resumed', detail: 'A fresh Maven/TestNG process is starting with the current workspace files.' });
+      },
+      error: () => {
+        this.logs.update(l => [...l, '✗ Failed to resume execution']);
+        this.messageService.add({ severity: 'error', summary: 'Failed to Resume', detail: 'Could not resume the test run' });
+      },
+    });
+  }
+
+  rebuildExecution() {
+    if (!this.auth.canEdit()) return;
+    const runId = this.currentRunId();
+    if (!runId) return;
+
+    this.executionService.rebuildRun(runId).subscribe({
+      next: () => {
+        this.logs.update(l => [...l, '', '🔧 Workspace test rebuild started']);
+        this.messageService.add({ severity: 'info', summary: 'Rebuild Started', detail: 'Test sources are being recompiled in the paused run workspace.' });
+      },
+      error: () => {
+        this.logs.update(l => [...l, '✗ Failed to rebuild workspace']);
+        this.messageService.add({ severity: 'error', summary: 'Failed to Rebuild', detail: 'Could not rebuild the workspace' });
+      },
+    });
+  }
+
+  private applyQuerySelection(): void {
+    if (this.querySelectionApplied) return;
+    const params = this.route.snapshot.queryParamMap;
+    const rawSelect = params.get('select') || '';
+    const selectedIds = rawSelect
+      .split(',')
+      .map((value) => Number(value.trim()))
+      .filter((id) => Number.isInteger(id) && id > 0);
+    if (selectedIds.length === 0) return;
+
+    const selectedSet = new Set(selectedIds);
+    this.scripts.update((list) => list.map((script) => ({ ...script, selected: selectedSet.has(script.id) })));
+    this.querySelectionApplied = true;
+
+    const requestedName = params.get('runName');
+    if (requestedName && requestedName.trim()) {
+      this.runName = requestedName.trim();
+    }
+    if (params.get('confirm') === '1') {
+      setTimeout(() => {
+        this.openRunConfirm();
+        if (requestedName && requestedName.trim()) {
+          this.runName = requestedName.trim();
+        }
+      });
+    }
   }
 }

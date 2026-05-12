@@ -79,6 +79,18 @@ export class ExecutionService {
     return this.http.post(`${this.apiUrl}/stop/${runId}`, {});
   }
 
+  pauseRun(runId: number): Observable<any> {
+    return this.http.post(`${this.apiUrl}/pause/${runId}`, {});
+  }
+
+  resumeRun(runId: number): Observable<any> {
+    return this.http.post(`${this.apiUrl}/resume/${runId}`, {});
+  }
+
+  rebuildRun(runId: number): Observable<any> {
+    return this.http.post(`${this.apiUrl}/rebuild/${runId}`, {});
+  }
+
   getRuns(filters?: { status?: string; limit?: number; offset?: number }): Observable<ExecutionRun[]> {
     let params = new HttpParams();
     if (filters?.status) params = params.set('status', filters.status);
@@ -193,7 +205,7 @@ export class ExecutionService {
       this.getRunDetails(runId).subscribe({
         next: run => {
           this.activeRunStatus.set(run.status);
-          if (run.status !== 'queued' && run.status !== 'running') {
+          if (run.status !== 'queued' && run.status !== 'running' && run.status !== 'paused') {
             this.getArtifacts(runId).subscribe({
               next: artifacts => this.artifactsReady.set(artifacts),
               error: () => {},

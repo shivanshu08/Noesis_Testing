@@ -272,6 +272,7 @@ export class Dashboard implements OnInit, OnDestroy {
       case 'passed': return 'success';
       case 'failed': return 'danger';
       case 'running': return 'warn';
+      case 'paused': return 'info';
       case 'queued': return 'info';
       case 'stopped': return 'secondary';
       default: return 'secondary';

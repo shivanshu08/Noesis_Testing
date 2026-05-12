@@ -17,6 +17,7 @@ export const routes: Routes = [
       { path: 'scripts/:id/configuration/attachments', loadComponent: () => import('./pages/script-attachments/script-attachments').then(m => m.ScriptAttachments) },
       { path: 'scripts/:id/configuration', loadComponent: () => import('./pages/script-configuration/script-configuration').then(m => m.ScriptConfiguration) },
       { path: 'runner', canActivate: [editGuard], loadComponent: () => import('./pages/runner/runner').then(m => m.Runner) },
+      { path: 'running-now', canActivate: [editGuard], loadComponent: () => import('./pages/running-now/running-now').then(m => m.RunningNow) },
       { path: 'suites', loadComponent: () => import('./pages/suites/suites').then(m => m.Suites) },
       { path: 'history', loadComponent: () => import('./pages/history/history').then(m => m.History) },
       { path: 'run/:id', loadComponent: () => import('./pages/run-detail/run-detail').then(m => m.RunDetail) },

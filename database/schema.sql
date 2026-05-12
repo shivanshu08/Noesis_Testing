@@ -17,12 +17,12 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
-    CREATE TYPE run_status AS ENUM ('queued', 'running', 'passed', 'failed', 'error', 'stopped');
+    CREATE TYPE run_status AS ENUM ('queued', 'running', 'paused', 'passed', 'failed', 'error', 'stopped');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
-    CREATE TYPE result_status AS ENUM ('queued', 'running', 'passed', 'failed', 'error', 'skipped');
+    CREATE TYPE result_status AS ENUM ('queued', 'running', 'paused', 'passed', 'failed', 'error', 'skipped');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 

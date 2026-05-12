@@ -10,6 +10,8 @@
   margin-bottom: 24px;
 
   .stat-card {
+    color: inherit;
+    text-decoration: none;
     background: var(--noesis-surface);
     border: 1px solid var(--noesis-border);
     border-radius: 14px;
@@ -22,6 +24,10 @@
     &:hover {
       transform: translateY(-2px);
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+    }
+
+    &.clickable-card {
+      cursor: pointer;
     }
 
     .stat-icon {

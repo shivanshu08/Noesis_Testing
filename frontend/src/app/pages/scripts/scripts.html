@@ -225,7 +225,7 @@
               pTooltip="Execute Script"
               tooltipStyleClass="single-line-tooltip"
               routerLink="/runner"
-              [queryParams]="{ select: script.id }"
+              [queryParams]="{ select: script.id, confirm: 1 }"
               [disabled]="!getScriptAvailability(script).canRun"
             />
             <p-button

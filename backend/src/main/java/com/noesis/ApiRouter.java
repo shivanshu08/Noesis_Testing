@@ -71,6 +71,9 @@ class ApiRouter extends NotificationFeature {
       else if (match(path, "/api/suites/(\\d+)") && method.equals("DELETE")) deleteSuite(ex, auth, id(path));
       else if (path.equals("/api/execution/run") && method.equals("POST")) run(ex, auth);
       else if (match(path, "/api/execution/stop/(\\d+)") && method.equals("POST")) stopRun(ex, auth, lastId(path));
+      else if (match(path, "/api/execution/pause/(\\d+)") && method.equals("POST")) pauseRun(ex, auth, lastId(path));
+      else if (match(path, "/api/execution/resume/(\\d+)") && method.equals("POST")) resumeRun(ex, auth, lastId(path));
+      else if (match(path, "/api/execution/rebuild/(\\d+)") && method.equals("POST")) rebuildRun(ex, auth, lastId(path));
       else if (path.equals("/api/execution/runs") && method.equals("GET")) runs(ex, auth, query);
       else if (match(path, "/api/execution/runs/(\\d+)") && method.equals("GET")) runDetails(ex, auth, lastId(path));
       else if (path.equals("/api/execution/stats") && method.equals("GET")) stats(ex, auth);

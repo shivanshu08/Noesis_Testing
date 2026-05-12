@@ -1,6 +1,6 @@
 import { Component, OnDestroy, OnInit, computed, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, RouterModule } from '@angular/router';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { CardModule } from 'primeng/card';
 import { ButtonModule } from 'primeng/button';
@@ -26,7 +26,7 @@ import { environment } from '../../../environments/environment';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-type ResultStatusFilter = 'all' | 'passed' | 'failed' | 'error' | 'running' | 'queued' | 'stopped' | 'skipped';
+type ResultStatusFilter = 'all' | 'passed' | 'failed' | 'error' | 'running' | 'paused' | 'queued' | 'stopped' | 'skipped';
 type ResultSortBy = 'duration-desc' | 'duration-asc' | 'name-asc' | 'name-desc' | 'status';
 type LogLevelFilter = 'all' | 'info' | 'warn' | 'error' | 'debug' | 'trace';
 interface RunSummaryCounts {
@@ -101,6 +101,7 @@ export class RunDetail implements OnInit, OnDestroy {
     { label: 'Failed', value: 'failed' },
     { label: 'Error', value: 'error' },
     { label: 'Running', value: 'running' },
+    { label: 'Paused', value: 'paused' },
     { label: 'Queued', value: 'queued' },
     { label: 'Stopped', value: 'stopped' },
     { label: 'Skipped', value: 'skipped' },
@@ -125,6 +126,7 @@ export class RunDetail implements OnInit, OnDestroy {
 
   constructor(
     private readonly route: ActivatedRoute,
+    private readonly router: Router,
     private readonly executionService: ExecutionService,
     private readonly messageService: MessageService,
     public auth: AuthService
@@ -372,6 +374,24 @@ export class RunDetail implements OnInit, OnDestroy {
     });
   }
 
+  openRerunDialog(): void {
+    const current = this.run();
+    const scriptIds = Array.from(new Set((current?.results || [])
+      .map((result) => Number(result.scriptId))
+      .filter((id) => Number.isInteger(id) && id > 0)));
+    if (scriptIds.length === 0) {
+      this.messageService.add({ severity: 'warn', summary: 'Re-run Unavailable', detail: 'No scripts were found for this run.' });
+      return;
+    }
+    this.router.navigate(['/runner'], {
+      queryParams: {
+        select: scriptIds.join(','),
+        confirm: 1,
+        runName: `Re-run: ${current?.runName || `Run #${this.runId}`}`,
+      },
+    });
+  }
+
   toggleAutoRefresh(): void {
     this.autoRefreshEnabled = !this.autoRefreshEnabled;
     const currentStatus = this.run()?.status;
@@ -408,6 +428,8 @@ export class RunDetail implements OnInit, OnDestroy {
         return 'danger';
       case 'running':
         return 'warn';
+      case 'paused':
+        return 'info';
       case 'queued':
         return 'info';
       case 'stopped':
@@ -458,7 +480,7 @@ export class RunDetail implements OnInit, OnDestroy {
 
   getTimelineWidth(durationMs: number | undefined | null, status: string): number {
     const normStatus = this.normalizeStatus(status);
-    if (['skipped', 'queued', 'stopped'].includes(normStatus)) {
+    if (['skipped', 'queued', 'paused', 'stopped'].includes(normStatus)) {
       return 0;
     }
 
@@ -475,6 +497,7 @@ export class RunDetail implements OnInit, OnDestroy {
     const status = this.normalizeStatus(result.status);
     if (status === 'skipped') return 'Skipped';
     if (status === 'queued') return 'Queued';
+    if (status === 'paused') return 'Paused';
     if (status === 'stopped') return 'Stopped';
     if (status === 'running') return 'In Progress';
 
@@ -494,6 +517,8 @@ export class RunDetail implements OnInit, OnDestroy {
         return 'Awaiting execution';
       case 'running':
         return 'Actively executing...';
+      case 'paused':
+        return 'Paused for operator intervention';
       case 'stopped':
         return 'Execution was manually stopped';
       default:

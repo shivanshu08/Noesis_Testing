@@ -103,6 +103,7 @@ export class History implements OnInit {
   readonly statusOptions: FilterOption[] = [
     { label: 'All Statuses', value: null },
     { label: 'Running / Queued', value: 'running' },
+    { label: 'Paused', value: 'paused' },
     { label: 'Passed', value: 'passed' },
     { label: 'Failed', value: 'failed' },
     { label: 'Error', value: 'error' },
@@ -243,6 +244,8 @@ export class History implements OnInit {
         return 'danger';
       case 'running':
         return 'warn';
+      case 'paused':
+        return 'info';
       case 'queued':
         return 'info';
       case 'stopped':
@@ -545,7 +548,7 @@ export class History implements OnInit {
   }
 
   private buildStatusInsights(runs: ExecutionRun[]): StatusInsight[] {
-    const activeCount = runs.filter((run) => run.status === 'running' || run.status === 'queued').length;
+    const activeCount = runs.filter((run) => run.status === 'running' || run.status === 'queued' || run.status === 'paused').length;
     const passedCount = runs.filter((run) => run.status === 'passed').length;
     const failedCount = runs.filter((run) => run.status === 'failed').length;
     const errorCount = runs.filter((run) => run.status === 'error').length;

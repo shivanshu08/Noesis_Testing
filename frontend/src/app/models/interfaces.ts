@@ -286,7 +286,7 @@ export interface ExecutionRun {
   runName: string;
   runType: string;
   suiteId?: number;
-  status: 'queued' | 'running' | 'passed' | 'failed' | 'error' | 'stopped';
+  status: 'queued' | 'running' | 'paused' | 'passed' | 'failed' | 'error' | 'stopped';
   totalScripts: number;
   passedCount: number;
   failedCount: number;

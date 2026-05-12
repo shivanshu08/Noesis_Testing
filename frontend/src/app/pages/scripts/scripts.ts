@@ -231,7 +231,7 @@ export class Scripts implements OnInit {
     }
 
     const ids = runnableScripts.map(s => s.id).join(',');
-    this.router.navigate(['/runner'], { queryParams: { select: ids } });
+    this.router.navigate(['/runner'], { queryParams: { select: ids, confirm: 1 } });
   }
 
   promptDeleteSelected() {

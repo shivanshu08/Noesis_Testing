@@ -16,7 +16,7 @@
       />
       @if (details(); as vm) {
         @if (auth.canRun()) {
-          <a pButton [outlined]="true" severity="success" icon="pi pi-bolt" label="Run Script" routerLink="/runner" [queryParams]="{ select: vm.script.id }"></a>
+          <a pButton [outlined]="true" severity="success" icon="pi pi-bolt" label="Run Script" routerLink="/runner" [queryParams]="{ select: vm.script.id, confirm: 1 }"></a>
         }
       }
     </div>
@@ -287,7 +287,7 @@
             <p>This script has not been executed yet. Run it once to start tracking timeline metrics.</p>
             <div class="timeline-empty-actions">
               @if (auth.canRun()) {
-                <a pButton severity="primary" icon="pi pi-bolt" label="Run Script" routerLink="/runner" [queryParams]="{ select: vm.script.id }"></a>
+                <a pButton severity="primary" icon="pi pi-bolt" label="Run Script" routerLink="/runner" [queryParams]="{ select: vm.script.id, confirm: 1 }"></a>
               }
               <a pButton [outlined]="true" severity="secondary" icon="pi pi-list" label="Open History" routerLink="/history"></a>
             </div>

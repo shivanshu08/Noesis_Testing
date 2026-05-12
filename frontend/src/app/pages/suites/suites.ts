@@ -420,17 +420,13 @@ export class Suites implements OnInit, OnDestroy {
         next: (full) => {
           const ids = full.scripts?.map(s => s.id) || [];
           if (ids.length === 0) return;
-          this.executionService.runScripts(ids, suite.name).subscribe({
-            next: (res) => this.router.navigate(['/run', res.runId]),
-          });
+          this.router.navigate(['/runner'], { queryParams: { select: ids.join(','), confirm: 1, runName: suite.name } });
         },
       });
       return;
     }
 
-    this.executionService.runScripts(scriptIds, suite.name).subscribe({
-      next: (res) => this.router.navigate(['/run', res.runId]),
-    });
+    this.router.navigate(['/runner'], { queryParams: { select: scriptIds.join(','), confirm: 1, runName: suite.name } });
   }
 
   // Tags management

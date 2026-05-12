@@ -43,34 +43,52 @@ class ExecutionSupportFeature extends UserManagementFeature {
   private static final Object AUTOMATION_WORKSPACE_LOCK = new Object();
 
   protected void startExecution(int runId, String runName, String testngXml, List<Map<String, Object>> scripts) {
+    startExecution(runId, runName, testngXml, scripts, null, false);
+  }
+
+  protected void resumeExecution(int runId, String runName, String testngXml, List<Map<String, Object>> scripts, Path workspace) {
+    startExecution(runId, runName, testngXml, scripts, workspace, true);
+  }
+
+  protected void startExecution(int runId, String runName, String testngXml, List<Map<String, Object>> scripts, Path existingWorkspace, boolean resumed) {
     CompletableFuture.runAsync(() -> {
       StringBuilder out = new StringBuilder();
       Path workspace = null;
       try {
-        workspace = resolveExecutionWorkspace(runId);
+        workspace = existingWorkspace == null ? resolveExecutionWorkspace(runId) : existingWorkspace;
         Path suiteFile = workspace.resolve("noesis-testng-run-" + runId + ".xml");
         Files.createDirectories(workspace);
         if (!Files.exists(workspace.resolve("pom.xml"))) throw new IOException("Automation workspace is missing pom.xml: " + workspace);
         Files.writeString(suiteFile, testngXml);
+        Map<String, Object> startMetadata = new LinkedHashMap<>();
+        startMetadata.put("executionSource", env.value("ST_AUTOMATION_SOURCE", "git"));
+        startMetadata.put("gitRepoUrl", gitRepositoryUrl());
+        startMetadata.put("gitRepoName", gitRepositoryName());
+        startMetadata.put("gitBranch", env.value("ST_AUTOMATION_GIT_BRANCH", "main"));
+        startMetadata.put("appUrl", env.value("ST_AUTOMATION_APP_URL", ""));
+        startMetadata.put("workspacePath", workspace.toString());
+        startMetadata.put("suiteFilePath", suiteFile.toString());
+        startMetadata.put("suiteFileName", suiteFile.getFileName().toString());
+        startMetadata.put("reportsDirectory", surefireReportsDirectory(workspace).toString());
+        startMetadata.put(resumed ? "resumedAt" : "startedAt", Instant.now().toString());
+        startMetadata.put("processMode", resumed ? "resumed-fresh-maven-process" : "initial-maven-process");
         db.update("UPDATE execution_runs SET run_metadata = COALESCE(run_metadata, '{}'::jsonb) || ?::jsonb WHERE id = ?",
-            json(Map.of(
-                "executionSource", env.value("ST_AUTOMATION_SOURCE", "git"),
-                "gitRepoUrl", gitRepositoryUrl(),
-                "gitRepoName", gitRepositoryName(),
-                "gitBranch", env.value("ST_AUTOMATION_GIT_BRANCH", "main"),
-                "appUrl", env.value("ST_AUTOMATION_APP_URL", ""),
-                "workspacePath", workspace.toString(),
-                "suiteFilePath", suiteFile.toString(),
-                "suiteFileName", suiteFile.getFileName().toString(),
-                "reportsDirectory", surefireReportsDirectory(workspace).toString(),
-                "startedAt", Instant.now().toString())), runId);
-        logExecution(runId, "INFO", "Execution started for " + runName + ".");
+            json(startMetadata), runId);
+        if (isRunInStatus(runId, "paused", "stopped")) {
+          logExecution(runId, "INFO", "Execution worker prepared the workspace but did not start Maven because the run is " + (isRunInStatus(runId, "paused") ? "paused" : "stopped") + ".");
+          return;
+        }
+        db.update("UPDATE execution_runs SET status = 'running'::run_status, completed_at = NULL WHERE id = ?", runId);
+        logExecution(runId, "INFO", (resumed ? "Execution resumed for " : "Execution started for ") + runName + ".");
         logExecution(runId, "INFO", "Workspace: " + workspace.toAbsolutePath());
+        Files.deleteIfExists(pauseSignalPath(workspace, runId));
+        injectPauseResumeListener(workspace);
         db.update("UPDATE execution_results SET status = 'running'::result_status, started_at = NOW() WHERE run_id = ?", runId);
         List<String> command = mavenCommand();
         command.add("test");
         applyBrowserVisibilityDefaults(command);
         command.add("-Dsurefire.suiteXmlFiles=" + suiteFile.toAbsolutePath());
+        command.add("-Dnoesis.run.id=" + runId);
         logExecution(runId, "INFO", "Command: " + String.join(" ", command));
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(workspace.toFile());
@@ -94,6 +112,10 @@ class ExecutionSupportFeature extends UserManagementFeature {
         }
         int exit = p.exitValue();
         activeProcesses.remove(runId);
+        if (isRunInStatus(runId, "paused", "stopped")) {
+          logExecution(runId, "INFO", "Execution process ended after an operator control action.");
+          return;
+        }
         ResultSummary summary = finalSummary(exit, out.toString(), workspace, scripts.size());
         String status = exit == 0 && summary.failed == 0 && summary.errors == 0 ? "passed" : "failed";
         db.update("UPDATE execution_runs SET status = ?::run_status, passed_count = ?, failed_count = ?, error_count = ?, skipped_count = ?, completed_at = NOW(), duration_ms = EXTRACT(EPOCH FROM (NOW() - started_at))::int * 1000, run_metadata = COALESCE(run_metadata, '{}'::jsonb) || ?::jsonb WHERE id = ?",
@@ -119,6 +141,10 @@ class ExecutionSupportFeature extends UserManagementFeature {
       } catch (Exception e) {
         activeProcesses.remove(runId);
         try {
+          if (isRunInStatus(runId, "paused", "stopped")) {
+            logExecution(runId, "INFO", "Execution worker exited after an operator control action: " + e.getMessage());
+            return;
+          }
           db.update("UPDATE execution_runs SET status = 'error'::run_status, completed_at = NOW(), error_count = total_scripts WHERE id = ?", runId);
           db.update("UPDATE execution_results SET status = 'error'::result_status, completed_at = NOW(), error_message = ? WHERE run_id = ?", e.getMessage(), runId);
           logExecution(runId, "ERROR", "Execution failed: " + e.getMessage());
@@ -128,8 +154,44 @@ class ExecutionSupportFeature extends UserManagementFeature {
     }, executionExecutor);
   }
 
+  protected void terminateProcessTree(Process process, long gracefulMillis) {
+    if (process == null) return;
+    ProcessHandle handle = process.toHandle();
+    List<ProcessHandle> descendants = handle.descendants().sorted((a, b) -> Long.compare(b.pid(), a.pid())).toList();
+    descendants.forEach(ProcessHandle::destroy);
+    handle.destroy();
+    try {
+      if (process.waitFor(Math.max(250, gracefulMillis), TimeUnit.MILLISECONDS)) return;
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
+    descendants.forEach(ph -> {
+      if (ph.isAlive()) ph.destroyForcibly();
+    });
+    if (handle.isAlive()) handle.destroyForcibly();
+  }
+
+  protected List<Map<String, Object>> scriptsForRun(int runId) throws SQLException {
+    return db.rows("""
+        SELECT s.id, s.name, s.class_name, s.method_name
+        FROM execution_results er
+        JOIN scripts s ON s.id = er.script_id
+        WHERE er.run_id = ?
+        ORDER BY er.id
+        """, runId);
+  }
+
   protected void logExecution(int runId, String severity, String detail) throws SQLException {
     db.update("INSERT INTO execution_logs (run_id, log_level, message, detailed_description, source_component, timestamp) VALUES (?, ?::log_level, ?, ?, 'java-execution-runner', NOW())", runId, severity, trim(detail, 4000), detail);
+  }
+
+  protected boolean isRunInStatus(int runId, String... statuses) {
+    try {
+      Map<String, Object> row = db.one("SELECT status FROM execution_runs WHERE id = ?", runId);
+      String current = str(row == null ? null : row.get("status")).toLowerCase(Locale.ROOT);
+      for (String status : statuses) if (current.equals(status.toLowerCase(Locale.ROOT))) return true;
+    } catch (Exception ignored) {}
+    return false;
   }
 
   protected List<String> mavenCommand() {
@@ -139,6 +201,45 @@ class ExecutionSupportFeature extends UserManagementFeature {
       if (Files.exists(mvn)) return new ArrayList<>(List.of(mvn.toString()));
     }
     return new ArrayList<>(List.of(isWindows() ? "mvn.cmd" : "mvn"));
+  }
+
+  protected Path pauseSignalPath(Path workspace, int runId) {
+    return workspace.resolve(".noesis-pause-signal");
+  }
+
+  protected void injectPauseResumeListener(Path workspace) throws IOException {
+    Path listenerDir = workspace.resolve("src/test/java/org/example/utility");
+    Files.createDirectories(listenerDir);
+    Path listenerFile = listenerDir.resolve("NoesisPauseResumeListener.java");
+    if (!Files.exists(listenerFile)) {
+      String code = """
+          package org.example.utility;
+
+          import org.testng.IInvokedMethod;
+          import org.testng.IInvokedMethodListener;
+          import org.testng.ITestResult;
+          import java.nio.file.Files;
+          import java.nio.file.Path;
+          import java.nio.file.Paths;
+
+          public class NoesisPauseResumeListener implements IInvokedMethodListener {
+              @Override
+              public void beforeInvocation(IInvokedMethod method, ITestResult testResult) {
+                  Path signal = Paths.get(System.getProperty("user.dir"), ".noesis-pause-signal");
+                  if (Files.exists(signal)) {
+                      System.out.println("[NOESIS] Execution paused. Waiting for resume signal...");
+                      while (Files.exists(signal)) {
+                          try { Thread.sleep(2000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
+                      }
+                      System.out.println("[NOESIS] Execution resumed. Continuing tests...");
+                  }
+              }
+              @Override
+              public void afterInvocation(IInvokedMethod method, ITestResult testResult) {}
+          }
+          """;
+      Files.writeString(listenerFile, code);
+    }
   }
 
   protected void applyBrowserVisibilityDefaults(List<String> command) {

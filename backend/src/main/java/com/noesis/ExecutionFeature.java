@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -61,10 +62,127 @@ class ExecutionFeature extends SuiteManagementFeature {
   protected void stopRun(HttpExchange ex, Auth auth, int id) throws IOException, SQLException {
     edit(auth);
     Process p = activeProcesses.remove(id);
-    if (p != null) p.destroy();
+    if (p != null) terminateProcessTree(p, 5000);
+    Map<String, Object> run = db.one("SELECT id, run_metadata FROM execution_runs WHERE id = ?", id);
+    if (run != null) {
+      Map<String, Object> runForMetadata = new LinkedHashMap<>();
+      runForMetadata.put("id", id);
+      runForMetadata.put("runMetadata", run.get("runMetadata"));
+      Map<String, Object> metadata = enrichRunMetadata(runForMetadata);
+      Path workspace = Path.of(str(metadata.get("workspacePath")));
+      Files.deleteIfExists(pauseSignalPath(workspace, id));
+    }
     db.update("UPDATE execution_runs SET status = 'stopped'::run_status, completed_at = NOW() WHERE id = ?", id);
-    db.update("UPDATE execution_results SET status = 'skipped'::result_status WHERE run_id = ? AND status IN ('queued','running')", id);
+    db.update("UPDATE execution_results SET status = 'skipped'::result_status WHERE run_id = ? AND status IN ('queued','running','paused')", id);
     send(ex, 200, message("Execution stopped."));
+  }
+
+  protected void pauseRun(HttpExchange ex, Auth auth, int id) throws IOException, SQLException {
+    edit(auth);
+    Map<String, Object> run = db.one("SELECT id, status, run_metadata FROM execution_runs WHERE id = ?", id);
+    if (run == null) throw new ApiException(404, "Run not found.");
+    String status = str(run.get("status")).toLowerCase(Locale.ROOT);
+    if (!Set.of("queued", "running").contains(status)) throw new ApiException(400, "Only queued or running executions can be paused.");
+
+    Map<String, Object> runForMetadata = new LinkedHashMap<>();
+    runForMetadata.put("id", id);
+    runForMetadata.put("runMetadata", run.get("runMetadata"));
+    Map<String, Object> metadata = enrichRunMetadata(runForMetadata);
+    Path workspace = Path.of(str(metadata.get("workspacePath")));
+    Path signalFile = pauseSignalPath(workspace, id);
+    Files.createDirectories(workspace);
+    Files.writeString(signalFile, Instant.now().toString());
+    Process p = activeProcesses.remove(id);
+
+    db.update("""
+        UPDATE execution_runs
+        SET status = 'paused'::run_status,
+            run_metadata = COALESCE(run_metadata, '{}'::jsonb) || ?::jsonb
+        WHERE id = ?
+        """, json(Map.of(
+            "pausedAt", Instant.now().toString(),
+            "pausedBy", auth.username,
+            "pauseMode", p == null ? "file-signal" : "terminated-surefire-process",
+            "resumeNote", "Resume starts a fresh Maven/TestNG process in the same workspace so rebuilt Java/config changes are used.")), id);
+    db.update("UPDATE execution_results SET status = 'paused'::result_status WHERE run_id = ? AND status IN ('queued','running')", id);
+    if (p != null) terminateProcessTree(p, 5000);
+    logExecution(id, "WARN", "Execution paused by " + auth.username + ". Active Maven/Surefire process was stopped; edit or rebuild the workspace, then resume.");
+    send(ex, 200, Map.of("message", "Execution paused. The active Surefire process has been stopped.", "workspacePath", workspace.toString()));
+  }
+
+  protected void resumeRun(HttpExchange ex, Auth auth, int id) throws IOException, SQLException {
+    edit(auth);
+    Map<String, Object> run = db.one("SELECT id, status, run_metadata FROM execution_runs WHERE id = ?", id);
+    if (run == null) throw new ApiException(404, "Run not found.");
+    String status = str(run.get("status")).toLowerCase(Locale.ROOT);
+    if (!"paused".equals(status)) throw new ApiException(400, "Only paused executions can be resumed.");
+
+    Map<String, Object> runForMetadata = new LinkedHashMap<>();
+    runForMetadata.put("id", id);
+    runForMetadata.put("runMetadata", run.get("runMetadata"));
+    Map<String, Object> metadata = enrichRunMetadata(runForMetadata);
+    Path workspace = Path.of(str(metadata.get("workspacePath")));
+    Path signalFile = pauseSignalPath(workspace, id);
+    Files.deleteIfExists(signalFile);
+    String runName = str(run.get("runName"));
+    String configXml = str(run.get("configXml"));
+    if (runName.isBlank() || configXml.isBlank()) {
+      Map<String, Object> full = db.one("SELECT run_name, config_xml FROM execution_runs WHERE id = ?", id);
+      if (full != null) {
+        runName = str(full.get("runName"));
+        configXml = str(full.get("configXml"));
+      }
+    }
+    if (configXml.isBlank()) throw new ApiException(400, "Run configuration XML is missing; cannot resume this execution.");
+    if (!Files.exists(workspace.resolve("pom.xml"))) throw new ApiException(400, "Run workspace is missing pom.xml: " + workspace);
+    List<Map<String, Object>> scripts = scriptsForRun(id);
+    if (scripts.isEmpty()) throw new ApiException(400, "Run has no scripts to resume.");
+
+    db.update("""
+        UPDATE execution_runs
+        SET status = 'running'::run_status,
+            completed_at = NULL,
+            run_metadata = COALESCE(run_metadata, '{}'::jsonb) || ?::jsonb
+        WHERE id = ?
+        """, json(Map.of("resumedAt", Instant.now().toString(), "resumedBy", auth.username, "resumeMode", "file-signal")), id);
+    db.update("UPDATE execution_results SET status = 'running'::result_status, completed_at = NULL WHERE run_id = ? AND status = 'paused'::result_status", id);
+    logExecution(id, "INFO", "Execution resumed by " + auth.username + ". Starting a fresh Maven/TestNG process in the saved workspace.");
+    resumeExecution(id, runName, configXml, scripts, workspace);
+    send(ex, 202, message("Execution resumed. A fresh Maven/TestNG process is starting from the saved workspace."));
+  }
+
+  protected void rebuildRun(HttpExchange ex, Auth auth, int id) throws IOException, SQLException {
+    edit(auth);
+    Map<String, Object> run = db.one("SELECT id, status, run_metadata FROM execution_runs WHERE id = ?", id);
+    if (run == null) throw new ApiException(404, "Run not found.");
+    String status = str(run.get("status")).toLowerCase(Locale.ROOT);
+    if (!"paused".equals(status)) throw new ApiException(400, "Pause the execution before rebuilding its workspace.");
+    CompletableFuture.runAsync(() -> {
+      try {
+        Map<String, Object> runForMetadata = new LinkedHashMap<>();
+        runForMetadata.put("id", id);
+        runForMetadata.put("runMetadata", run.get("runMetadata"));
+        Map<String, Object> metadata = enrichRunMetadata(runForMetadata);
+        Path workspace = Path.of(str(metadata.get("workspacePath")));
+        if (!Files.exists(workspace.resolve("pom.xml"))) throw new IOException("Workspace is missing pom.xml: " + workspace);
+        List<String> command = mavenCommand();
+        command.add("-q");
+        command.add("-DskipTests");
+        command.add("test-compile");
+        logExecution(id, "INFO", "Rebuild started: " + String.join(" ", command));
+        runCommand(id, workspace, command.toArray(String[]::new));
+        db.update("UPDATE execution_runs SET run_metadata = COALESCE(run_metadata, '{}'::jsonb) || ?::jsonb WHERE id = ?",
+            json(Map.of("lastRebuildAt", Instant.now().toString(), "lastRebuildStatus", "success", "lastRebuildBy", auth.username)), id);
+        logExecution(id, "INFO", "Rebuild completed successfully. Resume will use the newly compiled test classes.");
+      } catch (Exception e) {
+        try {
+          db.update("UPDATE execution_runs SET run_metadata = COALESCE(run_metadata, '{}'::jsonb) || ?::jsonb WHERE id = ?",
+              json(Map.of("lastRebuildAt", Instant.now().toString(), "lastRebuildStatus", "failed", "lastRebuildError", e.getMessage())), id);
+          logExecution(id, "ERROR", "Rebuild failed: " + e.getMessage());
+        } catch (Exception ignored) {}
+      }
+    }, executionExecutor);
+    send(ex, 202, message("Rebuild started."));
   }
 
   protected void runs(HttpExchange ex, Auth auth, Map<String, String> q) throws IOException, SQLException {
@@ -166,7 +284,7 @@ class ExecutionFeature extends SuiteManagementFeature {
         : (Number) db.one("SELECT COUNT(*)::int AS count FROM scripts WHERE is_active = TRUE").get("count");
     Number totalRuns = (Number) db.one("SELECT COUNT(*)::int AS count FROM execution_runs er" + runFilter, userParam).get("count");
     Number recentRuns = (Number) db.one("SELECT COUNT(*)::int AS count FROM execution_runs er" + runFilter + andOrWhere + "er.created_at >= NOW() - INTERVAL '7 days'", userParam).get("count");
-    Number running = (Number) db.one("SELECT COUNT(*)::int AS count FROM execution_runs er" + runFilter + andOrWhere + "er.status = 'running'", userParam).get("count");
+    Number running = (Number) db.one("SELECT COUNT(*)::int AS count FROM execution_runs er" + runFilter + andOrWhere + "er.status IN ('queued'::run_status, 'running'::run_status, 'paused'::run_status)", userParam).get("count");
     Object passRate = db.one("SELECT COALESCE(ROUND(AVG(CASE WHEN er.status = 'passed' THEN 100 ELSE 0 END), 1), 0) AS rate FROM execution_runs er" + runFilter + andOrWhere + "er.status IN ('passed','failed') AND er.created_at >= NOW() - INTERVAL '30 days'", userParam).get("rate");
     List<Map<String, Object>> recentHistory = db.rows("""
         SELECT er.created_at::date AS date,

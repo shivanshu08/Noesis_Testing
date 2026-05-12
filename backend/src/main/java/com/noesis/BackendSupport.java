@@ -58,6 +58,8 @@ class BackendSupport {
   }
 
   protected void ensureSchema() {
+    try { db.update("ALTER TYPE run_status ADD VALUE IF NOT EXISTS 'paused'"); } catch (Exception ignored) {}
+    try { db.update("ALTER TYPE result_status ADD VALUE IF NOT EXISTS 'paused'"); } catch (Exception ignored) {}
     try { db.update("ALTER TABLE test_suites ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT NULL"); } catch (Exception ignored) {}
     ensureAssignments();
     ensureDependencies();
@@ -489,6 +491,7 @@ class BackendSupport {
         .append("    <listener class-name=\"org.example.utility.CustomHtmlReporter\"/>\n")
         .append("    <listener class-name=\"org.example.utility.PreExecutionReviewListener\"/>\n")
         .append("    <listener class-name=\"org.example.utility.ExecutionOrderListener\"/>\n")
+        .append("    <listener class-name=\"org.example.utility.NoesisPauseResumeListener\"/>\n")
         .append("  </listeners>\n")
         .append("  <test name=\"Noesis Test\">\n    <classes>\n");
     for (Map<String, Object> script : scripts) {

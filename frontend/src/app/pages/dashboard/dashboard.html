@@ -41,7 +41,7 @@
       </div>
     </div>
 
-    <div class="stat-card">
+    <a class="stat-card clickable-card" routerLink="/running-now">
       <div class="stat-icon running">
         <i class="pi pi-spinner pi-spin"></i>
       </div>
@@ -49,7 +49,7 @@
         <span class="stat-value">{{ stats()?.runningCount || 0 }}</span>
         <span class="stat-label">Running Now</span>
       </div>
-    </div>
+    </a>
   </div>
 
   <!-- System Health Indicator -->
