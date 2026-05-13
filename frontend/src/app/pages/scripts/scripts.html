@@ -140,6 +140,12 @@
                 >
                   <i class="pi pi-pencil"></i>
                 </button>
+                @if (script.isFlaky) {
+                  <span class="flaky-script-badge" [pTooltip]="getFlakyTooltip(script)" tooltipStyleClass="single-line-tooltip">
+                    <i class="pi pi-exclamation-triangle"></i>
+                    Flaky
+                  </span>
+                }
               </div>
             </div>
           </td>

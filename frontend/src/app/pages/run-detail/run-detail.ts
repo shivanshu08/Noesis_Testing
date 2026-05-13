@@ -166,6 +166,25 @@ export class RunDetail implements OnInit, OnDestroy {
     return summary.failed + summary.error;
   }
 
+  get retryableFailedScriptIds(): number[] {
+    return Array.from(new Set((this.run()?.results || [])
+      .filter((result) => ['failed', 'error'].includes(this.normalizeStatus(result.status)))
+      .map((result) => Number(result.scriptId))
+      .filter((id) => Number.isInteger(id) && id > 0)));
+  }
+
+  get retryableFailedCount(): number {
+    return this.retryableFailedScriptIds.length;
+  }
+
+  get flakyCount(): number {
+    return (this.run()?.results || []).filter((result) => result.isFlaky).length;
+  }
+
+  get failureGroups() {
+    return this.run()?.failureGroups || [];
+  }
+
   get skippedCountValue(): number {
     return this.summaryCounts().skipped;
   }
@@ -392,6 +411,31 @@ export class RunDetail implements OnInit, OnDestroy {
     });
   }
 
+  retryFailedScripts(): void {
+    const current = this.run();
+    let failedScriptIds = this.retryableFailedScriptIds;
+    const runStatus = this.normalizeStatus(current?.status);
+
+    if (failedScriptIds.length === 0 && ['failed', 'error'].includes(runStatus)) {
+      failedScriptIds = Array.from(new Set((current?.results || [])
+        .map((result) => Number(result.scriptId))
+        .filter((id) => Number.isInteger(id) && id > 0)));
+    }
+
+    if (failedScriptIds.length === 0) {
+      this.messageService.add({ severity: 'info', summary: 'Nothing to Retry', detail: 'This run has no failed, errored, or retryable script rows.' });
+      return;
+    }
+
+    this.router.navigate(['/runner'], {
+      queryParams: {
+        select: failedScriptIds.join(','),
+        confirm: 1,
+        runName: `Retry failed: ${current?.runName || `Run #${this.runId}`}`,
+      },
+    });
+  }
+
   toggleAutoRefresh(): void {
     this.autoRefreshEnabled = !this.autoRefreshEnabled;
     const currentStatus = this.run()?.status;
@@ -524,6 +568,13 @@ export class RunDetail implements OnInit, OnDestroy {
       default:
         return '-';
     }
+  }
+
+  getFlakyTooltip(result: ExecutionResult): string {
+    const total = Number(result.recentRunCount || 0);
+    const failed = Number(result.recentFailedCount || 0);
+    const rate = Number(result.recentFailureRate || 0);
+    return `Flaky signal: ${failed}/${total} recent runs failed (${rate}%).`;
   }
 
   getRunMetadataValue(field: keyof NonNullable<ExecutionRun['runMetadata']>): string {

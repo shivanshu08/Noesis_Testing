@@ -64,7 +64,10 @@ class ScriptManagementFeature extends ExecutionSupportFeature {
       params.add(auth.userId);
     }
     sql.append(" ORDER BY s.name");
-    send(ex, 200, db.rows(sql.toString(), params.toArray()));
+    List<Map<String, Object>> rows = db.rows(sql.toString(), params.toArray());
+    addFlakyMetrics(rows);
+    addLastRunSummaries(rows);
+    send(ex, 200, rows);
   }
 
   protected void categories(HttpExchange ex, Auth auth) throws IOException, SQLException {
@@ -340,6 +343,108 @@ class ScriptManagementFeature extends ExecutionSupportFeature {
     out.put("lastRun", recentRuns.isEmpty() ? null : recentRuns.get(0));
     out.put("recentRuns", recentRuns);
     return out;
+  }
+
+  protected void addFlakyMetrics(List<Map<String, Object>> scripts) throws SQLException {
+    List<Integer> ids = scripts.stream()
+        .map(row -> metricScriptId(row))
+        .filter(id -> id > 0)
+        .distinct()
+        .toList();
+    if (ids.isEmpty()) return;
+
+    List<Map<String, Object>> rows = db.rows("""
+        SELECT script_id, status
+        FROM (
+          SELECT
+            eres.script_id,
+            eres.status::text AS status,
+            ROW_NUMBER() OVER (
+              PARTITION BY eres.script_id
+              ORDER BY COALESCE(eres.completed_at, er.completed_at, er.started_at, er.created_at) DESC, eres.id DESC
+            ) AS rn
+          FROM execution_results eres
+          JOIN execution_runs er ON er.id = eres.run_id
+          WHERE eres.script_id IN (""" + placeholders(ids.size()) + """
+            ) AND eres.status IN ('passed'::result_status, 'failed'::result_status, 'error'::result_status)
+        ) recent
+        WHERE rn <= 10
+        ORDER BY script_id, rn
+        """, ids.toArray());
+
+    Map<Integer, List<String>> statusesByScript = new LinkedHashMap<>();
+    for (Map<String, Object> row : rows) {
+      int scriptId = intValue(row.get("scriptId"), 0);
+      if (scriptId <= 0) continue;
+      statusesByScript.computeIfAbsent(scriptId, ignored -> new ArrayList<>()).add(str(row.get("status")).toLowerCase(Locale.ROOT));
+    }
+
+    for (Map<String, Object> script : scripts) {
+      int scriptId = metricScriptId(script);
+      List<String> statuses = statusesByScript.getOrDefault(scriptId, List.of());
+      int total = statuses.size();
+      int passed = (int) statuses.stream().filter("passed"::equals).count();
+      int failed = (int) statuses.stream().filter(status -> "failed".equals(status) || "error".equals(status)).count();
+      int transitions = 0;
+      String previous = "";
+      for (String status : statuses) {
+        String bucket = "passed".equals(status) ? "passed" : "failed";
+        if (!previous.isBlank() && !previous.equals(bucket)) transitions++;
+        previous = bucket;
+      }
+      int failureRate = percent(failed, total);
+      boolean flaky = total >= 4 && passed > 0 && failed > 0 && (transitions >= 2 || (failureRate >= 20 && failureRate <= 80));
+      script.put("recentRunCount", total);
+      script.put("recentPassedCount", passed);
+      script.put("recentFailedCount", failed);
+      script.put("recentFailureRate", failureRate);
+      script.put("flakyScore", flaky ? Math.min(100, (transitions * 20) + Math.abs(50 - Math.abs(50 - failureRate))) : 0);
+      script.put("isFlaky", flaky);
+    }
+  }
+
+  protected void addLastRunSummaries(List<Map<String, Object>> scripts) throws SQLException {
+    List<Integer> ids = scripts.stream()
+        .map(row -> metricScriptId(row))
+        .filter(id -> id > 0)
+        .distinct()
+        .toList();
+    if (ids.isEmpty()) return;
+
+    List<Map<String, Object>> rows = db.rows("""
+        SELECT script_id, status, completed_at, started_at, created_at
+        FROM (
+          SELECT
+            eres.script_id,
+            eres.status::text AS status,
+            er.completed_at,
+            er.started_at,
+            er.created_at,
+            ROW_NUMBER() OVER (
+              PARTITION BY eres.script_id
+              ORDER BY COALESCE(eres.completed_at, er.completed_at, er.started_at, er.created_at) DESC, eres.id DESC
+            ) AS rn
+          FROM execution_results eres
+          JOIN execution_runs er ON er.id = eres.run_id
+          WHERE eres.script_id IN (""" + placeholders(ids.size()) + """
+            ) AND eres.status IN ('passed'::result_status, 'failed'::result_status, 'error'::result_status, 'skipped'::result_status)
+        ) recent
+        WHERE rn = 1
+        """, ids.toArray());
+
+    Map<Integer, Map<String, Object>> byScript = new LinkedHashMap<>();
+    for (Map<String, Object> row : rows) byScript.put(intValue(row.get("scriptId"), 0), row);
+    for (Map<String, Object> script : scripts) {
+      Map<String, Object> last = byScript.get(metricScriptId(script));
+      if (last == null) continue;
+      script.put("lastRunStatus", last.get("status"));
+      script.put("lastRunAt", firstNonBlank(str(last.get("completedAt")), str(last.get("startedAt")), str(last.get("createdAt"))));
+    }
+  }
+
+  protected int metricScriptId(Map<String, Object> row) {
+    int scriptId = intValue(row.get("scriptId"), 0);
+    return scriptId > 0 ? scriptId : intValue(row.get("id"), 0);
   }
 
   protected int percent(double numerator, double denominator) {

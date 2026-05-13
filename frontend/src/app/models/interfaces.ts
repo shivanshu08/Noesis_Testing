@@ -61,6 +61,12 @@ export interface Script {
   createdAt: string;
   lastRunAt?: string;
   lastRunStatus?: string;
+  isFlaky?: boolean;
+  recentRunCount?: number;
+  recentPassedCount?: number;
+  recentFailedCount?: number;
+  recentFailureRate?: number;
+  flakyScore?: number;
   assignedUsers?: Array<{
     id: number;
     username: string;
@@ -326,6 +332,7 @@ export interface ExecutionRun {
   completedAt?: string;
   createdAt: string;
   results?: ExecutionResult[];
+  failureGroups?: FailureGroup[];
 }
 
 export interface ExecutionResult {
@@ -339,6 +346,20 @@ export interface ExecutionResult {
   logOutput?: string;
   startedAt?: string;
   completedAt?: string;
+  isFlaky?: boolean;
+  recentRunCount?: number;
+  recentPassedCount?: number;
+  recentFailedCount?: number;
+  recentFailureRate?: number;
+  flakyScore?: number;
+}
+
+export interface FailureGroup {
+  signature: string;
+  message: string;
+  count: number;
+  scriptIds: number[];
+  scriptNames: string[];
 }
 
 export interface ExecutionLog {

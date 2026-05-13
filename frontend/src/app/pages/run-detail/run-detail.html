@@ -26,6 +26,7 @@
       @if (run(); as r) {
         @if (auth.canRun()) {
           <p-button label="Trigger Re-run" icon="pi pi-refresh" severity="secondary" size="small" (onClick)="openRerunDialog()" />
+          <p-button label="Retry Failed" icon="pi pi-replay" severity="danger" size="small" styleClass="retry-failed-btn" (onClick)="retryFailedScripts()" />
         }
 
         @if (r.status === 'running') {
@@ -132,10 +133,51 @@
         <span class="kpi-label">Artifacts</span>
         <strong class="kpi-value">{{ artifacts().length }}</strong>
       </article>
+
+      <article class="kpi-card">
+        <span class="kpi-label">Flaky Signals</span>
+        <strong class="kpi-value warn">{{ flakyCount }}</strong>
+      </article>
     </section>
 
     <div class="details-grid">
       <div class="main-column">
+        @if (failureGroups.length > 0) {
+          <p-card styleClass="detail-card failure-groups-card">
+            <div class="card-head">
+              <div>
+                <h3><i class="pi pi-sitemap"></i> Failure Groups</h3>
+                <p>{{ failureGroups.length }} grouped root-cause signature{{ failureGroups.length === 1 ? '' : 's' }}</p>
+              </div>
+
+              <p-button
+                label="Retry Failed"
+                icon="pi pi-replay"
+                severity="danger"
+                size="small"
+                styleClass="retry-failed-btn"
+                [disabled]="!auth.canRun()"
+                (onClick)="retryFailedScripts()"
+              />
+            </div>
+
+            <div class="failure-group-list">
+              @for (group of failureGroups; track group.signature) {
+                <div class="failure-group-item">
+                  <div class="failure-group-count">
+                    <strong>{{ group.count }}</strong>
+                    <span>hit{{ group.count === 1 ? '' : 's' }}</span>
+                  </div>
+                  <div class="failure-group-body">
+                    <strong>{{ group.message }}</strong>
+                    <span>{{ group.scriptNames.slice(0, 4).join(', ') }}{{ group.scriptNames.length > 4 ? ' +' + (group.scriptNames.length - 4) + ' more' : '' }}</span>
+                  </div>
+                </div>
+              }
+            </div>
+          </p-card>
+        }
+
         <p-card styleClass="detail-card results-card">
           <div class="card-head">
             <div>
@@ -203,6 +245,12 @@
                   <div class="script-meta">
                     <span class="script-name">{{ result.scriptName || ('Script #' + result.scriptId) }}</span>
                     <small>{{ result.className || 'No class metadata' }}</small>
+                    @if (result.isFlaky) {
+                      <span class="flaky-badge" [pTooltip]="getFlakyTooltip(result)" tooltipPosition="top">
+                        <i class="pi pi-exclamation-triangle"></i>
+                        Flaky
+                      </span>
+                    }
                   </div>
                 </td>
                 <td class="status-col">

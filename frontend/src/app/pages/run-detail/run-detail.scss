@@ -39,6 +39,20 @@
   flex-wrap: wrap;
 }
 
+::ng-deep .retry-failed-btn {
+  font-weight: 700;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--noesis-danger) 24%, transparent);
+
+  &:not(:disabled) .p-button-icon,
+  &:not(:disabled) .p-button-label {
+    color: #ffffff;
+  }
+
+  &:disabled {
+    box-shadow: none;
+  }
+}
+
 .state-card {
   border: 1px solid var(--surface-border);
   border-radius: 1rem;
@@ -249,6 +263,10 @@
   &.danger {
     color: var(--noesis-danger);
   }
+
+  &.warn {
+    color: var(--noesis-warning);
+  }
 }
 
 .details-grid {
@@ -421,6 +439,86 @@
   small {
     color: var(--text-color-secondary);
     font-size: 0.75rem;
+  }
+}
+
+.flaky-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: fit-content;
+  padding: 0.18rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--noesis-warning) 42%, var(--surface-border));
+  background: color-mix(in srgb, var(--noesis-warning) 12%, var(--surface-card));
+  color: var(--noesis-warning);
+  font-size: 0.7rem;
+  font-weight: 750;
+  line-height: 1;
+
+  i {
+    font-size: 0.65rem;
+  }
+}
+
+.failure-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.failure-group-item {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: stretch;
+  border: 1px solid color-mix(in srgb, var(--noesis-danger) 26%, var(--surface-border));
+  border-radius: 0.8rem;
+  padding: 0.7rem;
+  background: color-mix(in srgb, var(--noesis-danger) 5%, var(--surface-card));
+}
+
+.failure-group-count {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--noesis-danger) 12%, transparent);
+  color: var(--noesis-danger);
+
+  strong {
+    font-size: 1.05rem;
+    line-height: 1;
+  }
+
+  span {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+}
+
+.failure-group-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.25rem;
+
+  strong {
+    color: var(--text-color);
+    font-size: 0.9rem;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+
+  span {
+    color: var(--text-color-secondary);
+    font-size: 0.78rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 

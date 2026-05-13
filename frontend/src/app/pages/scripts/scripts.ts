@@ -760,6 +760,13 @@ export class Scripts implements OnInit {
     return parts.length > 0 ? parts.join(' | ') : availability.label;
   }
 
+  getFlakyTooltip(script: Script): string {
+    const failed = Number(script.recentFailedCount || 0);
+    const total = Number(script.recentRunCount || 0);
+    const rate = Number(script.recentFailureRate || 0);
+    return `Flaky signal: ${failed}/${total} recent runs failed (${rate}%).`;
+  }
+
   getAvailabilityFilterLabel(): string {
     const selected = this.availabilityFilterOptions.find(option => option.value === this.selectedAvailability);
     return selected?.label || 'All Availability';

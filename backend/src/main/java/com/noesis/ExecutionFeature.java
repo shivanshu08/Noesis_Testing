@@ -253,10 +253,66 @@ class ExecutionFeature extends SuiteManagementFeature {
       if (visible == 0) throw new ApiException(403, "Access denied: You are not assigned to any scripts in this execution run.");
     }
     List<Map<String, Object>> results = db.rows("SELECT eres.*, s.name AS script_name, s.class_name FROM execution_results eres JOIN scripts s ON eres.script_id = s.id WHERE eres.run_id = ? ORDER BY eres.id", id);
+    addFlakyMetrics(results);
     run.put("results", results);
+    run.put("failureGroups", failureGroups(results));
     run.put("runMetadata", enrichRunMetadata(run));
     shapeRunResponse(run);
     send(ex, 200, run);
+  }
+
+  protected List<Map<String, Object>> failureGroups(List<Map<String, Object>> results) {
+    Map<String, Map<String, Object>> groups = new LinkedHashMap<>();
+    for (Map<String, Object> result : results) {
+      String status = str(result.get("status")).toLowerCase(Locale.ROOT);
+      if (!Set.of("failed", "error").contains(status)) continue;
+
+      String raw = firstNonBlank(str(result.get("errorMessage")), extractFailureLine(str(result.get("logOutput"))), "Unclassified failure");
+      String signature = failureSignature(raw);
+      Map<String, Object> group = groups.computeIfAbsent(signature, key -> {
+        Map<String, Object> created = new LinkedHashMap<>();
+        created.put("signature", key);
+        created.put("message", trim(raw, 260));
+        created.put("count", 0);
+        created.put("scriptIds", new ArrayList<Integer>());
+        created.put("scriptNames", new ArrayList<String>());
+        return created;
+      });
+      group.put("count", intValue(group.get("count"), 0) + 1);
+      @SuppressWarnings("unchecked")
+      List<Integer> scriptIds = (List<Integer>) group.get("scriptIds");
+      @SuppressWarnings("unchecked")
+      List<String> scriptNames = (List<String>) group.get("scriptNames");
+      int scriptId = intValue(result.get("scriptId"), 0);
+      if (scriptId > 0 && !scriptIds.contains(scriptId)) scriptIds.add(scriptId);
+      String scriptName = firstNonBlank(str(result.get("scriptName")), "Script #" + scriptId);
+      if (!scriptNames.contains(scriptName)) scriptNames.add(scriptName);
+    }
+    return groups.values().stream()
+        .sorted((a, b) -> Integer.compare(intValue(b.get("count"), 0), intValue(a.get("count"), 0)))
+        .toList();
+  }
+
+  protected String extractFailureLine(String output) {
+    if (output == null || output.isBlank()) return "";
+    for (String line : output.split("\\R")) {
+      String normalized = line.toLowerCase(Locale.ROOT);
+      if (normalized.contains("exception") || normalized.contains("assertion") || normalized.contains("failed") || normalized.contains("error")) {
+        return line.trim();
+      }
+    }
+    return "";
+  }
+
+  protected String failureSignature(String value) {
+    String normalized = str(value).toLowerCase(Locale.ROOT)
+        .replaceAll("\\b\\d+\\b", "#")
+        .replaceAll("0x[0-9a-f]+", "0x#")
+        .replaceAll("[\"'`].{1,80}?[\"'`]", "\"...\"")
+        .replaceAll("\\s+", " ")
+        .trim();
+    if (normalized.isBlank()) return "unclassified failure";
+    return trim(normalized, 140);
   }
 
   protected void shapeRunResponse(Map<String, Object> run) {
