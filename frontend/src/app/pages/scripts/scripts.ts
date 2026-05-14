@@ -190,6 +190,49 @@ export class Scripts implements OnInit {
     this.applyFilters();
   }
 
+  clearCatalogFilters() {
+    this.searchTerm = '';
+    this.selectedCategory = null;
+    this.selectedAvailability = null;
+    this.applyFilters();
+  }
+
+  setAvailabilityFilter(filter: AvailabilityFilter | null) {
+    this.selectedAvailability = filter;
+    this.applyFilters();
+  }
+
+  hasActiveFilters(): boolean {
+    return Boolean(this.searchTerm || this.selectedCategory || this.selectedAvailability);
+  }
+
+  getTotalScriptsCount(): number {
+    return this.scripts().length;
+  }
+
+  getRunnableScriptsCount(): number {
+    return this.scripts().filter(script => this.getScriptAvailability(script).canRun).length;
+  }
+
+  getAttentionScriptsCount(): number {
+    return this.scripts().filter(script => this.getScriptAvailability(script).kind === 'attention').length;
+  }
+
+  getMaintenanceScriptsCount(): number {
+    return this.scripts().filter(script => this.getScriptAvailability(script).kind === 'maintenance').length;
+  }
+
+  getTopCategorySummary(): string {
+    const categories = this.categories()
+      .filter(category => Number(category.scriptCount || 0) > 0)
+      .slice()
+      .sort((a, b) => Number(b.scriptCount || 0) - Number(a.scriptCount || 0));
+
+    if (categories.length === 0) return 'No categories yet';
+    const top = categories[0];
+    return `${top.name} leads with ${top.scriptCount} script${Number(top.scriptCount) === 1 ? '' : 's'}`;
+  }
+
   toggleScript(script: Script) {
     if (!this.auth.canEdit()) return;
 

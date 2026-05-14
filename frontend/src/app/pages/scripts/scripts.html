@@ -5,82 +5,142 @@
   </div>
 }
 <div class="scripts-page">
-  <div class="page-header">
-    <div>
-      <h1>Scripts</h1>
-      <p class="subtitle">Manage your ST automation test scripts</p>
+  <div class="scripts-shell">
+    <div class="page-header scripts-command-header">
+      <div class="page-title-block">
+        <span class="page-kicker">Script Catalog</span>
+        <h1>Automation Scripts</h1>
+        <p class="subtitle">Curate, assign, and launch the Java test scripts available in this workspace.</p>
+      </div>
+      <div class="header-actions">
+        <input type="file" #fileInput accept=".java" style="display: none;" (change)="onFileImport($event)" />
+        <p-button *ngIf="auth.isAdmin()" label="Assignments" icon="pi pi-link" severity="secondary" [outlined]="true" styleClass="command-btn" (onClick)="openAssignmentManagement()" />
+        <p-button *ngIf="auth.canEdit()" label="Import" icon="pi pi-upload" severity="secondary" [outlined]="true" styleClass="command-btn" (onClick)="fileInput.click()" />
+        <p-button *ngIf="auth.isAdmin()" label="Sync Workspace" icon="pi pi-refresh" severity="primary" styleClass="command-primary-btn" (onClick)="syncScripts()" />
+      </div>
     </div>
-    <div class="header-actions">
-      <input type="file" #fileInput accept=".java" style="display: none;" (change)="onFileImport($event)" />
-      <p-button *ngIf="auth.isAdmin()" label="Manage Assignments" icon="pi pi-link" severity="info" (onClick)="openAssignmentManagement()" />
-      <p-button *ngIf="auth.canEdit()" label="Import Script" icon="pi pi-upload" severity="secondary" (onClick)="fileInput.click()" />
-      <p-button *ngIf="auth.isAdmin()" label="Sync Workspace" icon="pi pi-refresh" severity="primary" (onClick)="syncScripts()" />
+
+    <div class="scripts-status-strip">
+      <button type="button" class="catalog-metric" [class.active]="selectedAvailability === null && !searchTerm && !selectedCategory" (click)="clearCatalogFilters()">
+        <span>{{ getTotalScriptsCount() }}</span>
+        <small>Total Scripts</small>
+      </button>
+      <button type="button" class="catalog-metric success" [class.active]="selectedAvailability === 'runnable'" (click)="setAvailabilityFilter('runnable')">
+        <span>{{ getRunnableScriptsCount() }}</span>
+        <small>Runnable</small>
+      </button>
+      <button type="button" class="catalog-metric warn" [class.active]="selectedAvailability === 'attention'" (click)="setAvailabilityFilter('attention')">
+        <span>{{ getAttentionScriptsCount() }}</span>
+        <small>Needs Review</small>
+      </button>
+      <button type="button" class="catalog-metric maintenance" [class.active]="selectedAvailability === 'maintenance'" (click)="setAvailabilityFilter('maintenance')">
+        <span>{{ getMaintenanceScriptsCount() }}</span>
+        <small>Maintenance</small>
+      </button>
+      <div class="catalog-insight">
+        <strong>{{ getTopCategorySummary() }}</strong>
+        <span>{{ filteredScripts().length }} visible after filters</span>
+      </div>
     </div>
   </div>
 
-  <!-- Filters -->
-  <div class="filters-bar">
-    <p-iconfield>
-      <p-inputicon styleClass="pi pi-search" />
-      <input type="text" pInputText placeholder="Search scripts..." [(ngModel)]="searchTerm" (input)="onSearch()" />
-    </p-iconfield>
+  <div class="catalog-toolbar">
+    <div class="filters-bar">
+      <p-iconfield styleClass="catalog-search">
+        <p-inputicon styleClass="pi pi-search" />
+        <input type="text" pInputText placeholder="Search name or class..." [(ngModel)]="searchTerm" (input)="onSearch()" />
+      </p-iconfield>
 
-    <p-select
-      [options]="categories()"
-      [(ngModel)]="selectedCategory"
-      optionLabel="name"
-      optionValue="id"
-      placeholder="All Categories"
-      [showClear]="true"
-      (onChange)="onCategoryChange()"
-      [style]="{ minWidth: '200px' }"
-    />
+      <p-select
+        [options]="categories()"
+        [(ngModel)]="selectedCategory"
+        optionLabel="name"
+        optionValue="id"
+        placeholder="All Categories"
+        [showClear]="true"
+        (onChange)="onCategoryChange()"
+        styleClass="catalog-select"
+      />
 
-    <p-select
-      [options]="availabilityFilterOptions"
-      [(ngModel)]="selectedAvailability"
-      optionLabel="label"
-      optionValue="value"
-      placeholder="All Availability"
-      [showClear]="true"
-      (onChange)="onAvailabilityChange()"
-      [style]="{ minWidth: '210px' }"
-    >
-      <ng-template pTemplate="selectedItem" let-selectedOption>
-        <div class="availability-filter-value">
-          <i class="pi pi-filter"></i>
-          <span>{{ selectedOption?.label || getAvailabilityFilterLabel() }}</span>
-        </div>
-      </ng-template>
-      <ng-template pTemplate="item" let-option>
-        <div class="availability-filter-value">
-          <i class="pi pi-circle-fill"></i>
-          <span>{{ option.label }}</span>
-        </div>
-      </ng-template>
-    </p-select>
+      <p-select
+        [options]="availabilityFilterOptions"
+        [(ngModel)]="selectedAvailability"
+        optionLabel="label"
+        optionValue="value"
+        placeholder="All Availability"
+        [showClear]="true"
+        (onChange)="onAvailabilityChange()"
+        styleClass="catalog-select availability-select"
+      >
+        <ng-template pTemplate="selectedItem" let-selectedOption>
+          <div class="availability-filter-value">
+            <i class="pi pi-filter"></i>
+            <span>{{ selectedOption?.label || getAvailabilityFilterLabel() }}</span>
+          </div>
+        </ng-template>
+        <ng-template pTemplate="item" let-option>
+          <div class="availability-filter-value">
+            <i class="pi pi-circle-fill"></i>
+            <span>{{ option.label }}</span>
+          </div>
+        </ng-template>
+      </p-select>
 
-    <span class="result-count">{{ filteredScripts().length }} scripts</span>
+      <p-button
+        *ngIf="hasActiveFilters()"
+        icon="pi pi-filter-slash"
+        [rounded]="true"
+        [text]="true"
+        severity="secondary"
+        pTooltip="Clear filters"
+        tooltipStyleClass="single-line-tooltip"
+        (onClick)="clearCatalogFilters()"
+      />
+    </div>
+
+    <div class="category-rail" *ngIf="categories().length > 0">
+      @for (cat of categories(); track cat.id) {
+        <button
+          type="button"
+          class="category-chip"
+          [class.active]="selectedCategory === cat.id"
+          (click)="selectedCategory = selectedCategory === cat.id ? null : cat.id; onCategoryChange()"
+        >
+          <i [class]="'pi ' + cat.icon" [style.color]="cat.color"></i>
+          <span>{{ cat.name }}</span>
+          <strong>{{ cat.scriptCount }}</strong>
+        </button>
+      }
+    </div>
   </div>
 
-  <!-- Bulk Actions Bar (Appears when scripts are selected) -->
   <div class="bulk-actions-bar" *ngIf="auth.canRun() && selectedScripts().length > 0">
     <div class="selection-info">
       <i class="pi pi-check-circle"></i>
-      <span><strong>{{ selectedScripts().length }}</strong> scripts selected</span>
+      <span><strong>{{ selectedScripts().length }}</strong> selected</span>
       @if (getRunnableSelectedCount() !== selectedScripts().length) {
         <span class="selection-warning">{{ getRunnableSelectedCount() }} runnable</span>
       }
     </div>
     <div class="action-buttons">
-      <p-button label="Clear Selection" [text]="true" severity="secondary" size="small" (onClick)="selectedScripts.set([])" />
+      <p-button label="Clear" [text]="true" severity="secondary" size="small" (onClick)="selectedScripts.set([])" />
       <p-button label="Run Selected" icon="pi pi-bolt" severity="success" size="small" (onClick)="runSelectedScripts()" />
-      <p-button *ngIf="auth.canEdit()" label="Remove Selected" icon="pi pi-trash" severity="danger" size="small" (onClick)="promptDeleteSelected()" />
+      <p-button *ngIf="auth.canEdit()" label="Remove" icon="pi pi-trash" severity="danger" size="small" (onClick)="promptDeleteSelected()" />
     </div>
   </div>
 
-  <!-- Scripts Table -->
   <p-card styleClass="scripts-table-card">
+    <ng-template #header>
+      <div class="table-card-header">
+        <div>
+          <h3>Script Registry</h3>
+          <span>{{ filteredScripts().length }} visible of {{ getTotalScriptsCount() }} total</span>
+        </div>
+        <div class="table-card-actions">
+          <p-button *ngIf="auth.canRun()" label="Runner" icon="pi pi-bolt" [outlined]="true" size="small" routerLink="/runner" />
+        </div>
+      </div>
+    </ng-template>
     <p-table
       [value]="filteredScripts()"
       [paginator]="true"
@@ -123,34 +183,45 @@
                 <i class="pi pi-file-edit"></i>
               </div>
               <div class="script-title-row">
-                <a
-                  class="script-name script-name-link"
-                  [routerLink]="['/scripts', script.id, 'configuration']"
-                  (click)="$event.stopPropagation()"
-                >
-                  {{ getDisplayScriptName(script) }}
-                </a>
-                <button
-                  *ngIf="auth.canEdit()"
-                  type="button"
-                  class="rename-script-btn"
-                  (click)="openRenameDialog(script, $event)"
-                  pTooltip="Rename script"
-                  tooltipStyleClass="single-line-tooltip"
-                >
-                  <i class="pi pi-pencil"></i>
-                </button>
-                @if (script.isFlaky) {
-                  <span class="flaky-script-badge" [pTooltip]="getFlakyTooltip(script)" tooltipStyleClass="single-line-tooltip">
-                    <i class="pi pi-exclamation-triangle"></i>
-                    Flaky
-                  </span>
-                }
+                <div class="script-name-line">
+                  <a
+                    class="script-name script-name-link"
+                    [routerLink]="['/scripts', script.id, 'configuration']"
+                    (click)="$event.stopPropagation()"
+                  >
+                    {{ getDisplayScriptName(script) }}
+                  </a>
+                  <button
+                    *ngIf="auth.canEdit()"
+                    type="button"
+                    class="rename-script-btn"
+                    (click)="openRenameDialog(script, $event)"
+                    pTooltip="Rename script"
+                    tooltipStyleClass="single-line-tooltip"
+                  >
+                    <i class="pi pi-pencil"></i>
+                  </button>
+                  @if (script.isFlaky) {
+                    <span class="flaky-script-badge" [pTooltip]="getFlakyTooltip(script)" tooltipStyleClass="single-line-tooltip">
+                      <i class="pi pi-exclamation-triangle"></i>
+                      Flaky
+                    </span>
+                  }
+                </div>
+                <span class="script-class-name">{{ script.className }}</span>
               </div>
             </div>
           </td>
           <td>
-            <p-tag [value]="getCategoryName(script.categoryId)" [severity]="getCategorySeverity(getCategoryName(script.categoryId))" />
+            <p-tag
+              styleClass="script-category-tag"
+              [value]="getCategoryName(script.categoryId)"
+              [style]="{
+                background: script.categoryColor + '14',
+                color: script.categoryColor,
+                border: '1px solid ' + script.categoryColor + '32'
+              }"
+            />
           </td>
           <td>
             @if (getAssignedUsers(script).length > 0) {
