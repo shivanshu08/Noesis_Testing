@@ -484,6 +484,20 @@ export class RunDetail implements OnInit, OnDestroy {
     }
   }
 
+  getRunToneClass(status: string | null | undefined): string {
+    switch (this.normalizeStatus(status)) {
+      case 'passed':
+        return 'status-tone-passed';
+      case 'failed':
+      case 'error':
+        return 'status-tone-failed';
+      case 'stopped':
+        return 'status-tone-stopped';
+      default:
+        return 'status-tone-default';
+    }
+  }
+
   formatDate(date: string | undefined | null): string {
     if (!date) return '-';
 

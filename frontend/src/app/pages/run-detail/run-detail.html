@@ -1,4 +1,4 @@
-<div class="run-detail-page">
+<div class="run-detail-page" [ngClass]="getRunToneClass(run()?.status)">
   <div class="details-toolbar">
     <a routerLink="/history" class="back-link">
       <i class="pi pi-arrow-left"></i>
