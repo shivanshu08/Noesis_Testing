@@ -84,6 +84,7 @@ export class ScriptConfiguration implements OnInit, OnDestroy {
     if (!detail) return [] as ScriptConfigurationResource[];
     const byKey = new Map<string, ScriptConfigurationResource>();
     for (const resource of [...(detail.resources.javaConfigs || []), ...(detail.resources.jsonFiles || [])]) {
+      if (this.getResourceLogicalName(resource).trim().toLowerCase() === 'base config') continue;
       const key = String(resource.resolvedPath || resource.reference || '').toLowerCase();
       if (key) byKey.set(key, resource);
     }

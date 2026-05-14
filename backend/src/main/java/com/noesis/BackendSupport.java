@@ -387,7 +387,11 @@ class BackendSupport {
 
   protected Path automationWorkspace() {
     if (env.value("ST_AUTOMATION_SOURCE", "git").equalsIgnoreCase("git")) {
-      return Path.of(env.value("ST_AUTOMATION_GIT_CACHE_PATH", env.value("ST_AUTOMATION_PATH", "automation-scripts")));
+      Path cache = Path.of(env.value("ST_AUTOMATION_GIT_CACHE_PATH", env.value("ST_AUTOMATION_PATH", "automation-scripts")));
+      if (Files.exists(cache)) return cache;
+      Path local = Path.of(env.value("ST_AUTOMATION_PATH", "automation-scripts"));
+      if (Files.exists(local)) return local;
+      return cache;
     }
     return Path.of(env.value("ST_AUTOMATION_PATH", "automation-scripts"));
   }

@@ -5,9 +5,11 @@ import com.sun.net.httpserver.HttpExchange;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -165,6 +167,10 @@ class ExecutionFeature extends SuiteManagementFeature {
         Map<String, Object> metadata = enrichRunMetadata(runForMetadata);
         Path workspace = Path.of(str(metadata.get("workspacePath")));
         if (!Files.exists(workspace.resolve("pom.xml"))) throw new IOException("Workspace is missing pom.xml: " + workspace);
+        List<String> syncedFiles = syncCoreConfigurationToRunWorkspace(id, workspace);
+        if (!syncedFiles.isEmpty()) {
+          logExecution(id, "INFO", "Synced edited core configuration files into paused workspace: " + String.join(", ", syncedFiles));
+        }
         List<String> command = mavenCommand();
         command.add("-q");
         command.add("-DskipTests");
@@ -183,6 +189,43 @@ class ExecutionFeature extends SuiteManagementFeature {
       }
     }, executionExecutor);
     send(ex, 202, message("Rebuild started."));
+  }
+
+  protected List<String> syncCoreConfigurationToRunWorkspace(int runId, Path runWorkspace) throws IOException, SQLException {
+    List<Map<String, Object>> scripts = db.rows("""
+        SELECT s.*
+        FROM execution_results er
+        JOIN scripts s ON s.id = er.script_id
+        WHERE er.run_id = ?
+        ORDER BY er.id
+        """, runId);
+    Path sourceWorkspace = automationWorkspace().toAbsolutePath().normalize();
+    LinkedHashSet<String> synced = new LinkedHashSet<>();
+
+    for (Map<String, Object> script : scripts) {
+      Path scriptPath = resolveScriptPath(script.get("filePath"));
+      String source = Files.exists(scriptPath) && Files.isRegularFile(scriptPath) ? Files.readString(scriptPath) : "";
+      Map<String, List<Map<String, Object>>> resources = scriptResources(script, scriptPath, source);
+      List<Map<String, Object>> coreResources = new ArrayList<>();
+      coreResources.addAll(resources.getOrDefault("javaConfigs", List.of()));
+      coreResources.addAll(resources.getOrDefault("jsonFiles", List.of()));
+
+      for (Map<String, Object> resource : coreResources) {
+        if (!Boolean.TRUE.equals(resource.get("existsOnDisk"))) continue;
+        String rawPath = str(resource.get("resolvedPath"));
+        if (rawPath.isBlank()) continue;
+        Path sourcePath = Path.of(rawPath).toAbsolutePath().normalize();
+        if (!Files.isRegularFile(sourcePath)) continue;
+        if (!sourcePath.startsWith(sourceWorkspace)) continue;
+        Path targetPath = runWorkspace.resolve(sourceWorkspace.relativize(sourcePath)).normalize();
+        if (!targetPath.startsWith(runWorkspace.toAbsolutePath().normalize())) continue;
+        Files.createDirectories(targetPath.getParent());
+        Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
+        synced.add(sourcePath.getFileName().toString());
+      }
+    }
+
+    return new ArrayList<>(synced);
   }
 
   protected void runs(HttpExchange ex, Auth auth, Map<String, String> q) throws IOException, SQLException {

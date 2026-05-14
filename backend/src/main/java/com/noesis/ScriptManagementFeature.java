@@ -3,6 +3,7 @@ package com.noesis;
 
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -19,6 +20,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 class ScriptManagementFeature extends ExecutionSupportFeature {
   protected void scripts(HttpExchange ex, Auth auth, Map<String, String> q) throws IOException, SQLException {
@@ -477,13 +480,11 @@ class ScriptManagementFeature extends ExecutionSupportFeature {
     }
 
     List<Map<String, Object>> scriptJavaConfigs = new ArrayList<>();
-    Map<String, Object> baseConfig = null;
     for (String imp : javaImports(source)) {
       String simple = imp.substring(imp.lastIndexOf('.') + 1);
       Path resolved = resolveImportPath(workspace, imp);
       if (resolved == null) continue;
       if (isBaseConfigImport(simple)) {
-        baseConfig = resource("java_config", imp, resolved, Files.exists(resolved), "Base Config");
         continue;
       }
       if (!isScriptJavaConfigImport(simple)) continue;
@@ -506,7 +507,6 @@ class ScriptManagementFeature extends ExecutionSupportFeature {
       Map<String, Object> item = resource("json", str(configFile), resolved, resolved != null && Files.exists(resolved), "script json");
       jsonFiles.add(item);
     }
-    if (baseConfig != null) javaConfigs.add(baseConfig);
     for (Map<String, Object> jsonFile : jsonFiles) {
       Path jsonPath = jsonFile.get("resolvedPath") == null ? null : Path.of(str(jsonFile.get("resolvedPath")));
       if (jsonPath == null || !Files.exists(jsonPath)) continue;
@@ -804,8 +804,34 @@ class ScriptManagementFeature extends ExecutionSupportFeature {
     Path path = Path.of(q.getOrDefault("path", ""));
     if (!Files.exists(path)) throw new ApiException(404, "File not found.");
     Headers h = ex.getResponseHeaders();
+    if (Files.isDirectory(path)) {
+      String zipName = path.getFileName() == null ? "attachment.zip" : path.getFileName() + ".zip";
+      h.add("Content-Disposition", "attachment; filename=\"" + zipName + "\"");
+      sendBytes(ex, 200, zipDirectory(path));
+      return;
+    }
     h.add("Content-Disposition", ("download".equals(q.get("mode")) ? "attachment" : "inline") + "; filename=\"" + path.getFileName() + "\"");
     sendBytes(ex, 200, Files.readAllBytes(path));
+  }
+
+  protected byte[] zipDirectory(Path directory) throws IOException {
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    try (ZipOutputStream zip = new ZipOutputStream(bytes); var paths = Files.walk(directory)) {
+      paths.filter(Files::isRegularFile).forEach(path -> {
+        try {
+          String entryName = directory.relativize(path).toString().replace('\\', '/');
+          zip.putNextEntry(new ZipEntry(entryName));
+          Files.copy(path, zip);
+          zip.closeEntry();
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      });
+    } catch (RuntimeException e) {
+      if (e.getCause() instanceof IOException io) throw io;
+      throw e;
+    }
+    return bytes.toByteArray();
   }
 
   protected void assignments(HttpExchange ex, Auth auth) throws IOException, SQLException {
