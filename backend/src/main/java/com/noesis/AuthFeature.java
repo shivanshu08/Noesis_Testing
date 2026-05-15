@@ -63,6 +63,10 @@ class AuthFeature extends BackendSupport {
     send(ex, 200, out);
   }
 
+  protected void renew(HttpExchange ex, Auth auth) throws IOException {
+    send(ex, 200, Map.of("token", jwt.create(auth.userId, auth.role)));
+  }
+
   protected void changePassword(HttpExchange ex, Auth auth) throws IOException, SQLException {
     Map<String, Object> body = body(ex);
     String current = str(body.get("currentPassword"));

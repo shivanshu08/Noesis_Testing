@@ -37,6 +37,7 @@ class ApiRouter extends NotificationFeature {
       if (auth == null) return;
 
       if (path.equals("/api/auth/me") && method.equals("GET")) me(ex, auth);
+      else if (path.equals("/api/auth/renew") && method.equals("POST")) renew(ex, auth);
       else if (path.equals("/api/auth/change-password") && method.equals("PUT")) changePassword(ex, auth);
       else if (path.equals("/api/auth/profile") && method.equals("PUT")) profile(ex, auth);
       else if (path.equals("/api/users") && method.equals("GET")) users(ex, auth);

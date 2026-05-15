@@ -12,8 +12,12 @@ export class AuthService {
   private readonly tokenKey = 'noesis_token';
   private readonly userKey = 'noesis_user';
   private readonly sessionService = inject(SessionService);
+  private readonly sessionRenewalLeadMs = 60000;
+  private readonly activeRenewalRetryMs = 30000;
   private sessionExpiryTimer: ReturnType<typeof setTimeout> | null = null;
   private suppressSessionErrorsUntil = 0;
+  private sessionExpiryDeferredForExecution = false;
+  private renewingSession = false;
 
   private currentUser = signal<User | null>(this.loadValidUser());
   readonly user = this.currentUser.asReadonly();
@@ -30,6 +34,18 @@ export class AuthService {
 
   constructor(private http: HttpClient, private router: Router) {
     this.scheduleSessionExpiry();
+    this.sessionService.executionActivityChanged.subscribe((active) => {
+      if (active) {
+        this.scheduleSessionExpiry();
+        return;
+      }
+      if (this.sessionExpiryDeferredForExecution) {
+        this.sessionExpiryDeferredForExecution = false;
+        this.sessionExpired();
+        return;
+      }
+      this.scheduleSessionExpiry();
+    });
   }
 
   login(credentials: LoginRequest): Observable<LoginResponse> {
@@ -48,13 +64,24 @@ export class AuthService {
   logout(): void {
     this.suppressSessionErrorsUntil = Date.now() + 5000;
     this.clearLocalSession();
+    this.sessionService.clearExecutionTimeoutHolds();
     this.sessionService.reset();
     this.router.navigate(['/login']);
+  }
+
+  renewSession(): Observable<{ token: string }> {
+    return this.http.post<{ token: string }>(`${this.apiUrl}/renew`, {}).pipe(
+      tap(response => {
+        localStorage.setItem(this.tokenKey, response.token);
+        this.scheduleSessionExpiry();
+      })
+    );
   }
 
   cancelTimedOutSession(): void {
     this.suppressSessionErrorsUntil = Date.now() + 5000;
     this.clearLocalSession();
+    this.sessionService.clearExecutionTimeoutHolds();
     this.sessionService.reset();
     this.router.navigate(['/login']);
   }
@@ -71,6 +98,11 @@ export class AuthService {
    * Shows a blocking re-login prompt without redirecting away from the current page.
    */
   sessionExpired(): void {
+    if (this.sessionService.isExecutionInProgress()) {
+      this.deferSessionExpiryForExecution();
+      return;
+    }
+
     // Only proceed if this is a fresh timeout (no duplicate alerts)
     const username = this.currentUser()?.username || this.loadStoredUsername();
     if (!this.sessionService.triggerSessionTimeout(username)) return;
@@ -89,7 +121,7 @@ export class AuthService {
     if (!token) return null;
     if (this.isTokenExpired(token)) {
       this.sessionExpired();
-      return null;
+      return this.sessionService.isExecutionInProgress() ? token : null;
     }
     return token;
   }
@@ -147,7 +179,52 @@ export class AuthService {
       this.sessionExpired();
       return;
     }
+
+    if (this.sessionService.isExecutionInProgress()) {
+      const renewalDelay = Math.max(1000, delay - this.sessionRenewalLeadMs);
+      this.sessionExpiryTimer = setTimeout(() => this.renewActiveExecutionSession(), renewalDelay);
+      return;
+    }
+
     this.sessionExpiryTimer = setTimeout(() => this.sessionExpired(), delay);
+  }
+
+  private renewActiveExecutionSession(): void {
+    if (!this.sessionService.isExecutionInProgress()) {
+      this.scheduleSessionExpiry();
+      return;
+    }
+    if (this.renewingSession) return;
+
+    const token = localStorage.getItem(this.tokenKey);
+    if (!token || this.isTokenExpired(token)) {
+      this.deferSessionExpiryForExecution();
+      return;
+    }
+
+    this.renewingSession = true;
+    this.renewSession().subscribe({
+      next: () => {
+        this.renewingSession = false;
+      },
+      error: () => {
+        this.renewingSession = false;
+        this.deferSessionExpiryForExecution();
+      },
+    });
+  }
+
+  private deferSessionExpiryForExecution(): void {
+    this.sessionExpiryDeferredForExecution = true;
+    this.clearSessionExpiryTimer();
+    this.sessionExpiryTimer = setTimeout(() => {
+      if (this.sessionService.isExecutionInProgress()) {
+        this.renewActiveExecutionSession();
+        return;
+      }
+      this.sessionExpiryDeferredForExecution = false;
+      this.sessionExpired();
+    }, this.activeRenewalRetryMs);
   }
 
   private clearSessionExpiryTimer(): void {

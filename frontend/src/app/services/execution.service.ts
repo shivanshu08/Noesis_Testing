@@ -1,8 +1,9 @@
 import { Injectable, signal } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, Subject, retry } from 'rxjs';
+import { Observable, Subject, catchError, retry, tap, throwError } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { ExecutionRun, ExecutionLog, DashboardStats, ScheduledRun, ExecutionArtifact } from '../models/interfaces';
+import { SessionService } from './session.service';
 
 @Injectable({ providedIn: 'root' })
 export class ExecutionService {
@@ -13,6 +14,8 @@ export class ExecutionService {
   private seenRunLogKeys = new Set<string>();
   private seenGlobalTerminalRunIds = new Set<number>();
   private globalPollInitialized = false;
+  private currentRunSessionHoldKey: string | null = null;
+  private readonly globalExecutionHoldKey = 'execution-global-active';
 
   readonly liveLogs = signal<ExecutionLog[]>([]);
   readonly activeRunStatus = signal<string | null>(null);
@@ -20,13 +23,20 @@ export class ExecutionService {
   
   readonly globalRunUpdates = new Subject<any>();
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient, private sessionService: SessionService) {}
 
   initGlobalSocket(): void {
     if (this.globalPollHandle === null) {
       const poll = () => {
         this.getRuns({ limit: 20 }).subscribe({
           next: (runs) => {
+            const hasActiveRun = runs.some(run => this.isSessionProtectedRunStatus(run.status));
+            if (hasActiveRun) {
+              this.sessionService.holdExecutionTimeout(this.globalExecutionHoldKey);
+            } else {
+              this.sessionService.releaseExecutionTimeout(this.globalExecutionHoldKey);
+            }
+
             const terminalRuns = runs.filter(run => this.isTerminalRunStatus(run.status));
             if (!this.globalPollInitialized) {
               terminalRuns.forEach(run => this.seenGlobalTerminalRunIds.add(run.id));
@@ -55,6 +65,10 @@ export class ExecutionService {
     return ['passed', 'failed', 'error', 'stopped'].includes(String(status || '').toLowerCase());
   }
 
+  private isSessionProtectedRunStatus(status: string | null | undefined): boolean {
+    return ['queued', 'running'].includes(String(status || '').toLowerCase());
+  }
+
   runScripts(scriptIds: number[], suiteName?: string, environmentName = 'local'): Observable<{
     runId: number;
     message: string;
@@ -62,6 +76,9 @@ export class ExecutionService {
     resolvedScriptIds?: number[];
     autoIncludedDependencyIds?: number[];
   }> {
+    const startHoldKey = `execution-start-${Date.now()}`;
+    this.sessionService.holdExecutionTimeout(startHoldKey);
+
     return this.http.post<{
       runId: number;
       message: string;
@@ -72,7 +89,16 @@ export class ExecutionService {
       scriptIds,
       suiteName,
       environment: environmentName,
-    });
+    }).pipe(
+      tap(response => {
+        this.sessionService.releaseExecutionTimeout(startHoldKey);
+        this.holdRunSession(response.runId);
+      }),
+      catchError(error => {
+        this.sessionService.releaseExecutionTimeout(startHoldKey);
+        return throwError(() => error);
+      })
+    );
   }
 
   stopRun(runId: number): Observable<any> {
@@ -182,6 +208,7 @@ export class ExecutionService {
     this.seenRunLogKeys.clear();
 
     this.disconnectFromRun();
+    this.holdRunSession(runId);
 
     const poll = () => {
       this.getLogs(runId).subscribe({
@@ -205,6 +232,11 @@ export class ExecutionService {
       this.getRunDetails(runId).subscribe({
         next: run => {
           this.activeRunStatus.set(run.status);
+          if (this.isSessionProtectedRunStatus(run.status)) {
+            this.holdRunSession(runId);
+          } else {
+            this.releaseRunSession();
+          }
           if (run.status !== 'queued' && run.status !== 'running' && run.status !== 'paused') {
             this.getArtifacts(runId).subscribe({
               next: artifacts => this.artifactsReady.set(artifacts),
@@ -226,7 +258,23 @@ export class ExecutionService {
       window.clearInterval(this.runPollHandle);
       this.runPollHandle = null;
     }
+    this.releaseRunSession();
     this.lastRunLogId = 0;
     this.seenRunLogKeys.clear();
+  }
+
+  private holdRunSession(runId: number): void {
+    const key = `execution-run-${runId}`;
+    if (this.currentRunSessionHoldKey && this.currentRunSessionHoldKey !== key) {
+      this.sessionService.releaseExecutionTimeout(this.currentRunSessionHoldKey);
+    }
+    this.currentRunSessionHoldKey = key;
+    this.sessionService.holdExecutionTimeout(key);
+  }
+
+  private releaseRunSession(): void {
+    if (!this.currentRunSessionHoldKey) return;
+    this.sessionService.releaseExecutionTimeout(this.currentRunSessionHoldKey);
+    this.currentRunSessionHoldKey = null;
   }
 }
