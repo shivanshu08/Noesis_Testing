@@ -24,7 +24,7 @@
       <button type="button" class="catalog-metric" [class.active]="selectedAvailability === null && !searchTerm && !selectedCategory" (click)="clearCatalogFilters()">
         <span>{{ getTotalScriptsCount() }}</span>
         <small>Total Scripts</small>
-        <i class="pi pi-file-edit"></i>
+        <i class="pi pi-file metric-icon metric-file-icon"></i>
       </button>
       <button type="button" class="catalog-metric success" [class.active]="selectedAvailability === 'runnable'" (click)="setAvailabilityFilter('runnable')">
         <span>{{ getRunnableScriptsCount() }}</span>
