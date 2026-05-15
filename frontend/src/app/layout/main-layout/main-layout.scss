@@ -8,7 +8,7 @@
 // Sidebar
 .sidebar {
   width: var(--sidebar-width);
-  background: var(--surface-section);
+  background: var(--noesis-sidebar-bg, var(--surface-section));
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -18,7 +18,7 @@
   z-index: 100;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: visible;
-  border-right: 1px solid var(--surface-border);
+  border-right: 1px solid color-mix(in srgb, var(--noesis-sidebar-bg, var(--surface-border)) 78%, var(--surface-border));
   box-shadow: 2px 0 15px rgba(0, 0, 0, 0.05);
 
   .sidebar-header {
@@ -26,7 +26,7 @@
     padding: 0 14px;
     display: flex;
     align-items: center;
-    border-bottom: 1px solid var(--surface-border);
+    border-bottom: 1px solid color-mix(in srgb, var(--noesis-sidebar-muted, var(--surface-border)) 24%, transparent);
 
     .logo {
       display: flex;
@@ -37,7 +37,7 @@
         width: 34px;
         height: 34px;
         min-width: 34px;
-        background: #204985;
+        background: var(--noesis-primary);
         border-radius: 8px;
         display: flex;
         align-items: center;
@@ -84,7 +84,7 @@
     gap: 12px;
     padding: 10px 14px;
     border-radius: 10px;
-    color: var(--text-color-secondary);
+    color: var(--noesis-sidebar-muted, var(--text-color-secondary));
     font-size: 0.9rem;
     font-weight: 500;
     cursor: pointer;
@@ -100,27 +100,27 @@
     }
 
     &:hover {
-      background: var(--surface-hover);
-      color: var(--text-color);
+      background: var(--noesis-sidebar-active, var(--surface-hover));
+      color: var(--noesis-sidebar-text, var(--text-color));
       transform: translateX(4px);
     }
 
     &.active {
       background: linear-gradient(90deg, var(--noesis-sidebar-active, rgba(99, 102, 241, 0.15)) 0%, transparent 100%);
-      color: var(--noesis-accent, #a78bfa);
+      color: var(--noesis-sidebar-text, var(--noesis-accent, #a78bfa));
       border-left: 4px solid var(--noesis-accent, #a78bfa);
       border-radius: 0 10px 10px 0;
       transform: none; // Reset transform on active
       font-weight: 600;
 
-      i { color: var(--noesis-accent, #a78bfa); }
+      i { color: var(--noesis-sidebar-text, var(--noesis-accent, #a78bfa)); }
     }
   }
 
   .sidebar-footer {
     position: relative;
     padding: 18px 14px 10px;
-    border-top: 1px solid var(--surface-border);
+    border-top: 1px solid color-mix(in srgb, var(--noesis-sidebar-muted, var(--surface-border)) 24%, transparent);
 
     .sidebar-user {
       display: flex;
@@ -143,7 +143,7 @@
         .sidebar-user-name {
           font-size: 1rem;
           font-weight: 800;
-          color: var(--text-color);
+          color: var(--noesis-sidebar-text, var(--text-color));
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -167,7 +167,7 @@
       border: 0;
       border-radius: 8px;
       background: transparent;
-      color: var(--text-color-secondary);
+      color: var(--noesis-sidebar-muted, var(--text-color-secondary));
       font: inherit;
       font-weight: 700;
       cursor: pointer;
@@ -176,7 +176,7 @@
       i {
         width: 22px;
         font-size: 1.3rem;
-        color: #334155;
+        color: var(--noesis-sidebar-muted, #334155);
       }
 
       span {
@@ -186,8 +186,8 @@
       }
 
       &:hover {
-        color: var(--text-color);
-        background: var(--surface-hover);
+        color: var(--noesis-sidebar-text, var(--text-color));
+        background: var(--noesis-sidebar-active, var(--surface-hover));
       }
     }
 
@@ -198,10 +198,10 @@
       align-items: center;
       justify-content: center;
       gap: 10px;
-      border: 1px solid var(--surface-border);
+      border: 1px solid color-mix(in srgb, var(--noesis-sidebar-muted, var(--surface-border)) 36%, transparent);
       border-radius: 18px;
-      background: transparent;
-      color: var(--text-color-secondary);
+      background: color-mix(in srgb, var(--noesis-sidebar-bg, transparent) 82%, var(--surface-card));
+      color: var(--noesis-sidebar-muted, var(--text-color-secondary));
       font: inherit;
       font-weight: 800;
       cursor: pointer;
@@ -212,8 +212,8 @@
       }
 
       &:hover {
-        background: var(--surface-hover);
-        color: var(--text-color);
+        background: var(--noesis-sidebar-active, var(--surface-hover));
+        color: var(--noesis-sidebar-text, var(--text-color));
         border-color: color-mix(in srgb, var(--surface-border) 70%, var(--noesis-primary));
       }
     }
@@ -240,7 +240,7 @@
 
       h3 {
         margin: 0 0 12px;
-        color: var(--text-color-secondary);
+        color: var(--text-color);
         font-size: 1.12rem;
         font-weight: 800;
       }
@@ -252,7 +252,7 @@
       gap: 4px;
       padding: 6px;
       border-radius: 8px;
-      background: #eef2f7;
+      background: color-mix(in srgb, var(--surface-hover) 80%, var(--surface-card));
 
       button {
         min-width: 74px;
@@ -267,8 +267,8 @@
         cursor: pointer;
 
         &.active {
-          background: #ffffff;
-          color: #020617;
+          background: var(--surface-card);
+          color: var(--text-color);
           box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
         }
       }
@@ -311,7 +311,7 @@
 
       &.active,
       &:hover {
-        outline: 3px solid #3b82f6;
+        outline: 3px solid var(--noesis-primary);
         transform: translateY(-1px);
       }
     }

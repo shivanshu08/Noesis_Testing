@@ -1,8 +1,12 @@
 import { Injectable, signal } from '@angular/core';
 
+export type ThemePresetName = 'Aura' | 'Lara' | 'Nora' | 'Drogevate';
+export type ThemeColorMode = 'monochrome' | 'color';
+
 export interface AppTheme {
   name: string;
   label: string;
+  preset: ThemePresetName;
   primary: string;
   primaryDark: string;
   accent: string;
@@ -10,22 +14,142 @@ export interface AppTheme {
   sidebarBgDark: string;
   sidebarActiveLight: string;
   sidebarActiveDark: string;
+  sidebarTextLight: string;
+  sidebarTextDark: string;
+  sidebarMutedLight: string;
+  sidebarMutedDark: string;
+}
+
+export interface ThemeSwatch {
+  label: string;
+  value: string;
+}
+
+export interface SurfaceSwatch extends ThemeSwatch {
+  light: SurfaceScale;
+  dark: SurfaceScale;
+}
+
+interface SurfaceScale {
+  bg: string;
+  surface: string;
+  section: string;
+  overlay: string;
+  border: string;
+  hover: string;
+  text: string;
+  muted: string;
 }
 
 @Injectable({ providedIn: 'root' })
 export class ThemeService {
-  readonly themes: AppTheme[] = [
-    { name: 'indigo', label: 'Indigo', primary: '#6366f1', primaryDark: '#4f46e5', accent: '#a78bfa', sidebarBgLight: '#f8fafc', sidebarBgDark: '#1e1e2e', sidebarActiveLight: '#e2e8f0', sidebarActiveDark: 'rgba(99, 102, 241, 0.15)' },
-    { name: 'ocean', label: 'Ocean Blue', primary: '#0ea5e9', primaryDark: '#0284c7', accent: '#38bdf8', sidebarBgLight: '#f0f9ff', sidebarBgDark: '#0f172a', sidebarActiveLight: '#e0f2fe', sidebarActiveDark: 'rgba(14, 165, 233, 0.15)' },
-    { name: 'emerald', label: 'Emerald', primary: '#10b981', primaryDark: '#059669', accent: '#34d399', sidebarBgLight: '#ecfdf5', sidebarBgDark: '#0f1a14', sidebarActiveLight: '#d1fae5', sidebarActiveDark: 'rgba(16, 185, 129, 0.15)' },
-    { name: 'rose', label: 'Rose', primary: '#f43f5e', primaryDark: '#e11d48', accent: '#fb7185', sidebarBgLight: '#fff1f2', sidebarBgDark: '#1a0f14', sidebarActiveLight: '#ffe4e6', sidebarActiveDark: 'rgba(244, 63, 94, 0.15)' },
-    { name: 'amber', label: 'Amber', primary: '#f59e0b', primaryDark: '#d97706', accent: '#fbbf24', sidebarBgLight: '#fffbeb', sidebarBgDark: '#1a1408', sidebarActiveLight: '#fef3c7', sidebarActiveDark: 'rgba(245, 158, 11, 0.15)' },
-    { name: 'teal', label: 'Teal', primary: '#14b8a6', primaryDark: '#0d9488', accent: '#2dd4bf', sidebarBgLight: '#f0fdfa', sidebarBgDark: '#0f1a19', sidebarActiveLight: '#ccfbf1', sidebarActiveDark: 'rgba(20, 184, 166, 0.15)' },
-    { name: 'sunset', label: 'Sunset', primary: '#f97316', primaryDark: '#ea580c', accent: '#f43f5e', sidebarBgLight: '#fff7ed', sidebarBgDark: '#1a0f0a', sidebarActiveLight: '#ffedd5', sidebarActiveDark: 'rgba(249, 115, 22, 0.15)' },
-    { name: 'cyberpunk', label: 'Cyberpunk', primary: '#d946ef', primaryDark: '#be185d', accent: '#06b6d4', sidebarBgLight: '#fdf4ff', sidebarBgDark: '#12031a', sidebarActiveLight: '#fae8ff', sidebarActiveDark: 'rgba(217, 70, 239, 0.15)' },
-    { name: 'midnight', label: 'Midnight', primary: '#8b5cf6', primaryDark: '#7c3aed', accent: '#3b82f6', sidebarBgLight: '#f5f3ff', sidebarBgDark: '#0b0f19', sidebarActiveLight: '#ede9fe', sidebarActiveDark: 'rgba(139, 92, 246, 0.15)' },
-    { name: 'slate', label: 'Slate', primary: '#64748b', primaryDark: '#475569', accent: '#94a3b8', sidebarBgLight: '#f8fafc', sidebarBgDark: '#0f1115', sidebarActiveLight: '#f1f5f9', sidebarActiveDark: 'rgba(100, 116, 139, 0.15)' },
+  readonly presets: ThemePresetName[] = ['Aura', 'Lara', 'Nora', 'Drogevate'];
+
+  private readonly colorPalettes: Record<ThemePresetName, ThemeSwatch[]> = {
+    Aura: [
+      { label: 'Indigo', value: '#6366f1' },
+      { label: 'Sky', value: '#0ea5e9' },
+      { label: 'Teal', value: '#14b8a6' },
+      { label: 'Emerald', value: '#10b981' },
+      { label: 'Amber', value: '#f59e0b' },
+      { label: 'Rose', value: '#f43f5e' },
+      { label: 'Violet', value: '#8b5cf6' },
+      { label: 'Pink', value: '#ec4899' }
+    ],
+    Lara: [
+      { label: 'Blue', value: '#3b82f6' },
+      { label: 'Cyan', value: '#06b6d4' },
+      { label: 'Green', value: '#22c55e' },
+      { label: 'Orange', value: '#f97316' },
+      { label: 'Purple', value: '#a855f7' },
+      { label: 'Fuchsia', value: '#d946ef' },
+      { label: 'Slate', value: '#64748b' },
+      { label: 'Zinc', value: '#71717a' }
+    ],
+    Nora: [
+      { label: 'Sapphire', value: '#2563eb' },
+      { label: 'Azure', value: '#0284c7' },
+      { label: 'Mint', value: '#059669' },
+      { label: 'Lime', value: '#65a30d' },
+      { label: 'Plum', value: '#7c3aed' },
+      { label: 'Magenta', value: '#c026d3' },
+      { label: 'Coral', value: '#e11d48' },
+      { label: 'Graphite', value: '#475569' }
+    ],
+    Drogevate: [
+      { label: 'Drogevate Blue', value: '#204985' },
+      { label: 'Deep Navy', value: '#173b6d' },
+      { label: 'Clinical Blue', value: '#2f67a7' },
+      { label: 'Signal Cyan', value: '#1aa7c8' },
+      { label: 'Digital Teal', value: '#18b7a6' },
+      { label: 'Action Orange', value: '#ff6b2c' },
+      { label: 'Review Amber', value: '#f5a623' },
+      { label: 'Alert Rose', value: '#e83e6f' }
+    ]
+  };
+
+  private readonly monochromePalettes: Record<ThemePresetName, ThemeSwatch[]> = {
+    Aura: [
+      { label: 'Slate', value: '#334155' },
+      { label: 'Zinc', value: '#52525b' },
+      { label: 'Neutral', value: '#525252' },
+      { label: 'Stone', value: '#57534e' }
+    ],
+    Lara: [
+      { label: 'Steel', value: '#475569' },
+      { label: 'Gray', value: '#4b5563' },
+      { label: 'Zinc', value: '#3f3f46' },
+      { label: 'Charcoal', value: '#374151' }
+    ],
+    Nora: [
+      { label: 'Graphite', value: '#374151' },
+      { label: 'Smoke', value: '#52525b' },
+      { label: 'Ash', value: '#64748b' },
+      { label: 'Ink', value: '#1f2937' }
+    ],
+    Drogevate: [
+      { label: 'Navy Mono', value: '#244569' },
+      { label: 'Blue Gray', value: '#3d5875' },
+      { label: 'Slate Blue', value: '#50657e' },
+      { label: 'Cool Steel', value: '#64748b' }
+    ]
+  };
+
+  readonly surfaceSwatches: SurfaceSwatch[] = [
+    {
+      label: 'Slate',
+      value: '#cbd5e1',
+      light: { bg: '#f4f7fb', surface: '#ffffff', section: '#ffffff', overlay: '#ffffff', border: '#dbe3ee', hover: '#edf2f7', text: '#102033', muted: '#64748b' },
+      dark: { bg: '#0f172a', surface: '#1e293b', section: '#111827', overlay: '#1e293b', border: '#334155', hover: '#26344a', text: '#f8fafc', muted: '#94a3b8' }
+    },
+    {
+      label: 'Neutral',
+      value: '#d4d4d4',
+      light: { bg: '#f7f7f7', surface: '#ffffff', section: '#ffffff', overlay: '#ffffff', border: '#dedede', hover: '#f0f0f0', text: '#171717', muted: '#737373' },
+      dark: { bg: '#111111', surface: '#1f1f1f', section: '#181818', overlay: '#242424', border: '#3a3a3a', hover: '#2d2d2d', text: '#fafafa', muted: '#a3a3a3' }
+    },
+    {
+      label: 'Zinc',
+      value: '#a1a1aa',
+      light: { bg: '#f7f7fa', surface: '#ffffff', section: '#ffffff', overlay: '#ffffff', border: '#dedee6', hover: '#f1f1f5', text: '#18181b', muted: '#71717a' },
+      dark: { bg: '#101014', surface: '#1d1d23', section: '#17171c', overlay: '#24242b', border: '#3f3f46', hover: '#2a2a32', text: '#fafafa', muted: '#a1a1aa' }
+    },
+    {
+      label: 'Stone',
+      value: '#d6d3d1',
+      light: { bg: '#f8f7f5', surface: '#ffffff', section: '#ffffff', overlay: '#ffffff', border: '#e2dfdc', hover: '#f1efed', text: '#1c1917', muted: '#78716c' },
+      dark: { bg: '#171412', surface: '#24201d', section: '#1d1a18', overlay: '#2b2622', border: '#44403c', hover: '#312c28', text: '#fafaf9', muted: '#a8a29e' }
+    }
   ];
+
+  private currentPreset = signal<ThemePresetName>(this.loadPreset());
+  readonly preset = this.currentPreset.asReadonly();
+
+  private colorMode = signal<ThemeColorMode>(this.loadColorMode());
+  readonly mode = this.colorMode.asReadonly();
+
+  private selectedSurface = signal<SurfaceSwatch>(this.loadSurface());
+  readonly surface = this.selectedSurface.asReadonly();
 
   private currentTheme = signal<AppTheme>(this.loadTheme());
   readonly theme = this.currentTheme.asReadonly();
@@ -38,15 +162,47 @@ export class ThemeService {
     this.applyTheme(this.currentTheme());
   }
 
+  primarySwatches(): ThemeSwatch[] {
+    return this.colorMode() === 'monochrome'
+      ? this.monochromePalettes[this.currentPreset()]
+      : this.colorPalettes[this.currentPreset()];
+  }
+
+  setPreset(preset: ThemePresetName): void {
+    this.currentPreset.set(preset);
+    localStorage.setItem('noesis_theme_preset', preset);
+
+    const selectedPalette = this.colorMode() === 'monochrome' ? this.monochromePalettes[preset] : this.colorPalettes[preset];
+    const currentPrimary = this.currentTheme().primary.toLowerCase();
+    const matchingSwatch = selectedPalette.find(swatch => swatch.value.toLowerCase() === currentPrimary) || selectedPalette[0];
+    this.setCustomPrimary(matchingSwatch.value, matchingSwatch.label, preset);
+  }
+
+  setColorMode(mode: ThemeColorMode): void {
+    this.colorMode.set(mode);
+    localStorage.setItem('noesis_theme_color_mode', mode);
+    const palette = mode === 'monochrome' ? this.monochromePalettes[this.currentPreset()] : this.colorPalettes[this.currentPreset()];
+    const matchingSwatch = palette.find(swatch => swatch.value.toLowerCase() === this.currentTheme().primary.toLowerCase()) || palette[0];
+    this.setCustomPrimary(matchingSwatch.value, matchingSwatch.label, this.currentPreset());
+  }
+
+  setSurface(label: string): void {
+    const nextSurface = this.surfaceSwatches.find(surface => surface.label === label) || this.surfaceSwatches[0];
+    this.selectedSurface.set(nextSurface);
+    localStorage.setItem('noesis_theme_surface', nextSurface.label);
+    this.applyDarkMode(this.darkMode());
+  }
+
   setTheme(theme: AppTheme): void {
+    this.currentPreset.set(theme.preset || this.currentPreset());
     this.currentTheme.set(theme);
     localStorage.setItem('noesis_theme', theme.name);
+    localStorage.setItem('noesis_theme_preset', theme.preset || this.currentPreset());
     this.applyTheme(theme);
   }
 
   toggleDarkMode(): void {
-    const newMode = !this.darkMode();
-    this.setDarkMode(newMode);
+    this.setDarkMode(!this.darkMode());
   }
 
   setDarkMode(newMode: boolean): void {
@@ -55,60 +211,111 @@ export class ThemeService {
     this.applyDarkMode(newMode);
   }
 
-  setCustomPrimary(primary: string, label: string): void {
-    const theme: AppTheme = {
-      name: `custom-${primary.replace('#', '')}`,
-      label,
-      primary,
-      primaryDark: this.mixWithBlack(primary, 0.14),
-      accent: this.mixWithWhite(primary, 0.32),
-      sidebarBgLight: '#f8fafc',
-      sidebarBgDark: '#1e1e2e',
-      sidebarActiveLight: 'rgba(59, 130, 246, 0.12)',
-      sidebarActiveDark: 'rgba(59, 130, 246, 0.18)'
-    };
-
+  setCustomPrimary(primary: string, label: string, preset = this.currentPreset()): void {
+    const theme = this.createTheme(primary, label, preset);
     this.currentTheme.set(theme);
     localStorage.setItem('noesis_theme', theme.name);
+    localStorage.setItem('noesis_theme_preset', preset);
     localStorage.setItem('noesis_custom_primary', JSON.stringify(theme));
     this.applyTheme(theme);
   }
 
+  chartPalette(): string[] {
+    const primary = this.currentTheme().primary;
+    const accent = this.currentTheme().accent;
+    return [
+      primary,
+      this.mixWithWhite(primary, this.darkMode() ? 0.22 : 0.16),
+      accent,
+      '#22c55e',
+      '#f59e0b',
+      '#ef4444',
+      '#06b6d4',
+      '#8b5cf6'
+    ];
+  }
+
+  private createTheme(primary: string, label: string, preset: ThemePresetName): AppTheme {
+    const [r, g, b] = this.hexToRgb(primary);
+    const isDrogevate = preset === 'Drogevate';
+
+    return {
+      name: `${preset.toLowerCase()}-${primary.replace('#', '')}`,
+      label,
+      preset,
+      primary,
+      primaryDark: this.mixWithBlack(primary, isDrogevate ? 0.22 : 0.14),
+      accent: isDrogevate ? '#9ed8f5' : this.mixWithWhite(primary, 0.32),
+      sidebarBgLight: isDrogevate ? '#204985' : '#ffffff',
+      sidebarBgDark: isDrogevate ? '#14345f' : '#111827',
+      sidebarActiveLight: isDrogevate ? 'rgba(255, 255, 255, 0.14)' : `rgba(${r}, ${g}, ${b}, 0.12)`,
+      sidebarActiveDark: isDrogevate ? 'rgba(158, 216, 245, 0.18)' : `rgba(${r}, ${g}, ${b}, 0.18)`,
+      sidebarTextLight: isDrogevate ? '#ffffff' : '#0f172a',
+      sidebarTextDark: '#f8fafc',
+      sidebarMutedLight: isDrogevate ? '#c4d9f3' : '#64748b',
+      sidebarMutedDark: isDrogevate ? '#bdd4f4' : '#94a3b8'
+    };
+  }
+
   private loadTheme(): AppTheme {
     const saved = localStorage.getItem('noesis_theme');
-    if (saved?.startsWith('custom-')) {
-      const custom = localStorage.getItem('noesis_custom_primary');
-      if (custom) {
-        try {
-          return JSON.parse(custom) as AppTheme;
-        } catch {
-          localStorage.removeItem('noesis_custom_primary');
+    const custom = localStorage.getItem('noesis_custom_primary');
+
+    if (custom) {
+      try {
+        const parsed = JSON.parse(custom) as Partial<AppTheme>;
+        if (parsed.primary && parsed.label) {
+          return this.createTheme(parsed.primary, parsed.label, parsed.preset || this.loadPreset());
         }
+      } catch {
+        localStorage.removeItem('noesis_custom_primary');
       }
     }
-    return this.themes.find(t => t.name === saved) || this.themes[0];
+
+    const legacyTheme = this.legacyThemes.find(theme => theme.name === saved);
+    if (legacyTheme) {
+      return this.createTheme(legacyTheme.primary, legacyTheme.label, 'Aura');
+    }
+
+    const preset = this.loadPreset();
+    const palette = this.loadColorMode() === 'monochrome' ? this.monochromePalettes[preset] : this.colorPalettes[preset];
+    return this.createTheme(palette[0].value, palette[0].label, preset);
+  }
+
+  private loadPreset(): ThemePresetName {
+    const saved = localStorage.getItem('noesis_theme_preset') as ThemePresetName | null;
+    return saved && this.presets.includes(saved) ? saved : 'Aura';
+  }
+
+  private loadColorMode(): ThemeColorMode {
+    return localStorage.getItem('noesis_theme_color_mode') === 'monochrome' ? 'monochrome' : 'color';
+  }
+
+  private loadSurface(): SurfaceSwatch {
+    const saved = localStorage.getItem('noesis_theme_surface');
+    return this.surfaceSwatches.find(surface => surface.label === saved) || this.surfaceSwatches[0];
   }
 
   private loadDarkMode(): boolean {
     const saved = localStorage.getItem('noesis_dark_mode');
-    if (saved !== null) {
-      return saved === 'true';
-    }
-    // Default to dark theme across the application
-    return true;
+    return saved === null ? false : saved === 'true';
   }
 
   private applyTheme(theme: AppTheme): void {
     const root = document.documentElement;
     const isDark = this.darkMode();
+    const [r, g, b] = this.hexToRgb(theme.primary);
 
+    root.dataset['noesisPreset'] = theme.preset.toLowerCase();
     root.style.setProperty('--noesis-primary', theme.primary);
+    root.style.setProperty('--noesis-primary-rgb', `${r}, ${g}, ${b}`);
     root.style.setProperty('--noesis-primary-dark', theme.primaryDark);
     root.style.setProperty('--noesis-accent', theme.accent);
     root.style.setProperty('--noesis-sidebar-bg', isDark ? theme.sidebarBgDark : theme.sidebarBgLight);
     root.style.setProperty('--noesis-sidebar-active', isDark ? theme.sidebarActiveDark : theme.sidebarActiveLight);
-    
-    // Map custom theme to PrimeNG v18 Aura native variables so ALL buttons/bars sync flawlessly
+    root.style.setProperty('--noesis-sidebar-text', isDark ? theme.sidebarTextDark : theme.sidebarTextLight);
+    root.style.setProperty('--noesis-sidebar-muted', isDark ? theme.sidebarMutedDark : theme.sidebarMutedLight);
+
     root.style.setProperty('--primary-color', theme.primary);
     root.style.setProperty('--p-primary-color', theme.primary);
     root.style.setProperty('--p-primary-500', theme.primary);
@@ -118,75 +325,54 @@ export class ThemeService {
 
   private applyDarkMode(isDark: boolean): void {
     const root = document.documentElement;
-    if (isDark) {
-      root.classList.add('dark-mode');
-      root.classList.add('p-dark'); // <-- CRITICAL: Triggers PrimeNG's native dark mode on all inputs/cards
-      root.style.setProperty('--logo-filter', 'brightness(0) invert(1)');
-      
-      // Update global Noesis variables for dark mode
-      root.style.setProperty('--noesis-bg', '#0f172a');
-      root.style.setProperty('--noesis-surface', '#1e293b');
-      root.style.setProperty('--noesis-text', '#f8fafc');
-      root.style.setProperty('--noesis-text-secondary', '#94a3b8');
-      root.style.setProperty('--noesis-border', '#334155');
-      
-      // Remove custom overrides so PrimeNG uses its PERFECT native Dark Aura palette
-      for (let i = 0; i <= 950; i += (i === 0 ? 50 : (i === 50 ? 50 : 100))) {
-        root.style.removeProperty(`--p-surface-${i}`);
-      }
-      root.style.removeProperty('--p-content-background');
-      root.style.removeProperty('--p-content-hover-background');
-      root.style.removeProperty('--p-content-border-color');
+    const surface = isDark ? this.selectedSurface().dark : this.selectedSurface().light;
 
-      // Map Layout Variables to the Palette
-      root.style.setProperty('--surface-ground', 'var(--p-surface-950)');
-      root.style.setProperty('--surface-section', 'var(--p-surface-900)');
-      root.style.setProperty('--surface-card', 'var(--p-surface-900)');
-      root.style.setProperty('--surface-overlay', 'var(--p-surface-800)');
-      root.style.setProperty('--surface-border', 'var(--p-surface-700)');
-      root.style.setProperty('--surface-hover', 'var(--p-surface-800)');
-      root.style.setProperty('--text-color', 'var(--p-surface-0)');
-      root.style.setProperty('--text-color-secondary', 'var(--p-surface-400)');
-    } else {
-      root.classList.remove('dark-mode');
-      root.classList.remove('p-dark');
-      root.style.setProperty('--logo-filter', 'brightness(0)');
-      
-      // Update global Noesis variables for light mode
-      root.style.setProperty('--noesis-bg', '#f8f9fc');
-      root.style.setProperty('--noesis-surface', '#ffffff');
-      root.style.setProperty('--noesis-text', '#1e293b');
-      root.style.setProperty('--noesis-text-secondary', '#64748b');
-      root.style.setProperty('--noesis-border', '#e2e8f0');
-      
-      // Strip the custom palette so PrimeNG uses its default beautiful Light mode
-      for (let i = 0; i <= 950; i += (i === 0 ? 50 : (i === 50 ? 50 : 100))) {
-        root.style.removeProperty(`--p-surface-${i}`);
-      }
-      root.style.removeProperty('--p-content-background');
-      root.style.removeProperty('--p-content-hover-background');
-      root.style.removeProperty('--p-content-border-color');
-      
-      // --- CRISP LIGHT MODE ---
-      root.style.setProperty('--surface-ground', '#f8fafc');
-      root.style.setProperty('--surface-section', '#ffffff');
-      root.style.setProperty('--surface-card', '#ffffff');
-      root.style.setProperty('--surface-overlay', '#ffffff');
-      root.style.setProperty('--surface-border', '#e2e8f0');
-      root.style.setProperty('--surface-hover', '#f1f5f9');
-      root.style.setProperty('--text-color', '#0f172a');
-      root.style.setProperty('--text-color-secondary', '#64748b');
+    root.classList.toggle('dark-mode', isDark);
+    root.classList.toggle('p-dark', isDark);
+    root.style.setProperty('--logo-filter', isDark ? 'brightness(0) invert(1)' : 'brightness(0)');
 
-      // Strip PrimeNG dark overrides to restore pure light mode
-      root.style.removeProperty('--p-surface-950');
-      root.style.removeProperty('--p-surface-900');
-      root.style.removeProperty('--p-surface-800');
-      root.style.removeProperty('--p-surface-700');
-      root.style.removeProperty('--p-content-background');
-      root.style.removeProperty('--p-content-hover-background');
-    }
+    root.style.setProperty('--noesis-bg', surface.bg);
+    root.style.setProperty('--noesis-surface', surface.surface);
+    root.style.setProperty('--noesis-text', surface.text);
+    root.style.setProperty('--noesis-text-secondary', surface.muted);
+    root.style.setProperty('--noesis-border', surface.border);
+
+    root.style.setProperty('--surface-ground', surface.bg);
+    root.style.setProperty('--surface-section', surface.section);
+    root.style.setProperty('--surface-card', surface.surface);
+    root.style.setProperty('--surface-overlay', surface.overlay);
+    root.style.setProperty('--surface-border', surface.border);
+    root.style.setProperty('--surface-hover', surface.hover);
+    root.style.setProperty('--text-color', surface.text);
+    root.style.setProperty('--text-color-secondary', surface.muted);
+
+    root.style.setProperty('--p-content-background', surface.surface);
+    root.style.setProperty('--p-content-hover-background', surface.hover);
+    root.style.setProperty('--p-content-border-color', surface.border);
+    root.style.setProperty('--p-surface-0', '#ffffff');
+    root.style.setProperty('--p-surface-50', isDark ? '#f8fafc' : surface.bg);
+    root.style.setProperty('--p-surface-100', isDark ? '#f1f5f9' : surface.hover);
+    root.style.setProperty('--p-surface-200', surface.border);
+    root.style.setProperty('--p-surface-700', isDark ? surface.border : '#475569');
+    root.style.setProperty('--p-surface-800', isDark ? surface.overlay : '#334155');
+    root.style.setProperty('--p-surface-900', isDark ? surface.surface : '#1e293b');
+    root.style.setProperty('--p-surface-950', isDark ? surface.bg : '#0f172a');
+
     this.applyTheme(this.currentTheme());
   }
+
+  private readonly legacyThemes: Array<Pick<AppTheme, 'name' | 'label' | 'primary'>> = [
+    { name: 'indigo', label: 'Indigo', primary: '#6366f1' },
+    { name: 'ocean', label: 'Ocean Blue', primary: '#0ea5e9' },
+    { name: 'emerald', label: 'Emerald', primary: '#10b981' },
+    { name: 'rose', label: 'Rose', primary: '#f43f5e' },
+    { name: 'amber', label: 'Amber', primary: '#f59e0b' },
+    { name: 'teal', label: 'Teal', primary: '#14b8a6' },
+    { name: 'sunset', label: 'Sunset', primary: '#f97316' },
+    { name: 'cyberpunk', label: 'Cyberpunk', primary: '#d946ef' },
+    { name: 'midnight', label: 'Midnight', primary: '#8b5cf6' },
+    { name: 'slate', label: 'Slate', primary: '#64748b' }
+  ];
 
   private mixWithBlack(hex: string, amount: number): string {
     return this.mix(hex, '#000000', amount);

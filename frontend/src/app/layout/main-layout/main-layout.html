@@ -63,16 +63,16 @@
           <section class="theme-section">
             <h3>Color Mode</h3>
             <div class="segmented-control color-mode">
-              <button type="button" [class.active]="themeColorMode === 'monochrome'" (click)="themeColorMode = 'monochrome'">Monochrome</button>
-              <button type="button" [class.active]="themeColorMode === 'color'" (click)="themeColorMode = 'color'">Color</button>
+              <button type="button" [class.active]="themeService.mode() === 'monochrome'" (click)="setThemeColorMode('monochrome')">Monochrome</button>
+              <button type="button" [class.active]="themeService.mode() === 'color'" (click)="setThemeColorMode('color')">Color</button>
             </div>
           </section>
 
           <section class="theme-section">
             <h3>Primary</h3>
             <div class="swatch-grid primary-grid">
-              @for (swatch of primarySwatches; track swatch.value) {
-                <button type="button" class="color-swatch" [class.active]="themeService.theme().primary === swatch.value" [style.background]="swatch.value" [attr.aria-label]="swatch.label" (click)="themeService.setCustomPrimary(swatch.value, swatch.label)"></button>
+              @for (swatch of primarySwatches(); track swatch.value) {
+                <button type="button" class="color-swatch" [class.active]="themeService.theme().primary === swatch.value" [style.background]="swatch.value" [attr.aria-label]="swatch.label" (click)="selectPrimary(swatch.value, swatch.label)"></button>
               }
             </div>
           </section>
@@ -80,8 +80,8 @@
           <section class="theme-section">
             <h3>Surface</h3>
             <div class="swatch-grid">
-              @for (surface of surfaceSwatches; track surface.name) {
-                <button type="button" class="color-swatch surface-swatch" [class.active]="selectedSurface === surface.name" [style.background]="surface.value" [attr.aria-label]="surface.name" (click)="selectedSurface = surface.name"></button>
+              @for (surface of surfaceSwatches; track surface.label) {
+                <button type="button" class="color-swatch surface-swatch" [class.active]="themeService.surface().label === surface.label" [style.background]="surface.value" [attr.aria-label]="surface.label" (click)="selectSurface(surface.label)"></button>
               }
             </div>
           </section>
@@ -90,7 +90,7 @@
             <h3>Presets</h3>
             <div class="segmented-control presets">
               @for (preset of themePresets; track preset) {
-                <button type="button" [class.active]="selectedPreset === preset" (click)="selectedPreset = preset">{{ preset }}</button>
+                <button type="button" [class.active]="themeService.preset() === preset" (click)="selectPreset(preset)">{{ preset }}</button>
               }
             </div>
           </section>

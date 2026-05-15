@@ -18,7 +18,7 @@ import { InputIconModule } from 'primeng/inputicon';
 import { MessageService } from 'primeng/api';
 import { AlertOverlayComponent } from '../../components/alert-overlay/alert-overlay';
 import { AuthService } from '../../services/auth.service';
-import { ThemeService } from '../../services/theme.service';
+import { ThemePresetName, ThemeService } from '../../services/theme.service';
 import { ExecutionService } from '../../services/execution.service';
 import { NotificationService } from '../../services/notification.service';
 import { environment } from '../../../environments/environment';
@@ -36,42 +36,18 @@ export class MainLayout implements OnInit, OnDestroy {
   showThemeMenu = false;
   showNotifications = false;
   showCommandPalette = false;
-  themeColorMode: 'monochrome' | 'color' = 'color';
-  selectedSurface = 'Slate';
-  selectedPreset = 'Aura';
   searchQuery = '';
   private pollingInterval: any;
 
-  readonly primarySwatches = [
-    { label: 'Slate', value: '#334155' },
-    { label: 'Stone', value: '#78716c' },
-    { label: 'Gray', value: '#64748b' },
-    { label: 'Emerald', value: '#10b981' },
-    { label: 'Green', value: '#22c55e' },
-    { label: 'Lime', value: '#84cc16' },
-    { label: 'Orange', value: '#f97316' },
-    { label: 'Amber', value: '#f59e0b' },
-    { label: 'Yellow', value: '#eab308' },
-    { label: 'Teal', value: '#14b8a6' },
-    { label: 'Cyan', value: '#06b6d4' },
-    { label: 'Sky', value: '#0ea5e9' },
-    { label: 'Blue', value: '#3b82f6' },
-    { label: 'Indigo', value: '#6366f1' },
-    { label: 'Violet', value: '#8b5cf6' },
-    { label: 'Purple', value: '#a855f7' },
-    { label: 'Fuchsia', value: '#d946ef' },
-    { label: 'Pink', value: '#ec4899' },
-    { label: 'Rose', value: '#f43f5e' }
-  ];
+  readonly primarySwatches = computed(() => this.themeService.primarySwatches());
 
-  readonly surfaceSwatches = [
-    { name: 'Slate', value: '#cbd5e1' },
-    { name: 'Neutral', value: '#d4d4d4' },
-    { name: 'Zinc', value: '#a1a1aa' },
-    { name: 'Stone', value: '#d6d3d1' }
-  ];
+  get surfaceSwatches() {
+    return this.themeService.surfaceSwatches;
+  }
 
-  readonly themePresets = ['Aura', 'Lara', 'Nora', 'Drogevate'];
+  get themePresets() {
+    return this.themeService.presets;
+  }
 
   navItems = computed(() => {
     const items = [
@@ -185,6 +161,22 @@ export class MainLayout implements OnInit, OnDestroy {
 
   setDarkMode(isDark: boolean) {
     this.themeService.setDarkMode(isDark);
+  }
+
+  setThemeColorMode(mode: 'monochrome' | 'color') {
+    this.themeService.setColorMode(mode);
+  }
+
+  selectPrimary(value: string, label: string) {
+    this.themeService.setCustomPrimary(value, label);
+  }
+
+  selectSurface(label: string) {
+    this.themeService.setSurface(label);
+  }
+
+  selectPreset(preset: ThemePresetName) {
+    this.themeService.setPreset(preset);
   }
 
   getUserInitials(fullName = ''): string {

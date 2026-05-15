@@ -51,6 +51,7 @@ export class Dashboard implements OnInit, OnDestroy {
   ) {
     effect(() => {
       const isDark = this.themeService.isDarkMode();
+      this.themeService.theme();
       if (this.stats()) {
         this.initCharts();
       }
@@ -115,6 +116,8 @@ export class Dashboard implements OnInit, OnDestroy {
     const textColorSecondary = isDark ? '#94a3b8' : '#64748b'; 
     const surfaceBorder = isDark ? '#334155' : '#e2e8f0';
     const surfaceCard = isDark ? '#1e293b' : '#ffffff';
+    const theme = this.themeService.theme();
+    const chartPalette = this.themeService.chartPalette();
 
     // Premium universal tooltip (Sleek slate dark mode look in both themes)
     const tooltipConfig = {
@@ -197,7 +200,12 @@ export class Dashboard implements OnInit, OnDestroy {
     if (currentStats) {
       this.categoryChartData = {
         labels: currentStats.categoryStats.map(c => c.name),
-        datasets: [{ data: currentStats.categoryStats.map(c => c.count), backgroundColor: currentStats.categoryStats.map(c => c.color), borderWidth: 0 }]
+        datasets: [{
+          data: currentStats.categoryStats.map(c => c.count),
+          backgroundColor: currentStats.categoryStats.map((_, index) => chartPalette[index % chartPalette.length]),
+          hoverBackgroundColor: currentStats.categoryStats.map((_, index) => chartPalette[(index + 1) % chartPalette.length]),
+          borderWidth: 0
+        }]
       };
 
       // Process DB data for the Combo Chart
@@ -237,9 +245,9 @@ export class Dashboard implements OnInit, OnDestroy {
               {
                   type: 'bar',
                   label: 'Passed Scripts',
-                  backgroundColor: 'rgba(16, 185, 129, 0.88)',
-                  hoverBackgroundColor: '#10b981',
-                  borderColor: '#059669',
+                  backgroundColor: theme.primary,
+                  hoverBackgroundColor: theme.primaryDark,
+                  borderColor: theme.primaryDark,
                   borderWidth: 0,
                   data: labels.length ? values.map(v => v.passed) : [0],
                   borderRadius: { topLeft: 8, topRight: 8, bottomLeft: 2, bottomRight: 2 },
