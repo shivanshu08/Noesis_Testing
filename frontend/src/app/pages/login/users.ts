@@ -14,10 +14,11 @@ import { CheckboxModule } from 'primeng/checkbox';
 import { AvatarModule } from 'primeng/avatar';
 import { InputGroupModule } from 'primeng/inputgroup';
 import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
-import { MessageService, ConfirmationService } from 'primeng/api';
+import { MessageService } from 'primeng/api';
 import { FileUploadModule } from 'primeng/fileupload';
 import { TooltipModule } from 'primeng/tooltip';
 import { AlertOverlayComponent } from '../../components/alert-overlay/alert-overlay';
+import { AlertOverlayService } from '../../services/alert-overlay.service';
 import { AuthService } from '../../services/auth.service';
 import { environment } from '../../../environments/environment';
 
@@ -25,7 +26,6 @@ import { environment } from '../../../environments/environment';
   selector: 'app-users',
   standalone: true,
   imports: [CommonModule, FormsModule, TableModule, CardModule, ButtonModule, DialogModule, InputTextModule, PasswordModule, SelectModule, TagModule, CheckboxModule, AvatarModule, InputGroupModule, InputGroupAddonModule, FileUploadModule, TooltipModule, AlertOverlayComponent],
-  providers: [ConfirmationService],
   templateUrl: './users.html',
   styleUrls: ['./users.scss']
 })
@@ -53,7 +53,7 @@ export class Users implements OnInit {
   constructor(
     private http: HttpClient, 
     private messageService: MessageService, 
-    private confirmationService: ConfirmationService,
+    private alertOverlay: AlertOverlayService,
     private authService: AuthService
   ) {}
 
@@ -182,27 +182,26 @@ export class Users implements OnInit {
     });
   }
 
-  deleteUser(user: any) {
-    this.confirmationService.confirm({
+  async deleteUser(user: any) {
+    const confirmed = await this.alertOverlay.confirm({
       message: 'Are you sure you want to delete ' + user.username + '?',
-      header: 'Confirm',
+      title: 'Confirm',
       icon: 'pi pi-trash',
       acceptLabel: 'Delete',
       rejectLabel: 'Cancel',
       acceptIcon: 'pi pi-trash',
       rejectIcon: 'pi pi-times',
-      defaultFocus: 'reject',
-      acceptButtonStyleClass: 'p-button-sm p-button-danger',
-      rejectButtonStyleClass: 'p-button-sm p-button-text p-button-secondary',
-      accept: () => {
-        this.http.delete(`${this.apiUrl}/${user.id}`, { headers: this.getHeaders() }).subscribe({
-          next: () => {
-            this.messageService.add({ severity: 'success', summary: 'Successful', detail: 'User Deleted' });
-            this.loadUsers();
-          },
-          error: (err) => this.messageService.add({ severity: 'error', summary: 'Error', detail: err.error?.error || 'Failed to delete user' })
-        });
-      }
+      danger: true,
+    });
+
+    if (!confirmed) return;
+
+    this.http.delete(`${this.apiUrl}/${user.id}`, { headers: this.getHeaders() }).subscribe({
+      next: () => {
+        this.messageService.add({ severity: 'success', summary: 'Successful', detail: 'User Deleted' });
+        this.loadUsers();
+      },
+      error: (err) => this.messageService.add({ severity: 'error', summary: 'Error', detail: err.error?.error || 'Failed to delete user' })
     });
   }
 }

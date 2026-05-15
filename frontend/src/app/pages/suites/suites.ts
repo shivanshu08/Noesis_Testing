@@ -10,7 +10,7 @@ import { TextareaModule } from 'primeng/textarea';
 import { MultiSelectModule } from 'primeng/multiselect';
 import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
-import { ConfirmationService, MessageService } from 'primeng/api';
+import { MessageService } from 'primeng/api';
 import { SelectModule } from 'primeng/select';
 import { ChipModule } from 'primeng/chip';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
@@ -26,6 +26,7 @@ import { AuthService } from '../../services/auth.service';
 import { ThemeService } from '../../services/theme.service';
 import { Subscription } from 'rxjs';
 import { AlertOverlayComponent } from '../../components/alert-overlay/alert-overlay';
+import { AlertOverlayService } from '../../services/alert-overlay.service';
 
 @Component({
   selector: 'app-suites',
@@ -37,7 +38,7 @@ import { AlertOverlayComponent } from '../../components/alert-overlay/alert-over
     ChipModule, ToggleSwitchModule, InputNumberModule, IconFieldModule, InputIconModule,
     AlertOverlayComponent
   ],
-  providers: [ConfirmationService, MessageService],
+  providers: [MessageService],
   templateUrl: './suites.html',
   styleUrl: './suites.scss',
 })
@@ -201,7 +202,7 @@ export class Suites implements OnInit, OnDestroy {
     private suiteService: SuiteService,
     private scriptService: ScriptService,
     private executionService: ExecutionService,
-    private confirmService: ConfirmationService,
+    private alertOverlay: AlertOverlayService,
     private messageService: MessageService,
     private router: Router,
     public auth: AuthService,
@@ -354,27 +355,26 @@ export class Suites implements OnInit, OnDestroy {
   }
 
   // Delete
-  deleteSuite(suite: TestSuite) {
+  async deleteSuite(suite: TestSuite) {
     if (!this.auth.isAdmin()) return;
 
-    this.confirmService.confirm({
+    const confirmed = await this.alertOverlay.confirm({
       message: this.getDeleteSuiteMessage(suite.name),
-      header: 'Delete Suite',
+      title: 'Delete Suite',
       icon: 'pi pi-trash',
       acceptLabel: 'Delete',
       rejectLabel: 'Cancel',
       acceptIcon: 'pi pi-trash',
       rejectIcon: 'pi pi-times',
-      defaultFocus: 'reject',
-      acceptButtonStyleClass: 'p-button-sm p-button-danger',
-      rejectButtonStyleClass: 'p-button-sm p-button-text p-button-secondary',
-      accept: () => {
-        this.suiteService.deleteSuite(suite.id).subscribe({
-          next: () => {
-            this.loadSuites();
-            this.messageService.add({ severity: 'success', summary: 'Deleted', detail: `Suite "${suite.name}" deleted.` });
-          },
-        });
+      danger: true,
+    });
+
+    if (!confirmed) return;
+
+    this.suiteService.deleteSuite(suite.id).subscribe({
+      next: () => {
+        this.loadSuites();
+        this.messageService.add({ severity: 'success', summary: 'Deleted', detail: `Suite "${suite.name}" deleted.` });
       },
     });
   }

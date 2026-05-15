@@ -11,9 +11,9 @@ import { TooltipModule } from 'primeng/tooltip';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { DatePickerModule } from 'primeng/datepicker';
-import { ConfirmationService } from 'primeng/api';
 import { MessageService } from 'primeng/api';
 import { AlertOverlayComponent } from '../../components/alert-overlay/alert-overlay';
+import { AlertOverlayService } from '../../services/alert-overlay.service';
 
 import { NotificationService, AppNotification } from '../../services/notification.service';
 
@@ -35,7 +35,7 @@ import { NotificationService, AppNotification } from '../../services/notificatio
     DatePickerModule,
     AlertOverlayComponent,
   ],
-  providers: [ConfirmationService, MessageService],
+  providers: [MessageService],
   templateUrl: './notifications.html',
   styleUrl: './notifications.scss',
 })
@@ -101,7 +101,7 @@ export class Notifications implements OnInit {
 
   constructor(
     public notificationService: NotificationService,
-    private confirmationService: ConfirmationService,
+    private alertOverlay: AlertOverlayService,
     private messageService: MessageService
   ) {}
 
@@ -171,32 +171,31 @@ export class Notifications implements OnInit {
     this.expandedRows[notifId] = !this.expandedRows[notifId];
   }
 
-  deleteNotification(notification: AppNotification) {
-    this.confirmationService.confirm({
+  async deleteNotification(notification: AppNotification) {
+    const confirmed = await this.alertOverlay.confirm({
       message: `Delete notification: "${notification.summary}"?`,
-      header: 'Confirm',
+      title: 'Confirm',
       icon: 'pi pi-trash',
       acceptLabel: 'Delete',
       rejectLabel: 'Cancel',
       acceptIcon: 'pi pi-trash',
       rejectIcon: 'pi pi-times',
-      defaultFocus: 'reject',
-      acceptButtonStyleClass: 'p-button-sm p-button-danger',
-      rejectButtonStyleClass: 'p-button-sm p-button-text p-button-secondary',
-      accept: () => {
-        this.notificationService.delete(notification.id);
-        this.applyFilters();
-        this.messageService.add({
-          severity: 'success',
-          summary: 'Deleted',
-          detail: 'Notification removed',
-          life: 2000,
-        });
-      },
+      danger: true,
+    });
+
+    if (!confirmed) return;
+
+    this.notificationService.delete(notification.id);
+    this.applyFilters();
+    this.messageService.add({
+      severity: 'success',
+      summary: 'Deleted',
+      detail: 'Notification removed',
+      life: 2000,
     });
   }
 
-  deleteSelected() {
+  async deleteSelected() {
     if (this.selectedNotifications().length === 0) {
       this.messageService.add({
         severity: 'warn',
@@ -207,39 +206,38 @@ export class Notifications implements OnInit {
       return;
     }
 
-    this.confirmationService.confirm({
+    const confirmed = await this.alertOverlay.confirm({
       message: `Delete ${this.selectedNotifications().length} notification(s)?`,
-      header: 'Confirm',
+      title: 'Confirm',
       icon: 'pi pi-trash',
       acceptLabel: 'Delete',
       rejectLabel: 'Cancel',
       acceptIcon: 'pi pi-trash',
       rejectIcon: 'pi pi-times',
-      defaultFocus: 'reject',
-      acceptButtonStyleClass: 'p-button-sm p-button-danger',
-      rejectButtonStyleClass: 'p-button-sm p-button-text p-button-secondary',
-      accept: () => {
-        const ids = this.selectedNotifications().map(n => n.id);
-        this.notificationService.deleteMultiple(ids).subscribe({
-          next: () => {
-            this.selectedNotifications().forEach(n => this.notificationService.delete(n.id));
-            this.applyFilters();
-            this.selectedNotifications.set([]);
-            this.messageService.add({
-              severity: 'success',
-              summary: 'Deleted',
-              detail: `${ids.length} notification(s) removed`,
-              life: 2000,
-            });
-          },
-          error: () => {
-            this.messageService.add({
-              severity: 'error',
-              summary: 'Error',
-              detail: 'Failed to delete notifications',
-              life: 2000,
-            });
-          },
+      danger: true,
+    });
+
+    if (!confirmed) return;
+
+    const ids = this.selectedNotifications().map(n => n.id);
+    this.notificationService.deleteMultiple(ids).subscribe({
+      next: () => {
+        this.selectedNotifications().forEach(n => this.notificationService.delete(n.id));
+        this.applyFilters();
+        this.selectedNotifications.set([]);
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Deleted',
+          detail: `${ids.length} notification(s) removed`,
+          life: 2000,
+        });
+      },
+      error: () => {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Failed to delete notifications',
+          life: 2000,
         });
       },
     });
@@ -293,30 +291,28 @@ export class Notifications implements OnInit {
     });
   }
 
-  clearAllNotifications() {
-    this.confirmationService.confirm({
+  async clearAllNotifications() {
+    const confirmed = await this.alertOverlay.confirm({
       message: 'Clear all notifications? This action cannot be undone.',
-      header: 'Confirm',
+      title: 'Confirm',
       icon: 'pi pi-exclamation-triangle',
       acceptLabel: 'Clear',
       rejectLabel: 'Cancel',
       acceptIcon: 'pi pi-trash',
       rejectIcon: 'pi pi-times',
-      defaultFocus: 'reject',
-      acceptButtonStyleClass: 'p-button-sm p-button-danger',
-      rejectButtonStyleClass: 'p-button-sm p-button-text p-button-secondary',
-      reject: () => {},
-      accept: () => {
-        this.notificationService.clearAll();
-        this.applyFilters();
-        this.selectedNotifications.set([]);
-        this.messageService.add({
-          severity: 'success',
-          summary: 'Cleared',
-          detail: 'All notifications removed',
-          life: 2000,
-        });
-      },
+      danger: true,
+    });
+
+    if (!confirmed) return;
+
+    this.notificationService.clearAll();
+    this.applyFilters();
+    this.selectedNotifications.set([]);
+    this.messageService.add({
+      severity: 'success',
+      summary: 'Cleared',
+      detail: 'All notifications removed',
+      life: 2000,
     });
   }
 

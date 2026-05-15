@@ -2,10 +2,11 @@ import { Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { SessionService } from './services/session.service';
+import { AlertOverlayComponent } from './components/alert-overlay/alert-overlay';
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, CommonModule],
+  imports: [RouterOutlet, CommonModule, AlertOverlayComponent],
   template: `
     <!-- Session Timeout Alert Banner -->
     @if (sessionService.showTimeoutAlert()) {
@@ -21,6 +22,7 @@ import { SessionService } from './services/session.service';
         </div>
       </div>
     }
+    <app-alert-overlay [showToast]="false" />
     <router-outlet />
   `,
   styles: [],

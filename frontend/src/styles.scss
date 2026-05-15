@@ -118,6 +118,108 @@ a {
   font-size: 1.24rem;
 }
 
+.noesis-alert-dialog.p-dialog {
+  margin-top: 0.85rem !important;
+  border-radius: 10px !important;
+  background: var(--noesis-surface) !important;
+  border: 1px solid var(--noesis-border) !important;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.14) !important;
+  overflow: hidden;
+}
+
+.noesis-alert-dialog .p-dialog-header {
+  background: transparent !important;
+  border: none !important;
+  padding: 0.75rem 0.95rem 0.2rem !important;
+}
+
+.noesis-alert-dialog .p-dialog-title {
+  color: var(--noesis-text) !important;
+  font-size: 0.92rem !important;
+  font-weight: 700 !important;
+}
+
+.noesis-alert-dialog .p-dialog-close-button {
+  width: 1.8rem !important;
+  height: 1.8rem !important;
+  border-radius: 50% !important;
+  color: var(--noesis-text-secondary) !important;
+}
+
+.noesis-alert-dialog .p-dialog-content {
+  background: transparent !important;
+  padding: 0.55rem 0.95rem 0.8rem !important;
+}
+
+.noesis-alert-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+}
+
+.noesis-alert-icon {
+  width: 1.45rem;
+  min-width: 1.45rem;
+  height: 1.45rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--noesis-info);
+}
+
+.noesis-alert-icon i {
+  font-size: 1.08rem;
+}
+
+.noesis-alert-content.severity-success .noesis-alert-icon { color: var(--noesis-success); }
+.noesis-alert-content.severity-warn .noesis-alert-icon { color: var(--noesis-warning); }
+.noesis-alert-content.severity-danger .noesis-alert-icon { color: var(--noesis-danger); }
+
+.noesis-alert-copy {
+  min-width: 0;
+}
+
+.noesis-alert-copy p {
+  margin: 0;
+  color: var(--noesis-text);
+  font-size: 0.86rem;
+  font-weight: 500;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.noesis-alert-copy small {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--noesis-text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.noesis-alert-dialog .p-dialog-footer {
+  background: transparent !important;
+  border: none !important;
+  padding: 0.45rem 0.95rem 0.95rem !important;
+}
+
+.noesis-alert-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.noesis-alert-actions .p-button {
+  margin: 0 !important;
+  border-radius: 7px !important;
+  font-size: 0.79rem !important;
+  font-weight: 600 !important;
+  min-height: 2rem !important;
+  padding: 0.36rem 0.78rem !important;
+  box-shadow: none !important;
+}
+
 // Scrollbar styling
 ::-webkit-scrollbar {
   width: 6px;

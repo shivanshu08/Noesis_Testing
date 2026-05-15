@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input } from '@angular/core';
-import { Confirmation } from 'primeng/api';
-import { ConfirmDialogModule } from 'primeng/confirmdialog';
+import { Component, Input, inject } from '@angular/core';
+import { ButtonModule } from 'primeng/button';
+import { DialogModule } from 'primeng/dialog';
 import { ToastModule } from 'primeng/toast';
+import { AlertButton, AlertOverlayService } from '../../services/alert-overlay.service';
 
 type ToastPosition =
   | 'top-left'
@@ -16,18 +17,54 @@ type ToastPosition =
 @Component({
   selector: 'app-alert-overlay',
   standalone: true,
-  imports: [CommonModule, ConfirmDialogModule, ToastModule],
+  imports: [CommonModule, ButtonModule, DialogModule, ToastModule],
   template: `
     <ng-container *ngIf="showConfirm">
-      <p-confirmDialog #confirmDialog position="top" styleClass="noesis-confirm-dialog">
-        <ng-template #icon>
-          <i
-            class="pi pi-trash noesis-confirm-trash-icon"
-            [class.noesis-confirm-trash-icon-delete]="isDeleteConfirmation(confirmDialog.confirmation)"
-            aria-hidden="true"
-          ></i>
-        </ng-template>
-      </p-confirmDialog>
+      @if (alertService.current(); as alert) {
+        <p-dialog
+          [visible]="true"
+          [modal]="true"
+          [draggable]="false"
+          [resizable]="false"
+          [closable]="true"
+          [closeOnEscape]="alert.closeOnEscape"
+          [header]="alert.title"
+          position="top"
+          [style]="{ width: 'min(430px, 92vw)' }"
+          styleClass="noesis-alert-dialog"
+          appendTo="body"
+          (onHide)="alertService.close()"
+        >
+          <div class="noesis-alert-content" [ngClass]="'severity-' + alert.severity">
+            <span class="noesis-alert-icon">
+              <i [class]="alert.icon" aria-hidden="true"></i>
+            </span>
+            <div class="noesis-alert-copy">
+              <p>{{ alert.message }}</p>
+              @if (alert.detail) {
+                <small>{{ alert.detail }}</small>
+              }
+            </div>
+          </div>
+
+          <ng-template pTemplate="footer">
+            <div class="noesis-alert-actions">
+              @for (button of alert.buttons; track button.value) {
+                <p-button
+                  [label]="button.label"
+                  [icon]="button.icon"
+                  [severity]="button.severity"
+                  [outlined]="button.outlined"
+                  [text]="button.text"
+                  [autofocus]="button.autofocus"
+                  size="small"
+                  (onClick)="selectButton(button)"
+                />
+              }
+            </div>
+          </ng-template>
+        </p-dialog>
+      }
     </ng-container>
 
     <ng-container *ngIf="showToast">
@@ -36,23 +73,13 @@ type ToastPosition =
   `,
 })
 export class AlertOverlayComponent {
+  protected readonly alertService = inject(AlertOverlayService);
+
   @Input() showConfirm = true;
   @Input() showToast = true;
   @Input() toastPosition: ToastPosition = 'bottom-right';
 
-  private readonly deleteHints = ['delete', 'remove', 'clear', 'permanent', 'discard'];
-
-  isDeleteConfirmation(confirmation: Confirmation | null | undefined): boolean {
-    const contextText = [
-      confirmation?.header || '',
-      confirmation?.message || '',
-      confirmation?.acceptLabel || '',
-      confirmation?.icon || '',
-      confirmation?.acceptButtonStyleClass || '',
-    ]
-      .join(' ')
-      .toLowerCase();
-
-    return this.deleteHints.some((hint) => contextText.includes(hint)) || contextText.includes('danger');
+  selectButton(button: AlertButton): void {
+    this.alertService.close(button.value);
   }
 }
