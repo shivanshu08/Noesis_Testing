@@ -24,67 +24,90 @@
     </nav>
 
     <div class="sidebar-footer">
-      <!-- User details -->
       @if (auth.user(); as user) {
-        <div class="sidebar-user" [class.compact]="sidebarCollapsed()">
-          <p-avatar [label]="!user.avatarUrl ? (user.fullName.charAt(0) || 'U') : ''" [image]="user.avatarUrl || undefined" shape="circle" [style]="{ 'width': '40px', 'height': '40px', 'background': 'linear-gradient(135deg, var(--noesis-primary), var(--noesis-accent))', 'color': '#fff', 'font-weight': '600' }" />
+        <div class="sidebar-user" [class.compact]="sidebarCollapsed()" [pTooltip]="sidebarCollapsed() ? user.fullName : ''" tooltipPosition="right">
+          <p-avatar [label]="!user.avatarUrl ? getUserInitials(user.fullName) : ''" [image]="user.avatarUrl || undefined" shape="circle" [style]="{ 'width': '54px', 'height': '54px', 'background': 'var(--noesis-primary)', 'color': '#fff', 'font-weight': '700', 'font-size': '1.2rem' }" />
           @if (!sidebarCollapsed()) {
             <div class="sidebar-user-info">
               <span class="sidebar-user-name">{{ user.fullName }}</span>
-              <span class="sidebar-user-role">{{ user.role | titlecase }}</span>
             </div>
           }
         </div>
       }
-      <a (click)="auth.logout()" class="nav-item logout-item" [pTooltip]="sidebarCollapsed() ? 'Logout' : ''" tooltipPosition="right">
-        <i class="pi pi-sign-out"></i>
+
+      <div class="footer-actions">
+        <button type="button" class="footer-btn" (click)="showThemeMenu = !showThemeMenu" [pTooltip]="sidebarCollapsed() ? 'Theme' : ''" tooltipPosition="right">
+          <i class="pi pi-palette"></i>
+          @if (!sidebarCollapsed()) {
+            <span>Theme</span>
+          }
+        </button>
+        <button type="button" class="footer-btn" (click)="auth.logout()" [pTooltip]="sidebarCollapsed() ? 'Logout' : ''" tooltipPosition="right">
+          <i class="pi pi-sign-out"></i>
+          @if (!sidebarCollapsed()) {
+            <span>Logout</span>
+          }
+        </button>
+      </div>
+
+      @if (showThemeMenu && !sidebarCollapsed()) {
+        <div class="sidebar-theme-panel" (mouseleave)="showThemeMenu = false">
+          <section class="theme-section">
+            <h3>Colour Scheme</h3>
+            <div class="segmented-control">
+              <button type="button" [class.active]="!themeService.isDarkMode()" (click)="setDarkMode(false)">Light</button>
+              <button type="button" [class.active]="themeService.isDarkMode()" (click)="setDarkMode(true)">Dark</button>
+            </div>
+          </section>
+
+          <section class="theme-section">
+            <h3>Color Mode</h3>
+            <div class="segmented-control color-mode">
+              <button type="button" [class.active]="themeColorMode === 'monochrome'" (click)="themeColorMode = 'monochrome'">Monochrome</button>
+              <button type="button" [class.active]="themeColorMode === 'color'" (click)="themeColorMode = 'color'">Color</button>
+            </div>
+          </section>
+
+          <section class="theme-section">
+            <h3>Primary</h3>
+            <div class="swatch-grid primary-grid">
+              @for (swatch of primarySwatches; track swatch.value) {
+                <button type="button" class="color-swatch" [class.active]="themeService.theme().primary === swatch.value" [style.background]="swatch.value" [attr.aria-label]="swatch.label" (click)="themeService.setCustomPrimary(swatch.value, swatch.label)"></button>
+              }
+            </div>
+          </section>
+
+          <section class="theme-section">
+            <h3>Surface</h3>
+            <div class="swatch-grid">
+              @for (surface of surfaceSwatches; track surface.name) {
+                <button type="button" class="color-swatch surface-swatch" [class.active]="selectedSurface === surface.name" [style.background]="surface.value" [attr.aria-label]="surface.name" (click)="selectedSurface = surface.name"></button>
+              }
+            </div>
+          </section>
+
+          <section class="theme-section">
+            <h3>Presets</h3>
+            <div class="segmented-control presets">
+              @for (preset of themePresets; track preset) {
+                <button type="button" [class.active]="selectedPreset === preset" (click)="selectedPreset = preset">{{ preset }}</button>
+              }
+            </div>
+          </section>
+        </div>
+      }
+
+      <button type="button" class="collapse-toggle" (click)="toggleSidebar()" [pTooltip]="sidebarCollapsed() ? 'Expand' : ''" tooltipPosition="right">
         @if (!sidebarCollapsed()) {
-          <span>Logout</span>
+          <span>Collapse</span>
         }
-      </a>
+        <i [class]="sidebarCollapsed() ? 'pi pi-angle-right' : 'pi pi-angle-left'"></i>
+      </button>
     </div>
   </aside>
 
   <!-- Main Content -->
   <div class="main-content">
-    <!-- Topbar -->
-    <header class="topbar">
-      <div class="topbar-left">
-        <p-button icon="pi pi-bars" [rounded]="true" [text]="true" severity="secondary" (onClick)="toggleSidebar()" />
-      </div>
-      <div class="topbar-right">
-        <!-- Dark Mode Toggle -->
-        <p-button [icon]="themeService.isDarkMode() ? 'pi pi-sun' : 'pi pi-moon'" [rounded]="true" [text]="true" severity="secondary" (onClick)="toggleDarkMode()" [pTooltip]="themeService.isDarkMode() ? 'Switch to Light Mode' : 'Switch to Dark Mode'" tooltipPosition="bottom" />
-
-        <!-- Theme Selector -->
-        <div class="theme-selector">
-          <p-button icon="pi pi-palette" [rounded]="true" [text]="true" severity="secondary" (onClick)="showThemeMenu = !showThemeMenu" pTooltip="Change Theme" tooltipPosition="bottom" />
-          @if (showThemeMenu) {
-            <div class="theme-dropdown" (mouseleave)="showThemeMenu = false">
-              @for (t of themeService.themes; track t.name) {
-                <button class="theme-option" [class.active]="themeService.theme().name === t.name" (click)="themeService.setTheme(t); showThemeMenu = false">
-                  <span class="theme-swatch" [style.background]="t.primary"></span>
-                  <span>{{ t.label }}</span>
-                </button>
-              }
-            </div>
-          }
-        </div>
-
-        <!-- User Profile Dropdown -->
-        <div class="user-info cursor-pointer" (click)="userMenu.toggle($event)" style="cursor: pointer;">
-          <p-avatar [label]="!auth.user()?.avatarUrl ? (auth.user()?.fullName?.charAt(0) || 'U') : ''" [image]="auth.user()?.avatarUrl || undefined" shape="circle" [style]="{ 'width': '40px', 'height': '40px', 'background': 'linear-gradient(135deg, var(--noesis-primary), var(--noesis-accent))', 'color': '#fff' }" />
-          @if (auth.user(); as user) {
-            <div class="user-details">
-              <span class="user-name">{{ user.fullName }} <i class="pi pi-angle-down" style="font-size: 0.75rem; margin-left: 4px;"></i></span>
-              <span class="user-role">{{ user.role | titlecase }}</span>
-            </div>
-          }
-        </div>
-        <p-menu #userMenu [model]="userMenuItems" [popup]="true" appendTo="body" />
-      </div>
-    </header>
-
     <!-- Page Content -->
     <main class="page-content">
       <router-outlet />

@@ -206,6 +206,14 @@ export class Runner implements OnInit, OnDestroy {
     return this.selectedScripts.length;
   }
 
+  get dependencyEnabledCount(): number {
+    return this.filteredScripts.filter((script) => (script.dependencyCount || 0) > 0 || (script.dependentCount || 0) > 0).length;
+  }
+
+  get activeScheduleCount(): number {
+    return this.schedules().filter((schedule) => schedule.isActive).length;
+  }
+
   get dependencyTargetScript(): SelectableScript | null {
     const scriptId = this.dependencyTargetScriptId;
     if (!scriptId) return null;

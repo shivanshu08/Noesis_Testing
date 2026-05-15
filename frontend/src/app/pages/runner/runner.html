@@ -108,9 +108,17 @@
         <span>{{ selectedCount }}</span>
         <small>Selected</small>
       </div>
-      <div class="status-workflow">
-        <strong>Pause, edit, rebuild, resume</strong>
-        <span>Paused runs stop the active Surefire process. Rebuild compiles the saved workspace before resume.</span>
+      <div class="status-metric">
+        <span>{{ categories().length }}</span>
+        <small>Categories</small>
+      </div>
+      <div class="status-metric">
+        <span>{{ dependencyEnabledCount }}</span>
+        <small>With Dependencies</small>
+      </div>
+      <div class="status-metric">
+        <span>{{ activeScheduleCount }}</span>
+        <small>Active Schedules</small>
       </div>
     </div>
   </div>

@@ -46,13 +46,46 @@ export class ThemeService {
 
   toggleDarkMode(): void {
     const newMode = !this.darkMode();
+    this.setDarkMode(newMode);
+  }
+
+  setDarkMode(newMode: boolean): void {
     this.darkMode.set(newMode);
     localStorage.setItem('noesis_dark_mode', newMode ? 'true' : 'false');
     this.applyDarkMode(newMode);
   }
 
+  setCustomPrimary(primary: string, label: string): void {
+    const theme: AppTheme = {
+      name: `custom-${primary.replace('#', '')}`,
+      label,
+      primary,
+      primaryDark: this.mixWithBlack(primary, 0.14),
+      accent: this.mixWithWhite(primary, 0.32),
+      sidebarBgLight: '#f8fafc',
+      sidebarBgDark: '#1e1e2e',
+      sidebarActiveLight: 'rgba(59, 130, 246, 0.12)',
+      sidebarActiveDark: 'rgba(59, 130, 246, 0.18)'
+    };
+
+    this.currentTheme.set(theme);
+    localStorage.setItem('noesis_theme', theme.name);
+    localStorage.setItem('noesis_custom_primary', JSON.stringify(theme));
+    this.applyTheme(theme);
+  }
+
   private loadTheme(): AppTheme {
     const saved = localStorage.getItem('noesis_theme');
+    if (saved?.startsWith('custom-')) {
+      const custom = localStorage.getItem('noesis_custom_primary');
+      if (custom) {
+        try {
+          return JSON.parse(custom) as AppTheme;
+        } catch {
+          localStorage.removeItem('noesis_custom_primary');
+        }
+      }
+    }
     return this.themes.find(t => t.name === saved) || this.themes[0];
   }
 
@@ -153,5 +186,33 @@ export class ThemeService {
       root.style.removeProperty('--p-content-hover-background');
     }
     this.applyTheme(this.currentTheme());
+  }
+
+  private mixWithBlack(hex: string, amount: number): string {
+    return this.mix(hex, '#000000', amount);
+  }
+
+  private mixWithWhite(hex: string, amount: number): string {
+    return this.mix(hex, '#ffffff', amount);
+  }
+
+  private mix(hex: string, target: string, amount: number): string {
+    const sourceRgb = this.hexToRgb(hex);
+    const targetRgb = this.hexToRgb(target);
+    const rgb = sourceRgb.map((channel, index) => Math.round(channel + (targetRgb[index] - channel) * amount));
+    return `#${rgb.map(channel => channel.toString(16).padStart(2, '0')).join('')}`;
+  }
+
+  private hexToRgb(hex: string): [number, number, number] {
+    const normalized = hex.replace('#', '');
+    const value = normalized.length === 3
+      ? normalized.split('').map(char => char + char).join('')
+      : normalized;
+
+    return [
+      parseInt(value.slice(0, 2), 16),
+      parseInt(value.slice(2, 4), 16),
+      parseInt(value.slice(4, 6), 16)
+    ];
   }
 }
