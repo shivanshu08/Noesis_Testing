@@ -505,22 +505,33 @@
 
 <!-- Script Assignment Management Dialog -->
 <p-dialog
-  header="Script Access Control"
   [visible]="assignmentDialogVisible()"
   (visibleChange)="assignmentDialogVisible.set($event)"
   [modal]="true"
-  [style]="{ width: 'min(1120px, 96vw)', height: '86vh' }"
+  position="center"
+  appendTo="body"
+  [dismissableMask]="true"
+  [breakpoints]="{ '1180px': '94vw', '760px': '100vw' }"
+  [style]="{ width: 'min(1180px, calc(100vw - 48px))', height: 'min(820px, calc(100vh - 48px))' }"
   [contentStyle]="{ padding: '0' }"
   styleClass="assignment-management-dialog"
   [draggable]="false"
   [resizable]="false"
 >
+  <ng-template #header>
+    <div class="assignment-dialog-title">
+      <span>
+        <strong>Assign Scripts</strong>
+        <small>Select a tester, assign scripts, then save changes</small>
+      </span>
+    </div>
+  </ng-template>
+
   <div class="access-console">
     <aside class="access-sidebar">
       <div class="access-sidebar-head">
         <div>
-          <span class="access-label">Testers</span>
-          <h3>Access Profiles</h3>
+          <h3>Testers</h3>
         </div>
         <p-badge [value]="testerUsers().length" severity="secondary" />
       </div>
@@ -582,7 +593,7 @@
     </aside>
 
     <section class="access-workspace">
-      @if (selectedTester(); as user) {
+        @if (selectedTester(); as user) {
         <div class="access-hero">
           <div class="access-identity">
             <p-avatar
@@ -603,11 +614,11 @@
             </div>
             <div class="access-stat add">
               <strong>{{ pendingAddCount() }}</strong>
-              <span>To Add</span>
+              <span>Add</span>
             </div>
             <div class="access-stat remove">
               <strong>{{ pendingRemoveCount() }}</strong>
-              <span>To Remove</span>
+              <span>Remove</span>
             </div>
             <div class="access-stat pending" [class.hot]="assignmentChangeCount() > 0">
               <strong>{{ assignmentChangeCount() }}</strong>
