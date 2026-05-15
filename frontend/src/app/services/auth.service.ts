@@ -47,27 +47,36 @@ export class AuthService {
 
   logout(): void {
     this.suppressSessionErrorsUntil = Date.now() + 5000;
-    this.clearSessionExpiryTimer();
-    localStorage.removeItem(this.tokenKey);
-    localStorage.removeItem(this.userKey);
-    this.currentUser.set(null);
+    this.clearLocalSession();
     this.sessionService.reset();
     this.router.navigate(['/login']);
   }
 
-  /**
-   * Handles session expiration (401 from server).
-   * Shows a top-center alert, clears credentials, and redirects to login.
-   */
-  sessionExpired(): void {
-    // Only proceed if this is a fresh timeout (no duplicate alerts)
-    if (!this.sessionService.triggerSessionTimeout()) return;
+  cancelTimedOutSession(): void {
+    this.suppressSessionErrorsUntil = Date.now() + 5000;
+    this.clearLocalSession();
+    this.sessionService.reset();
+    this.router.navigate(['/login']);
+  }
 
+  private clearLocalSession(): void {
+    this.clearSessionExpiryTimer();
     localStorage.removeItem(this.tokenKey);
     localStorage.removeItem(this.userKey);
     this.currentUser.set(null);
+  }
+
+  /**
+   * Handles session expiration (401 from server).
+   * Shows a blocking re-login prompt without redirecting away from the current page.
+   */
+  sessionExpired(): void {
+    // Only proceed if this is a fresh timeout (no duplicate alerts)
+    const username = this.currentUser()?.username || this.loadStoredUsername();
+    if (!this.sessionService.triggerSessionTimeout(username)) return;
+
+    localStorage.removeItem(this.tokenKey);
     this.clearSessionExpiryTimer();
-    this.router.navigate(['/login']);
   }
 
   handleSessionError(): void {
@@ -114,6 +123,17 @@ export class AuthService {
       try { return JSON.parse(stored); } catch { return null; }
     }
     return null;
+  }
+
+  private loadStoredUsername(): string {
+    const stored = localStorage.getItem(this.userKey);
+    if (!stored) return '';
+    try {
+      const user = JSON.parse(stored) as Partial<User>;
+      return typeof user.username === 'string' ? user.username : '';
+    } catch {
+      return '';
+    }
   }
 
   private scheduleSessionExpiry(): void {

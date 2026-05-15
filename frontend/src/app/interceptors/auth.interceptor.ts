@@ -5,10 +5,8 @@ import { catchError, throwError } from 'rxjs';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
-  const token = authService.getToken();
-
-  // Don't attach token or intercept 401 on login requests
   const isLoginRequest = req.url.includes('/auth/login');
+  const token = isLoginRequest ? null : authService.getToken();
 
   if (token && !isLoginRequest) {
     req = req.clone({
