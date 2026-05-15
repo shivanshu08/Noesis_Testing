@@ -9,8 +9,8 @@
     <div class="page-header runner-command-header">
       <div class="page-title-block">
         <span class="page-kicker">Automation Runner</span>
-        <h1>Script Execution Console</h1>
-        <p class="subtitle">Select scripts, run TestNG, and control active Surefire executions.</p>
+        <h1>Run Scripts</h1>
+        <p class="subtitle">Select scripts, schedule runs, and watch execution output.</p>
       </div>
       <div class="header-actions">
         @if (!running() && runStatus() !== 'paused') {
@@ -100,26 +100,26 @@
     </div>
 
     <div class="runner-status-strip">
-      <div class="status-metric">
+      <button type="button" class="status-metric" [class.active]="!hasRunnerMetricFilter" (click)="showAllScriptsMetric()">
         <span>{{ filteredScripts.length }}</span>
         <small>Visible Scripts</small>
-      </div>
-      <div class="status-metric accent">
+      </button>
+      <button type="button" class="status-metric accent" [class.active]="showOnlySelected" (click)="showSelectedScriptsMetric()">
         <span>{{ selectedCount }}</span>
         <small>Selected</small>
-      </div>
-      <div class="status-metric">
+      </button>
+      <button type="button" class="status-metric" (click)="showCategoriesMetric()">
         <span>{{ categories().length }}</span>
         <small>Categories</small>
-      </div>
-      <div class="status-metric">
+      </button>
+      <button type="button" class="status-metric" [class.active]="showOnlyDependencies" (click)="showDependencyScriptsMetric()">
         <span>{{ dependencyEnabledCount }}</span>
         <small>With Dependencies</small>
-      </div>
-      <div class="status-metric">
+      </button>
+      <button type="button" class="status-metric" (click)="openSchedulesMetric()">
         <span>{{ activeScheduleCount }}</span>
         <small>Active Schedules</small>
-      </div>
+      </button>
     </div>
   </div>
 
@@ -146,8 +146,10 @@
         <ng-template #header>
           <div class="selection-header">
             <div class="selection-title">
-              <h3>Select Scripts</h3>
-              <span class="selection-badge" [class.active]="selectedCount > 0">{{ selectedCount }} selected</span>
+              <div>
+                <h3>Select Scripts</h3>
+                <span>{{ filteredScripts.length }} visible</span>
+              </div>
             </div>
             <div class="selection-actions">
               <p-button label="Select All" size="small" [text]="true" (onClick)="selectAll()" />
@@ -158,7 +160,10 @@
 
         <!-- Filters -->
         <div class="selection-filters">
-          <input type="text" pInputText placeholder="Search scripts..." [(ngModel)]="searchTerm" class="w-full" id="input-search-scripts" />
+          <div class="runner-search">
+            <i class="pi pi-search"></i>
+            <input type="text" pInputText placeholder="Search scripts..." [(ngModel)]="searchTerm" class="w-full" id="input-search-scripts" />
+          </div>
           <p-select
             [options]="categories()"
             [(ngModel)]="selectedCategory"
@@ -171,14 +176,9 @@
           />
         </div>
 
-        <!-- Quick Category Select -->
-        <div class="category-chips">
-          @for (cat of categories(); track cat.id) {
-            <button class="cat-chip" (click)="selectCategory(cat.id)">
-              {{ cat.name }}
-              <span class="chip-count">{{ cat.scriptCount }}</span>
-            </button>
-          }
+        <div class="selection-mini-summary" [class.active]="selectedCount > 0">
+          <span>{{ selectedCount }} selected</span>
+          <span>{{ dependencyEnabledCount }} dependencies</span>
         </div>
 
         <p-divider />
@@ -197,47 +197,44 @@
                   <p-checkbox [ngModel]="script.selected" [binary]="true" tabindex="-1" />
                 </div>
                 <div class="script-info">
-                  <span class="script-name">{{ script.name }}</span>
+                  <div class="script-title-line">
+                    <span class="script-name">{{ script.name }}</span>
+                  </div>
                   <span class="script-class">{{ script.className.split('.').pop() }}</span>
-                  @if ((script.dependencyCount || 0) > 0 || (script.dependentCount || 0) > 0) {
-                    <div class="script-dependency-meta">
-                      @if ((script.dependencyCount || 0) > 0) {
-                        <span class="dependency-chip">
-                          <i class="pi pi-link"></i>
-                          {{ script.dependencyCount }} prerequisite{{ (script.dependencyCount || 0) === 1 ? '' : 's' }}
-                        </span>
-                      }
-                      @if ((script.dependentCount || 0) > 0) {
-                        <span class="dependency-chip secondary">
-                          <i class="pi pi-sitemap"></i>
-                          used by {{ script.dependentCount }}
-                        </span>
-                      }
-                    </div>
-                  }
                 </div>
-                <div class="script-actions" style="display: flex; gap: 8px; align-items: center;">
-                  <p-tag [value]="getCategoryName(script.categoryId)" size="small" severity="secondary" />
-                  <p-button
-                    icon="pi pi-link"
-                    [text]="true"
-                    severity="secondary"
-                    size="small"
-                    pTooltip="Manage Dependencies"
-                    (onClick)="openDependencyDialog($event, script.id)"
-                    [disabled]="running() || !auth.canEdit()"
-                    styleClass="btn-config-dependency"
-                  />
-                  <p-button
-                    icon="pi pi-bolt"
-                    [text]="true"
-                    severity="success"
-                    size="small"
-                    pTooltip="Run Now"
-                    (onClick)="runIndividualScript($event, script.id)"
-                    [disabled]="running()"
-                    styleClass="btn-run-individual"
-                  />
+                <div class="script-row-meta">
+                  <p-tag [value]="getCategoryName(script.categoryId)" size="small" severity="secondary" styleClass="script-category-tag" />
+                  <button
+                    type="button"
+                    class="dependency-summary-btn"
+                    [class.has-links]="(script.dependencyCount || 0) > 0 || (script.dependentCount || 0) > 0"
+                    (click)="openDependencyMapDialog($event, script.id)"
+                  >
+                    <i class="pi pi-sitemap"></i>
+                    <span>{{ (script.dependencyCount || 0) + (script.dependentCount || 0) }}</span>
+                  </button>
+                  <div class="script-actions">
+                    <p-button
+                      icon="pi pi-link"
+                      [text]="true"
+                      severity="secondary"
+                      size="small"
+                      pTooltip="Manage Dependencies"
+                      (onClick)="openDependencyDialog($event, script.id)"
+                      [disabled]="running() || !auth.canEdit()"
+                      styleClass="btn-config-dependency"
+                    />
+                    <p-button
+                      icon="pi pi-bolt"
+                      [text]="true"
+                      severity="success"
+                      size="small"
+                      pTooltip="Run Now"
+                      (onClick)="runIndividualScript($event, script.id)"
+                      [disabled]="running()"
+                      styleClass="btn-run-individual"
+                    />
+                  </div>
                 </div>
               </div>
             }
@@ -439,6 +436,88 @@
   </ng-template>
 </p-dialog>
 
+<!-- Dependency Map Dialog -->
+<p-dialog
+  header="Script Dependencies"
+  [(visible)]="showDependencyMapDialog"
+  [modal]="true"
+  [closable]="true"
+  [style]="{ width: '620px', maxWidth: 'calc(100vw - 32px)' }"
+  [dismissableMask]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [position]="'center'"
+  appendTo="body"
+  styleClass="dependency-map-dialog"
+  id="dialog-dependency-map"
+>
+  @if (dependencyMapScript; as script) {
+    <div class="dependency-map-body">
+      <div class="dependency-map-head">
+        <strong>{{ script.name }}</strong>
+        <span>{{ script.className.split('.').pop() }}</span>
+      </div>
+
+      <div class="dependency-map-grid">
+        <section>
+          <div class="dependency-map-section-title">
+            <i class="pi pi-arrow-left"></i>
+            <span>Depends on</span>
+            <strong>{{ dependencyMapPrerequisites.length }}</strong>
+          </div>
+          @if (dependencyMapPrerequisites.length > 0) {
+            <div class="dependency-map-list">
+              @for (item of dependencyMapPrerequisites; track item.id) {
+                <div class="dependency-map-row">
+                  <span>{{ item.name }}</span>
+                  <small>{{ getCategoryName(item.categoryId) }}</small>
+                </div>
+              }
+            </div>
+          } @else {
+            <div class="dependency-map-empty">No prerequisite scripts.</div>
+          }
+        </section>
+
+        <section>
+          <div class="dependency-map-section-title">
+            <i class="pi pi-arrow-right"></i>
+            <span>Used by</span>
+            <strong>{{ dependencyMapDependents.length }}</strong>
+          </div>
+          @if (dependencyMapDependents.length > 0) {
+            <div class="dependency-map-list">
+              @for (item of dependencyMapDependents; track item.id) {
+                <div class="dependency-map-row">
+                  <span>{{ item.name }}</span>
+                  <small>{{ getCategoryName(item.categoryId) }}</small>
+                </div>
+              }
+            </div>
+          } @else {
+            <div class="dependency-map-empty">No scripts currently depend on this.</div>
+          }
+        </section>
+      </div>
+    </div>
+  }
+
+  <ng-template #footer>
+    <div class="dependency-map-footer">
+      @if (dependencyMapScript && auth.canEdit()) {
+        <p-button
+          label="Edit Dependencies"
+          icon="pi pi-link"
+          severity="secondary"
+          [outlined]="true"
+          (onClick)="editDependencyMapScript($event)"
+        />
+      }
+      <p-button label="Close" (onClick)="closeDependencyMapDialog()" />
+    </div>
+  </ng-template>
+</p-dialog>
+
 <!-- Dependency Dialog -->
 <p-dialog
   header="Configure Dependencies"
@@ -493,8 +572,13 @@
   [(visible)]="showScheduleDialog"
   [modal]="true"
   [closable]="true"
-  [style]="{ width: '560px' }"
+  [style]="{ width: '500px', maxWidth: 'calc(100vw - 32px)' }"
+  [contentStyle]="{ overflow: 'visible' }"
   [dismissableMask]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [position]="'center'"
+  appendTo="body"
   styleClass="schedule-dialog"
   id="dialog-schedule-run"
 >
@@ -508,31 +592,48 @@
       <label style="margin-bottom: 12px;">Schedule Type</label>
       <div class="schedule-type-toggle">
         <button class="segment-btn" [class.active]="scheduleType === 'recurring'" (click)="scheduleType = 'recurring'">
-          <i class="pi pi-sync"></i>
-          <span>Recurring Schedule</span>
+          <span>Recurring</span>
         </button>
         <button class="segment-btn" [class.active]="scheduleType === 'once'" (click)="scheduleType = 'once'">
-          <i class="pi pi-calendar-clock"></i>
-          <span>Specific Date & Time</span>
+          <span>One Time</span>
         </button>
       </div>
     </div>
 
     @if (scheduleType === 'recurring') {
       <div class="schedule-field">
-        <label>Select Recurring Schedule</label>
-        <div class="cron-presets">
-          @for (preset of cronPresets; track preset.cron) {
-            <button
-              class="cron-preset-btn"
-              [class.active]="selectedPreset?.cron === preset.cron"
-              (click)="selectCronPreset(preset)"
-            >
+        <label for="schedule-preset-select">
+          <i class="pi pi-calendar"></i>
+          Schedule presets
+        </label>
+        <p-select
+          [options]="cronPresets"
+          [(ngModel)]="selectedPreset"
+          optionLabel="label"
+          placeholder="Choose schedule preset"
+          appendTo="body"
+          styleClass="schedule-preset-select"
+          panelStyleClass="schedule-preset-panel"
+          [style]="{ width: '100%' }"
+          (onChange)="selectCronPreset($event.value)"
+          id="schedule-preset-select"
+        >
+          <ng-template pTemplate="selectedItem" let-preset>
+            <div class="schedule-preset-value">
+              <i [class]="preset?.icon || 'pi pi-calendar'"></i>
+              <span>{{ preset?.label || 'Choose schedule preset' }}</span>
+            </div>
+          </ng-template>
+          <ng-template pTemplate="item" let-preset>
+            <div class="schedule-preset-option">
               <i [class]="preset.icon"></i>
-              <span>{{ preset.label }}</span>
-            </button>
-          }
-        </div>
+              <div>
+                <span>{{ preset.label }}</span>
+                <small>{{ preset.description }}</small>
+              </div>
+            </div>
+          </ng-template>
+        </p-select>
       </div>
 
       <div class="schedule-field">
@@ -548,15 +649,19 @@
     } @else {
       <div class="schedule-field">
         <label>Execute Once At</label>
-        <p-datepicker
-          [(ngModel)]="scheduleDate"
-          [showTime]="true"
-          hourFormat="12"
-          [minDate]="minScheduleDate"
-          appendTo="body"
-          styleClass="w-full"
-          [ngStyle]="{ width: '100%' }"
-        ></p-datepicker>
+        <div class="schedule-date-field">
+          <i class="pi pi-calendar"></i>
+          <p-datepicker
+            [(ngModel)]="scheduleDate"
+            [showTime]="true"
+            hourFormat="12"
+            [minDate]="minScheduleDate"
+            placeholder="Select date and time"
+            appendTo="body"
+            styleClass="w-full"
+            [ngStyle]="{ width: '100%' }"
+          ></p-datepicker>
+        </div>
       </div>
     }
 
@@ -606,32 +711,32 @@
 >
   <div class="schedules-panel">
     @if (loadingSchedules) {
-      <div class="schedules-loading" style="text-align: center; padding: 2rem;">
-        <i class="pi pi-spinner pi-spin" style="font-size: 2rem; color: var(--noesis-text-muted);"></i>
-        <p style="margin-top: 1rem; color: var(--noesis-text-secondary);">Loading schedules...</p>
+      <div class="schedules-loading">
+        <i class="pi pi-spinner pi-spin"></i>
+        <p>Loading schedules...</p>
       </div>
     } @else if (schedules().length === 0) {
-      <div class="schedules-empty" style="text-align: center; padding: 3rem 1rem;">
-        <i class="pi pi-calendar-times" style="font-size: 3rem; color: var(--noesis-border);"></i>
-        <p style="margin-top: 1rem; color: var(--noesis-text-primary);">No scheduled runs yet</p>
-        <p class="hint" style="color: var(--noesis-text-secondary); font-size: 0.9rem;">Select scripts and click "Schedule Run" to create one</p>
+      <div class="schedules-empty">
+        <i class="pi pi-calendar-times"></i>
+        <p>No scheduled runs yet</p>
+        <p class="hint">Select scripts and click "Schedule Run" to create one</p>
       </div>
     } @else {
-      <div style="display: flex; flex-direction: column; gap: 1rem; padding: 0.5rem 0;">
+      <div class="schedule-list">
         @for (schedule of schedules(); track schedule.id) {
-          <div class="schedule-card" [class.inactive]="!schedule.isActive" style="border: 1px solid var(--noesis-border); border-radius: 8px; padding: 1rem; background: var(--noesis-bg-body);">
-            <div class="schedule-card-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
+          <div class="schedule-card" [class.inactive]="!schedule.isActive">
+            <div class="schedule-card-header">
               <div class="schedule-info">
-                <div class="schedule-name" style="font-weight: 500; font-size: 1.1rem; margin-bottom: 0.25rem;">{{ schedule.name }}</div>
-                <div class="schedule-cron" style="font-size: 0.85rem; color: var(--noesis-primary); font-family: 'JetBrains Mono', monospace;">
+                <div class="schedule-name">{{ schedule.name }}</div>
+                <div class="schedule-cron">
                   @if (schedule.isOneTime) {
-                    <i class="pi pi-calendar-clock" style="font-size: 0.7rem; margin-right: 4px;"></i>One-Time Execute
+                    <i class="pi pi-calendar-clock"></i>One-Time Execute
                   } @else {
-                    <i class="pi pi-sync" style="font-size: 0.7rem; margin-right: 4px;"></i>{{ schedule.cronExpression }}
+                    <i class="pi pi-sync"></i>{{ schedule.cronExpression }}
                   }
                 </div>
               </div>
-              <div class="schedule-actions" style="display: flex; gap: 0.5rem;">
+              <div class="schedule-actions">
                 <p-button
                   [icon]="schedule.isActive ? 'pi pi-pause' : 'pi pi-bolt'"
                   [text]="true"
@@ -643,24 +748,24 @@
                 <p-button icon="pi pi-trash" [text]="true" size="small" severity="danger" pTooltip="Delete" (onClick)="deleteSchedule(schedule)" />
               </div>
             </div>
-            <div class="schedule-meta" style="display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.85rem; color: var(--noesis-text-secondary); align-items: center;">
+            <div class="schedule-meta">
               @if (schedule.nextRunAt) {
-                <span class="meta-item" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                <span class="meta-item">
                   <i class="pi pi-clock"></i> Next: {{ formatDate(schedule.nextRunAt) }}
                 </span>
               }
               @if (schedule.lastRunAt) {
-                <span class="meta-item" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                <span class="meta-item">
                   <i class="pi pi-history"></i> Last: {{ formatDate(schedule.lastRunAt) }}
                 </span>
               }
-              <span class="meta-item" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+              <span class="meta-item">
                 <i class="pi pi-user"></i> {{ schedule.createdBy || 'System' }}
               </span>
               <p-tag [value]="schedule.isActive ? 'Active' : 'Paused'" [severity]="schedule.isActive ? 'success' : 'secondary'" size="small" />
             </div>
             @if (schedule.description) {
-              <p class="schedule-desc" style="margin: 0.75rem 0 0 0; padding-top: 0.75rem; border-top: 1px solid var(--noesis-border); font-size: 0.9rem; color: var(--noesis-text-secondary);">
+              <p class="schedule-desc">
                 {{ schedule.description }}
               </p>
             }

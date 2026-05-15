@@ -68,6 +68,8 @@ export class Runner implements OnInit, OnDestroy {
 
   selectedCategory: number | null = null;
   searchTerm = '';
+  showOnlySelected = false;
+  showOnlyDependencies = false;
   autoScroll = true;
   private scriptRegistrySubscription?: Subscription;
   private querySelectionApplied = false;
@@ -87,7 +89,9 @@ export class Runner implements OnInit, OnDestroy {
 
   // Dependency Configuration Dialog
   showDependencyDialog = false;
+  showDependencyMapDialog = false;
   dependencyTargetScriptId: number | null = null;
+  dependencyMapScriptId: number | null = null;
   dependencyDraftIds: number[] = [];
   savingDependencies = false;
 
@@ -195,6 +199,12 @@ export class Runner implements OnInit, OnDestroy {
     if (this.selectedCategory) {
       results = results.filter(s => s.categoryId === this.selectedCategory);
     }
+    if (this.showOnlySelected) {
+      results = results.filter(s => s.selected);
+    }
+    if (this.showOnlyDependencies) {
+      results = results.filter(s => (s.dependencyCount || 0) > 0 || (s.dependentCount || 0) > 0);
+    }
     return results;
   }
 
@@ -214,6 +224,10 @@ export class Runner implements OnInit, OnDestroy {
     return this.schedules().filter((schedule) => schedule.isActive).length;
   }
 
+  get hasRunnerMetricFilter(): boolean {
+    return !!this.searchTerm || !!this.selectedCategory || this.showOnlySelected || this.showOnlyDependencies;
+  }
+
   get dependencyTargetScript(): SelectableScript | null {
     const scriptId = this.dependencyTargetScriptId;
     if (!scriptId) return null;
@@ -226,6 +240,29 @@ export class Runner implements OnInit, OnDestroy {
 
     return this.scripts()
       .filter((script) => script.id !== targetId && script.isActive)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  get dependencyMapScript(): SelectableScript | null {
+    const scriptId = this.dependencyMapScriptId;
+    if (!scriptId) return null;
+    return this.scripts().find((script) => script.id === scriptId) || null;
+  }
+
+  get dependencyMapPrerequisites(): SelectableScript[] {
+    const script = this.dependencyMapScript;
+    if (!script) return [];
+    const dependencyIds = new Set(script.dependencies || []);
+    return this.scripts()
+      .filter((candidate) => dependencyIds.has(candidate.id))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  get dependencyMapDependents(): SelectableScript[] {
+    const scriptId = this.dependencyMapScriptId;
+    if (!scriptId) return [];
+    return this.scripts()
+      .filter((candidate) => (candidate.dependencies || []).includes(scriptId))
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
@@ -276,6 +313,9 @@ export class Runner implements OnInit, OnDestroy {
 
   clearSelection() {
     this.scripts.update(list => list.map(s => ({ ...s, selected: false })));
+    if (this.showOnlySelected) {
+      this.showOnlySelected = false;
+    }
   }
 
   toggleScript(id: number) {
@@ -288,6 +328,38 @@ export class Runner implements OnInit, OnDestroy {
     this.scripts.update(list => list.map(s =>
       s.categoryId === catId ? { ...s, selected: true } : s
     ));
+  }
+
+  showAllScriptsMetric() {
+    this.searchTerm = '';
+    this.selectedCategory = null;
+    this.showOnlySelected = false;
+    this.showOnlyDependencies = false;
+  }
+
+  showSelectedScriptsMetric() {
+    this.showOnlySelected = !this.showOnlySelected;
+    if (this.showOnlySelected) {
+      this.showOnlyDependencies = false;
+    }
+  }
+
+  showCategoriesMetric() {
+    this.selectedCategory = null;
+    this.showOnlySelected = false;
+    this.showOnlyDependencies = false;
+  }
+
+  showDependencyScriptsMetric() {
+    this.showOnlyDependencies = !this.showOnlyDependencies;
+    if (this.showOnlyDependencies) {
+      this.showOnlySelected = false;
+    }
+  }
+
+  openSchedulesMetric() {
+    this.showSchedulesPanel = true;
+    this.loadSchedules();
   }
 
   runIndividualScript(event: Event, scriptId: number) {
@@ -309,6 +381,25 @@ export class Runner implements OnInit, OnDestroy {
     this.dependencyDraftIds = [...(targetScript.dependencies || [])];
     this.savingDependencies = false;
     this.showDependencyDialog = true;
+  }
+
+  openDependencyMapDialog(event: Event, scriptId: number) {
+    event.stopPropagation();
+    this.dependencyMapScriptId = scriptId;
+    this.showDependencyMapDialog = true;
+  }
+
+  closeDependencyMapDialog() {
+    this.showDependencyMapDialog = false;
+    this.dependencyMapScriptId = null;
+  }
+
+  editDependencyMapScript(event: Event) {
+    event.stopPropagation();
+    const scriptId = this.dependencyMapScriptId;
+    if (!scriptId) return;
+    this.showDependencyMapDialog = false;
+    this.openDependencyDialog(event, scriptId);
   }
 
   closeDependencyDialog() {
