@@ -24,18 +24,22 @@
       <button type="button" class="catalog-metric" [class.active]="selectedAvailability === null && !searchTerm && !selectedCategory" (click)="clearCatalogFilters()">
         <span>{{ getTotalScriptsCount() }}</span>
         <small>Total Scripts</small>
+        <i class="pi pi-file-edit"></i>
       </button>
       <button type="button" class="catalog-metric success" [class.active]="selectedAvailability === 'runnable'" (click)="setAvailabilityFilter('runnable')">
         <span>{{ getRunnableScriptsCount() }}</span>
         <small>Runnable</small>
+        <i class="pi pi-play-circle metric-icon"></i>
       </button>
       <button type="button" class="catalog-metric warn" [class.active]="selectedAvailability === 'attention'" (click)="setAvailabilityFilter('attention')">
         <span>{{ getAttentionScriptsCount() }}</span>
         <small>Needs Review</small>
+        <i class="pi pi-exclamation-triangle metric-icon"></i>
       </button>
       <button type="button" class="catalog-metric maintenance" [class.active]="selectedAvailability === 'maintenance'" (click)="setAvailabilityFilter('maintenance')">
         <span>{{ getMaintenanceScriptsCount() }}</span>
         <small>Maintenance</small>
+        <i class="pi pi-wrench metric-icon"></i>
       </button>
     </div>
   </div>

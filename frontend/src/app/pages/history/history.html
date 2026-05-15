@@ -33,7 +33,7 @@
 
   <div class="history-stats-grid">
     <button type="button" class="history-stat-card clickable" (click)="applyStatusShortcut(null)">
-      <div class="hstat-icon total"><i class="pi pi-bolt"></i></div>
+      <div class="hstat-icon total"><i class="pi pi-list"></i></div>
       <div class="hstat-info">
         <span class="hstat-value">{{ totalRunsCount() }}</span>
         <span class="hstat-label">Total Runs</span>
@@ -41,7 +41,7 @@
     </button>
 
     <button type="button" class="history-stat-card clickable" (click)="applyStatusShortcut('running')">
-      <div class="hstat-icon active"><i class="pi pi-spin pi-spinner"></i></div>
+      <div class="hstat-icon active"><i class="pi pi-wave-pulse"></i></div>
       <div class="hstat-info">
         <span class="hstat-value">{{ runningCount() }}</span>
         <span class="hstat-label">Running / Queued</span>
@@ -73,7 +73,7 @@
     </div>
 
     <div class="history-stat-card">
-      <div class="hstat-icon recent"><i class="pi pi-calendar"></i></div>
+      <div class="hstat-icon recent"><i class="pi pi-calendar-clock"></i></div>
       <div class="hstat-info">
         <span class="hstat-value date">{{ lastRunDate() }}</span>
         <span class="hstat-label">Most Recent Run</span>

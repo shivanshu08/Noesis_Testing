@@ -80,6 +80,9 @@
   appearance: none;
   text-align: left;
   cursor: pointer;
+  position: relative;
+  min-height: 78px;
+  padding-right: 54px;
   transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
 
   span {
@@ -113,6 +116,50 @@
   }
 
   &.maintenance span {
+    color: #d97706;
+  }
+
+  .metric-icon {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: translateY(-50%);
+    border-radius: 9px;
+    background: var(--noesis-surface);
+    color: var(--noesis-text);
+    font-size: 0.95rem;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--noesis-border) 76%, transparent);
+  }
+
+  .metric-file-icon.pi::before {
+    content: "" !important;
+    width: 15px;
+    height: 18px;
+    display: block;
+    box-sizing: border-box;
+    border: 2px solid currentColor;
+    border-radius: 3px;
+    background:
+      linear-gradient(135deg, transparent 0 48%, currentColor 50% 62%, transparent 64%) top right / 8px 8px no-repeat,
+      linear-gradient(currentColor, currentColor) 3px 9px / 7px 1.5px no-repeat,
+      linear-gradient(currentColor, currentColor) 3px 13px / 8px 1.5px no-repeat;
+    clip-path: polygon(0 0, 68% 0, 100% 32%, 100% 100%, 0 100%);
+  }
+
+  &.success .metric-icon {
+    color: #059669;
+  }
+
+  &.warn .metric-icon {
+    color: #e11d48;
+  }
+
+  &.maintenance .metric-icon {
     color: #d97706;
   }
 }

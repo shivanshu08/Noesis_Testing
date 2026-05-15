@@ -103,22 +103,27 @@
       <button type="button" class="status-metric" [class.active]="!hasRunnerMetricFilter" (click)="showAllScriptsMetric()">
         <span>{{ filteredScripts.length }}</span>
         <small>Visible Scripts</small>
+        <i class="pi pi-file metric-icon metric-file-icon"></i>
       </button>
       <button type="button" class="status-metric accent" [class.active]="showOnlySelected" (click)="showSelectedScriptsMetric()">
         <span>{{ selectedCount }}</span>
         <small>Selected</small>
+        <i class="pi pi-check-circle metric-icon"></i>
       </button>
       <button type="button" class="status-metric" (click)="showCategoriesMetric()">
         <span>{{ categories().length }}</span>
         <small>Categories</small>
+        <i class="pi pi-table metric-icon"></i>
       </button>
       <button type="button" class="status-metric" [class.active]="showOnlyDependencies" (click)="showDependencyScriptsMetric()">
         <span>{{ dependencyEnabledCount }}</span>
         <small>With Dependencies</small>
+        <i class="pi pi-sitemap metric-icon"></i>
       </button>
       <button type="button" class="status-metric" (click)="openSchedulesMetric()">
         <span>{{ activeScheduleCount }}</span>
         <small>Active Schedules</small>
+        <i class="pi pi-calendar-clock metric-icon"></i>
       </button>
     </div>
   </div>
