@@ -1,0 +1,64 @@
+databases:
+  - name: noesis-manager-db
+    plan: free
+    databaseName: noesis_testing
+    user: noesis_user
+
+services:
+  - type: web
+    name: noesis-manager-api
+    runtime: java
+    plan: free
+    rootDir: backend
+    buildCommand: mvn -DskipTests package
+    startCommand: java -jar target/noesis-testing-backend-1.0.0.jar
+    healthCheckPath: /api/health
+    envVars:
+      - key: DB_HOST
+        fromDatabase:
+          name: noesis-manager-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: noesis-manager-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: noesis-manager-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: noesis-manager-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: noesis-manager-db
+          property: password
+      - key: INIT_DB_SCHEMA
+        value: true
+      - key: SCHEMA_PATH
+        value: ../database/schema.sql
+      - key: CORS_ORIGIN
+        value: https://noesis-manager.netlify.app
+      - key: APP_BASE_URL
+        value: https://noesis-manager.netlify.app
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 2h
+      - key: MAIL_ENABLED
+        value: false
+      - key: ST_AUTOMATION_SOURCE
+        value: git
+      - key: ST_AUTOMATION_GIT_REPO_URL
+        value: https://github.com/prashantguleria/AutomationTesting.git
+      - key: ST_AUTOMATION_GIT_BRANCH
+        value: main
+      - key: ST_AUTOMATION_GIT_CACHE_PATH
+        value: /tmp/noesis/automation-testing-repo
+      - key: ST_AUTOMATION_PATH
+        value: /tmp/noesis/automation-scripts
+      - key: ST_AUTOMATION_REPORTS_PATH
+        value: /tmp/noesis/noesis-reports
+      - key: ST_AUTOMATION_REPORTS_GIT_PUBLISH
+        value: false

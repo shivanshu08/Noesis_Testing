@@ -368,9 +368,9 @@ CREATE INDEX IF NOT EXISTS idx_script_assignments_assigned_by ON script_assignme
 -- Seed Data
 -- ============================================================
 
--- Default admin user (password: admin123 - bcrypt hashed)
+-- Default admin user (password: admin123 - change immediately after first login)
 INSERT INTO users (username, email, password_hash, full_name, role) 
-SELECT 'admin', 'admin@noesis.com', '$2b$12$LJ3m4ys4Fp/hMN2K3EXAMPLE_HASH_REPLACE_ON_SETUP', 'System Admin', 'admin'
+SELECT 'admin', 'admin@noesis.com', '$2a$12$PoEPovB7JXTLk4C8XVks5u7.ub6cYLt8eEi4rIwVvVwAWCrS.3Ife', 'System Admin', 'admin'
 WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin');
 
 -- Script Categories

@@ -20,6 +20,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -59,6 +60,7 @@ class BackendSupport {
   }
 
   protected void ensureSchema() {
+    initializeSchemaFile();
     try { db.update("ALTER TYPE run_status ADD VALUE IF NOT EXISTS 'paused'"); } catch (Exception ignored) {}
     try { db.update("ALTER TYPE result_status ADD VALUE IF NOT EXISTS 'paused'"); } catch (Exception ignored) {}
     try { db.update("ALTER TABLE test_suites ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT NULL"); } catch (Exception ignored) {}
@@ -100,6 +102,18 @@ class BackendSupport {
         )
         """); } catch (Exception ignored) {}
     ensureConfigurationChanges();
+  }
+
+  protected void initializeSchemaFile() {
+    if (!Boolean.parseBoolean(env.value("INIT_DB_SCHEMA", "true"))) return;
+    Path schema = env.schemaPath();
+    if (!Files.exists(schema)) return;
+    try {
+      db.execute(Files.readString(schema));
+      System.out.println("Database schema initialized from " + schema);
+    } catch (Exception err) {
+      System.err.println("Database schema initialization skipped/failed: " + err.getMessage());
+    }
   }
 
   protected void ensureConfigurationChanges() {
@@ -581,11 +595,38 @@ class BackendSupport {
     int intValue(String key, int fallback) {
       try { return Integer.parseInt(value(key, String.valueOf(fallback))); } catch (Exception e) { return fallback; }
     }
-    String jdbcUrl() { return "jdbc:postgresql://" + value("DB_HOST", "localhost") + ":" + value("DB_PORT", "5432") + "/" + value("DB_NAME", "noesis_testing"); }
+    String jdbcUrl() {
+      String jdbc = value("JDBC_DATABASE_URL", "");
+      if (!jdbc.isBlank()) return jdbc;
+      String databaseUrl = value("DATABASE_URL", "");
+      if (databaseUrl.startsWith("postgres://") || databaseUrl.startsWith("postgresql://")) return postgresUrlToJdbc(databaseUrl);
+      return "jdbc:postgresql://" + value("DB_HOST", "localhost") + ":" + value("DB_PORT", "5432") + "/" + value("DB_NAME", "noesis_testing");
+    }
     String dbUser() { return value("DB_USER", "postgres"); }
     String dbPassword() { return value("DB_PASSWORD", ""); }
     String jwtSecret() { return value("JWT_SECRET", "fallback-secret-change-me"); }
     String jwtExpiresIn() { return value("JWT_EXPIRES_IN", "2h"); }
+    Path schemaPath() {
+      String configured = value("SCHEMA_PATH", "");
+      if (!configured.isBlank()) return Path.of(configured);
+      if (Files.exists(Path.of("database", "schema.sql"))) return Path.of("database", "schema.sql");
+      return Path.of("..", "database", "schema.sql");
+    }
+    String postgresUrlToJdbc(String databaseUrl) {
+      try {
+        URI uri = URI.create(databaseUrl);
+        String userInfo = uri.getUserInfo();
+        if (userInfo != null && !userInfo.isBlank()) {
+          String[] parts = userInfo.split(":", 2);
+          if (System.getProperty("DB_USER") == null && System.getenv("DB_USER") == null) System.setProperty("DB_USER", URLDecoder.decode(parts[0], StandardCharsets.UTF_8));
+          if (parts.length > 1 && System.getProperty("DB_PASSWORD") == null && System.getenv("DB_PASSWORD") == null) System.setProperty("DB_PASSWORD", URLDecoder.decode(parts[1], StandardCharsets.UTF_8));
+        }
+        int port = uri.getPort() > 0 ? uri.getPort() : 5432;
+        return "jdbc:postgresql://" + uri.getHost() + ":" + port + uri.getPath();
+      } catch (Exception ignored) {
+        return databaseUrl.replaceFirst("^postgres(?:ql)?://", "jdbc:postgresql://");
+      }
+    }
     static void loadDotenv() {
       Path env = Files.exists(Path.of(".env")) ? Path.of(".env") : Path.of("backend", ".env");
       if (!Files.exists(env)) return;
@@ -607,6 +648,11 @@ class BackendSupport {
     private final Env env;
     Db(Env env) { this.env = env; }
     Connection connection() throws SQLException { return DriverManager.getConnection(env.jdbcUrl(), env.dbUser(), env.dbPassword()); }
+    void execute(String sql) throws SQLException {
+      try (Connection c = connection(); Statement statement = c.createStatement()) {
+        statement.execute(sql);
+      }
+    }
     Map<String, Object> one(String sql, Object... args) throws SQLException {
       List<Map<String, Object>> rows = rows(sql, args);
       return rows.isEmpty() ? null : rows.get(0);
