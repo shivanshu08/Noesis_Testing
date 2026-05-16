@@ -1,3 +1,0 @@
-[submodule "backend/.cache/automation-testing-repo"]
-	path = backend/.cache/automation-testing-repo
-	url = https://github.com/prashantguleria/AutomationTesting.git
