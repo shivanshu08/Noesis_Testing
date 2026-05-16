@@ -151,6 +151,19 @@ export class ThemeService {
   private selectedSurface = signal<SurfaceSwatch>(this.loadSurface());
   readonly surface = this.selectedSurface.asReadonly();
 
+  private readonly legacyThemes: Array<Pick<AppTheme, 'name' | 'label' | 'primary'>> = [
+    { name: 'indigo', label: 'Indigo', primary: '#6366f1' },
+    { name: 'ocean', label: 'Ocean Blue', primary: '#0ea5e9' },
+    { name: 'emerald', label: 'Emerald', primary: '#10b981' },
+    { name: 'rose', label: 'Rose', primary: '#f43f5e' },
+    { name: 'amber', label: 'Amber', primary: '#f59e0b' },
+    { name: 'teal', label: 'Teal', primary: '#14b8a6' },
+    { name: 'sunset', label: 'Sunset', primary: '#f97316' },
+    { name: 'cyberpunk', label: 'Cyberpunk', primary: '#d946ef' },
+    { name: 'midnight', label: 'Midnight', primary: '#8b5cf6' },
+    { name: 'slate', label: 'Slate', primary: '#64748b' }
+  ];
+
   private currentTheme = signal<AppTheme>(this.loadTheme());
   readonly theme = this.currentTheme.asReadonly();
 
@@ -360,19 +373,6 @@ export class ThemeService {
 
     this.applyTheme(this.currentTheme());
   }
-
-  private readonly legacyThemes: Array<Pick<AppTheme, 'name' | 'label' | 'primary'>> = [
-    { name: 'indigo', label: 'Indigo', primary: '#6366f1' },
-    { name: 'ocean', label: 'Ocean Blue', primary: '#0ea5e9' },
-    { name: 'emerald', label: 'Emerald', primary: '#10b981' },
-    { name: 'rose', label: 'Rose', primary: '#f43f5e' },
-    { name: 'amber', label: 'Amber', primary: '#f59e0b' },
-    { name: 'teal', label: 'Teal', primary: '#14b8a6' },
-    { name: 'sunset', label: 'Sunset', primary: '#f97316' },
-    { name: 'cyberpunk', label: 'Cyberpunk', primary: '#d946ef' },
-    { name: 'midnight', label: 'Midnight', primary: '#8b5cf6' },
-    { name: 'slate', label: 'Slate', primary: '#64748b' }
-  ];
 
   private mixWithBlack(hex: string, amount: number): string {
     return this.mix(hex, '#000000', amount);
