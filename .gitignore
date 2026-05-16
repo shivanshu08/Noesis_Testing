@@ -5,6 +5,7 @@ dist/
 .angular/
 out-tsc/
 backend/node_modules/
+backend/.cache/
 backend/dist/
 backend/logs/
 backend/target/
