@@ -7,11 +7,9 @@ databases:
 services:
   - type: web
     name: noesis-manager-api
-    runtime: java
+    runtime: docker
     plan: free
-    rootDir: backend
-    buildCommand: mvn -DskipTests package
-    startCommand: java -jar target/noesis-testing-backend-1.0.0.jar
+    dockerfilePath: ./Dockerfile
     healthCheckPath: /api/health
     envVars:
       - key: DB_HOST
@@ -37,7 +35,7 @@ services:
       - key: INIT_DB_SCHEMA
         value: true
       - key: SCHEMA_PATH
-        value: ../database/schema.sql
+        value: database/schema.sql
       - key: CORS_ORIGIN
         value: https://noesis-manager.netlify.app
       - key: APP_BASE_URL
