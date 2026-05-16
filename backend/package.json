@@ -8,7 +8,5 @@
     "start": "java -jar target/noesis-testing-backend-1.0.0.jar",
     "dev": "mvn -Dexec.mainClass=com.noesis.NoesisTestingApplication exec:java",
     "db:init": "mvn -Dexec.mainClass=com.noesis.NoesisTestingApplication exec:java"
-  },
-  "dependencies": {},
-  "devDependencies": {}
+  }
 }

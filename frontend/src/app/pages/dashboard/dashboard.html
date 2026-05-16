@@ -9,42 +9,30 @@
     </div>
   </div>
 
-  <!-- Stats Cards -->
   <div class="stats-grid">
     <div class="stat-card">
-      <div class="stat-icon scripts">
-        <i class="pi pi-file-edit"></i>
-      </div>
+      <div class="stat-icon scripts"><i class="pi pi-file-edit"></i></div>
       <div class="stat-info">
         <span class="stat-value">{{ stats()?.totalScripts || 0 }}</span>
         <span class="stat-label">{{ auth.isTester() ? 'Assigned Scripts' : 'Total Scripts' }}</span>
       </div>
     </div>
-
     <div class="stat-card">
-      <div class="stat-icon runs">
-        <i class="pi pi-play-circle"></i>
-      </div>
+      <div class="stat-icon runs"><i class="pi pi-play-circle"></i></div>
       <div class="stat-info">
         <span class="stat-value">{{ stats()?.totalRuns || 0 }}</span>
         <span class="stat-label">Total Runs</span>
       </div>
     </div>
-
     <div class="stat-card">
-      <div class="stat-icon passed">
-        <i class="pi pi-check-circle"></i>
-      </div>
+      <div class="stat-icon passed"><i class="pi pi-check-circle"></i></div>
       <div class="stat-info">
         <span class="stat-value">{{ getPassRate() }}%</span>
         <span class="stat-label">Pass Rate</span>
       </div>
     </div>
-
     <a class="stat-card clickable-card" routerLink="/running-now">
-      <div class="stat-icon running">
-        <i class="pi pi-wave-pulse"></i>
-      </div>
+      <div class="stat-icon running"><i class="pi pi-wave-pulse"></i></div>
       <div class="stat-info">
         <span class="stat-value">{{ stats()?.runningCount || 0 }}</span>
         <span class="stat-label">Running Now</span>
@@ -52,42 +40,106 @@
     </a>
   </div>
 
-  <!-- System Health Indicator -->
   @if (systemHealth(); as health) {
-    <div class="system-health-bar">
-      <div class="health-title">
-        <i class="pi pi-server"></i>
-        <span>System Health</span>
+    <div class="health-command-center" [class.health-critical]="getOverallStatus(health) === 'critical'" [class.health-warn]="getOverallStatus(health) === 'warn'">
+      <div class="health-bg-glow"></div>
+      <div class="health-header">
+        <div class="health-title-group">
+          <div class="health-icon-wrap" [class.pulse-ok]="getOverallStatus(health) === 'ok'" [class.pulse-warn]="getOverallStatus(health) === 'warn'" [class.pulse-critical]="getOverallStatus(health) === 'critical'">
+            <i class="pi pi-server"></i>
+          </div>
+          <div>
+            <span class="health-title-text">System Health</span>
+            <span class="health-subtitle">Live telemetry from backend</span>
+          </div>
+        </div>
+        <div class="health-overall-badge" [class.badge-ok]="getOverallStatus(health) === 'ok'" [class.badge-warn]="getOverallStatus(health) === 'warn'" [class.badge-critical]="getOverallStatus(health) === 'critical'">
+          <span class="badge-dot"></span>
+          {{ getOverallStatus(health) === 'ok' ? 'All Systems Nominal' : getOverallStatus(health) === 'warn' ? 'Elevated Load' : 'Needs Attention' }}
+        </div>
       </div>
-      <div class="health-indicators">
-        <div class="health-item">
-          <span class="health-dot" [class.ok]="health.api === 'ok'" [class.degraded]="health.api !== 'ok'"></span>
-          <span class="health-label">API</span>
-          <span class="health-status" [class.ok]="health.api === 'ok'">{{ health.api === 'ok' ? 'Operational' : 'Degraded' }}</span>
+
+      <div class="health-metrics-grid five-cols">
+        <!-- 1. API Status — always visible -->
+        <div class="health-metric-card">
+          <div class="metric-visual"><div class="metric-ring" [class.ring-ok]="health.api === 'ok'" [class.ring-critical]="health.api !== 'ok'"><i class="pi pi-globe"></i></div></div>
+          <div class="metric-data">
+            <span class="metric-label">API</span>
+            <span class="metric-value" [class.val-ok]="health.api === 'ok'" [class.val-critical]="health.api !== 'ok'">{{ health.api === 'ok' ? 'Operational' : 'Degraded' }}</span>
+          </div>
         </div>
-        <div class="health-divider"></div>
-        <div class="health-item">
-          <span class="health-dot" [class.ok]="health.db === 'ok'" [class.degraded]="health.db !== 'ok'"></span>
-          <span class="health-label">Database</span>
-          <span class="health-status" [class.ok]="health.db === 'ok'">{{ health.db === 'ok' ? 'Connected' : 'Degraded' }}</span>
+
+        <!-- 2. Database — always visible -->
+        <div class="health-metric-card">
+          <div class="metric-visual"><div class="metric-ring" [class.ring-ok]="health.db === 'ok'" [class.ring-critical]="health.db !== 'ok'"><i class="pi pi-database"></i></div></div>
+          <div class="metric-data">
+            <span class="metric-label">Database</span>
+            <span class="metric-value" [class.val-ok]="health.db === 'ok'" [class.val-critical]="health.db !== 'ok'">{{ health.db === 'ok' ? 'Connected' : 'Degraded' }}</span>
+            @if (health.dbLatencyMs > 0) {
+              <span class="metric-detail" [class.detail-ok]="getDbLatencyLevel(health.dbLatencyMs) === 'ok'" [class.detail-warn]="getDbLatencyLevel(health.dbLatencyMs) === 'warn'" [class.detail-critical]="getDbLatencyLevel(health.dbLatencyMs) === 'critical'">{{ health.dbLatencyMs }}ms latency</span>
+            }
+          </div>
         </div>
-        <div class="health-divider"></div>
-        <div class="health-item">
-          <i class="pi pi-clock" style="font-size: 0.7rem; color: var(--noesis-text-secondary);"></i>
-          <span class="health-label">Uptime</span>
-          <span class="health-status ok">{{ formatUptime(health.uptime) }}</span>
+
+        <!-- 3. Uptime — always visible -->
+        <div class="health-metric-card">
+          <div class="metric-visual"><div class="metric-ring ring-ok"><i class="pi pi-clock"></i></div></div>
+          <div class="metric-data">
+            <span class="metric-label">Uptime</span>
+            <span class="metric-value val-ok">{{ health.uptime > 0 ? formatUptime(health.uptime) : '-' }}</span>
+          </div>
         </div>
-        <div class="health-divider"></div>
-        <div class="health-item">
-          <i class="pi pi-microchip" style="font-size: 0.7rem; color: var(--noesis-text-secondary);"></i>
-          <span class="health-label">Memory</span>
-          <span class="health-status ok">{{ health.memoryMB }} MB</span>
+
+        <!-- 4. Memory — always visible, adapts to available data -->
+        <div class="health-metric-card">
+          <div class="metric-visual"><div class="metric-ring" [class.ring-ok]="getMemoryLevel(health.memoryPercent) === 'ok'" [class.ring-warn]="getMemoryLevel(health.memoryPercent) === 'warn'" [class.ring-critical]="getMemoryLevel(health.memoryPercent) === 'critical'"><i class="pi pi-microchip"></i></div></div>
+          <div class="metric-data">
+            <span class="metric-label">Heap Memory</span>
+            @if (health.maxMemoryMB > 0) {
+              <span class="metric-value" [class.val-ok]="getMemoryLevel(health.memoryPercent) === 'ok'" [class.val-warn]="getMemoryLevel(health.memoryPercent) === 'warn'" [class.val-critical]="getMemoryLevel(health.memoryPercent) === 'critical'">{{ health.memoryMB }} / {{ health.maxMemoryMB }} MB</span>
+              <div class="metric-bar-track"><div class="metric-bar-fill" [class.bar-ok]="getMemoryLevel(health.memoryPercent) === 'ok'" [class.bar-warn]="getMemoryLevel(health.memoryPercent) === 'warn'" [class.bar-critical]="getMemoryLevel(health.memoryPercent) === 'critical'" [style.width.%]="health.memoryPercent"></div></div>
+              <span class="metric-detail" [class.detail-ok]="getMemoryLevel(health.memoryPercent) === 'ok'" [class.detail-warn]="getMemoryLevel(health.memoryPercent) === 'warn'" [class.detail-critical]="getMemoryLevel(health.memoryPercent) === 'critical'">{{ health.memoryPercent }}% used</span>
+            } @else {
+              <span class="metric-value val-ok">{{ health.memoryMB > 0 ? health.memoryMB + ' MB used' : '-' }}</span>
+            }
+          </div>
         </div>
+
+        <!-- 5. Disk Space — always visible, adapts to available data -->
+        <div class="health-metric-card">
+          <div class="metric-visual"><div class="metric-ring" [class.ring-ok]="getDiskLevel(health.diskPercent) === 'ok'" [class.ring-warn]="getDiskLevel(health.diskPercent) === 'warn'" [class.ring-critical]="getDiskLevel(health.diskPercent) === 'critical'"><i class="pi pi-server"></i></div></div>
+          <div class="metric-data">
+            <span class="metric-label">Disk Space</span>
+            @if (health.diskTotalGB > 0) {
+              <span class="metric-value" [class.val-ok]="getDiskLevel(health.diskPercent) === 'ok'" [class.val-warn]="getDiskLevel(health.diskPercent) === 'warn'" [class.val-critical]="getDiskLevel(health.diskPercent) === 'critical'">{{ health.diskUsedGB }} / {{ health.diskTotalGB }} GB</span>
+              <div class="metric-bar-track"><div class="metric-bar-fill" [class.bar-ok]="getDiskLevel(health.diskPercent) === 'ok'" [class.bar-warn]="getDiskLevel(health.diskPercent) === 'warn'" [class.bar-critical]="getDiskLevel(health.diskPercent) === 'critical'" [style.width.%]="health.diskPercent"></div></div>
+              <span class="metric-detail" [class.detail-ok]="getDiskLevel(health.diskPercent) === 'ok'" [class.detail-warn]="getDiskLevel(health.diskPercent) === 'warn'" [class.detail-critical]="getDiskLevel(health.diskPercent) === 'critical'">{{ health.diskFreeGB }} GB free</span>
+            } @else {
+              <span class="metric-value val-ok">Pending</span>
+              <span class="metric-detail detail-ok">Restart backend</span>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div class="health-footer">
+        @if (health.javaVersion && health.javaVersion !== '-') {
+          <span class="health-footer-tag"><i class="pi pi-code"></i> Java {{ health.javaVersion }}</span>
+        }
+        @if (health.os && health.os !== '-') {
+          <span class="health-footer-tag"><i class="pi pi-desktop"></i> {{ health.os }}</span>
+        }
+        @if (health.cpuCores > 0) {
+          <span class="health-footer-tag"><i class="pi pi-microchip"></i> {{ health.cpuCores }} CPU cores</span>
+        }
+        @if (health.pid > 0) {
+          <span class="health-footer-tag"><i class="pi pi-hashtag"></i> PID {{ health.pid }}</span>
+        }
+        <span class="health-footer-tag"><i class="pi pi-sync"></i> Refreshes every 30s</span>
       </div>
     </div>
   }
 
-  <!-- Scripts Overview -->
   <div style="margin-bottom: 24px;">
     <p-card styleClass="report-sources-card chart-card">
       <h3 class="mb-3" style="font-size: 1.1rem; font-weight: 600;">Scripts Overview</h3>
@@ -114,7 +166,6 @@
     </p-card>
   </div>
 
-  <!-- Execution Trend -->
   <div class="trend-section">
     <p-card styleClass="chart-card execution-trend-card">
       <div class="trend-card-header">
@@ -123,31 +174,19 @@
           <p>Passed and failed script executions across the last 30 days</p>
         </div>
         <div class="trend-summary">
-          <span class="trend-chip total">
-            <i class="pi pi-chart-bar"></i>
-            {{ trendSummary.total }} Total
-          </span>
-          <span class="trend-chip passed">
-            <i class="pi pi-check-circle"></i>
-            {{ trendSummary.passed }} Passed
-          </span>
-          <span class="trend-chip failed">
-            <i class="pi pi-times-circle"></i>
-            {{ trendSummary.failed }} Failed
-          </span>
+          <span class="trend-chip total"><i class="pi pi-chart-bar"></i> {{ trendSummary.total }} Total</span>
+          <span class="trend-chip passed"><i class="pi pi-check-circle"></i> {{ trendSummary.passed }} Passed</span>
+          <span class="trend-chip failed"><i class="pi pi-times-circle"></i> {{ trendSummary.failed }} Failed</span>
         </div>
       </div>
       @if (historyChartData) {
-        <div class="trend-chart-shell">
-          <p-chart type="bar" [data]="historyChartData" [options]="chartOptions" height="320px" />
-        </div>
+        <div class="trend-chart-shell"><p-chart type="bar" [data]="historyChartData" [options]="chartOptions" height="320px" /></div>
       } @else {
         <div class="empty-state trend-empty">Insufficient data to render chart</div>
       }
     </p-card>
   </div>
 
-  <!-- Recent Runs -->
   <p-card styleClass="runs-card">
     <ng-template pTemplate="title">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
@@ -157,15 +196,7 @@
     </ng-template>
     <p-table [value]="recentRuns()" [rows]="5" responsiveLayout="scroll" styleClass="p-datatable-sm">
       <ng-template #header>
-        <tr>
-          <th>Execution ID</th>
-          <th>Suite / Run Name</th>
-          <th>Environment</th>
-          <th>Status</th>
-          <th>Duration</th>
-          <th>Triggered At</th>
-          <th style="width: 60px;"></th>
-        </tr>
+        <tr><th>Execution ID</th><th>Suite / Run Name</th><th>Environment</th><th>Status</th><th>Duration</th><th>Triggered At</th><th style="width: 60px;"></th></tr>
       </ng-template>
       <ng-template #body let-run>
         <tr>
@@ -175,22 +206,12 @@
           <td><p-tag [value]="run.status | titlecase" [severity]="getStatusSeverity(run.status)" /></td>
           <td><i class="pi pi-clock" style="font-size: 0.8rem; color: var(--text-color-secondary); margin-right: 4px;"></i> {{ formatDuration(run.durationMs ? run.durationMs / 1000 : null) }}</td>
           <td>{{ formatDate(run.startedAt) }}</td>
-          <td>
-            <p-button icon="pi pi-eye" [rounded]="true" [text]="true" size="small" severity="secondary" [routerLink]="'/run/' + run.id" pTooltip="View Details" tooltipPosition="left" />
-          </td>
+          <td><p-button icon="pi pi-eye" [rounded]="true" [text]="true" size="small" severity="secondary" [routerLink]="'/run/' + run.id" pTooltip="View Details" tooltipPosition="left" /></td>
         </tr>
       </ng-template>
       <ng-template #emptymessage>
-        <tr>
-          <td colspan="6" class="empty-row">
-            <div class="empty-state">
-              <i class="pi pi-inbox"></i>
-              <p>No executions yet. Start by running some scripts!</p>
-            </div>
-          </td>
-        </tr>
+        <tr><td colspan="6" class="empty-row"><div class="empty-state"><i class="pi pi-inbox"></i><p>No executions yet. Start by running some scripts!</p></div></td></tr>
       </ng-template>
     </p-table>
   </p-card>
 </div>
-

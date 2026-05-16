@@ -41,6 +41,7 @@ import javax.crypto.spec.SecretKeySpec;
 import org.postgresql.util.PGobject;
 
 class BackendSupport {
+  protected static final long STARTED_AT_EPOCH = System.currentTimeMillis() / 1000;
   protected static final ObjectMapper JSON = new ObjectMapper();
   protected static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() {};
   protected static final TypeReference<Object> ANY = new TypeReference<>() {};

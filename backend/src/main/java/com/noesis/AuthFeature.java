@@ -9,19 +9,81 @@ import org.mindrot.jbcrypt.BCrypt;
 
 class AuthFeature extends BackendSupport {
   protected void health(HttpExchange ex) throws IOException {
+    Runtime rt = Runtime.getRuntime();
+    long now = System.currentTimeMillis() / 1000;
+    long uptimeSeconds = now - STARTED_AT_EPOCH;
+
+    // DB health check with latency measurement
     String dbStatus = "ok";
+    long dbLatencyMs = 0;
     try {
+      long t0 = System.nanoTime();
       db.one("SELECT 1 AS ok");
+      dbLatencyMs = (System.nanoTime() - t0) / 1_000_000;
     } catch (Exception ignored) {
       dbStatus = "degraded";
     }
-    send(ex, 200, Map.of(
-        "status", dbStatus.equals("ok") ? "ok" : "degraded",
-        "api", "ok",
-        "db", dbStatus,
-        "uptime", System.nanoTime() / 1_000_000_000,
-        "memoryMB", Runtime.getRuntime().totalMemory() / 1024 / 1024,
-        "timestamp", Instant.now().toString()));
+
+    // CPU load via MXBean
+    double cpuLoad = -1;
+    double systemLoadAvg = -1;
+    int availableProcessors = rt.availableProcessors();
+    try {
+      java.lang.management.OperatingSystemMXBean osBean = java.lang.management.ManagementFactory.getOperatingSystemMXBean();
+      systemLoadAvg = Math.round(osBean.getSystemLoadAverage() * 100.0) / 100.0;
+      if (osBean instanceof com.sun.management.OperatingSystemMXBean sunBean) {
+        cpuLoad = Math.round(sunBean.getProcessCpuLoad() * 10000.0) / 100.0;
+      }
+    } catch (Exception ignored) {}
+
+    // Memory
+    long totalMB = rt.totalMemory() / 1024 / 1024;
+    long freeMB = rt.freeMemory() / 1024 / 1024;
+    long maxMB = rt.maxMemory() / 1024 / 1024;
+    long usedMB = totalMB - freeMB;
+    int activeThreads = Thread.activeCount();
+
+    // GC stats
+    long gcCount = 0;
+    long gcTimeMs = 0;
+    for (java.lang.management.GarbageCollectorMXBean gc : java.lang.management.ManagementFactory.getGarbageCollectorMXBeans()) {
+      long c = gc.getCollectionCount();
+      long t = gc.getCollectionTime();
+      if (c >= 0) gcCount += c;
+      if (t >= 0) gcTimeMs += t;
+    }
+
+    // Disk space (root partition where the app is running)
+    java.io.File root = new java.io.File(".");
+    long diskTotalGB = root.getTotalSpace() / 1024 / 1024 / 1024;
+    long diskFreeGB = root.getUsableSpace() / 1024 / 1024 / 1024;
+    long diskUsedGB = diskTotalGB - diskFreeGB;
+    long diskPercent = diskTotalGB > 0 ? Math.round(diskUsedGB * 100.0 / diskTotalGB) : 0;
+
+    java.util.LinkedHashMap<String, Object> data = new java.util.LinkedHashMap<>();
+    data.put("status", dbStatus.equals("ok") ? "ok" : "degraded");
+    data.put("api", "ok");
+    data.put("db", dbStatus);
+    data.put("dbLatencyMs", dbLatencyMs);
+    data.put("uptime", uptimeSeconds);
+    data.put("memoryMB", usedMB);
+    data.put("maxMemoryMB", maxMB);
+    data.put("memoryPercent", maxMB > 0 ? Math.round(usedMB * 100.0 / maxMB) : 0);
+    data.put("cpuLoad", cpuLoad >= 0 ? cpuLoad : null);
+    data.put("cpuCores", availableProcessors);
+    data.put("systemLoadAvg", systemLoadAvg >= 0 ? systemLoadAvg : null);
+    data.put("activeThreads", activeThreads);
+    data.put("gcCount", gcCount);
+    data.put("gcTimeMs", gcTimeMs);
+    data.put("diskTotalGB", diskTotalGB);
+    data.put("diskFreeGB", diskFreeGB);
+    data.put("diskUsedGB", diskUsedGB);
+    data.put("diskPercent", diskPercent);
+    data.put("javaVersion", System.getProperty("java.version"));
+    data.put("os", System.getProperty("os.name"));
+    data.put("pid", ProcessHandle.current().pid());
+    data.put("timestamp", Instant.now().toString());
+    send(ex, 200, data);
   }
 
   protected void login(HttpExchange ex) throws IOException, SQLException {

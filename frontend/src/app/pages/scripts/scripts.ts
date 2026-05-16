@@ -28,6 +28,7 @@ import { environment } from '../../../environments/environment';
 import { AuthService } from '../../services/auth.service';
 import { RouterModule, Router } from '@angular/router';
 import { AlertOverlayComponent } from '../../components/alert-overlay/alert-overlay';
+import { ThemeService } from '../../services/theme.service';
 
 type AvailabilityKind = 'ready' | 'maintenance' | 'blocked' | 'attention' | 'unassigned' | 'never-run';
 type AvailabilityFilter = 'runnable' | AvailabilityKind;
@@ -133,8 +134,18 @@ export class Scripts implements OnInit {
     public auth: AuthService,
     private router: Router,
     private messageService: MessageService,
-    private http: HttpClient
+    private http: HttpClient,
+    public themeService: ThemeService
   ) {}
+
+  visibleCategories = computed(() =>
+    this.categories()
+      .filter(cat => (cat.scriptCount || 0) > 0)
+      .map(cat => ({
+        ...cat,
+        color: this.getCategoryColor(cat)
+      }))
+  );
 
   ngOnInit() {
     this.loadCategories();
@@ -145,6 +156,15 @@ export class Scripts implements OnInit {
     this.scriptService.getCategories().subscribe({
       next: (data) => this.categories.set(data),
     });
+  }
+
+  private getCategoryColor(cat: ScriptCategory): string {
+    // Use the theme's primary color as base, with category-specific variations
+    const themePrimary = this.themeService.theme().primary;
+    if (cat.color && cat.color !== '#000000' && cat.color !== '#ffffff') {
+      return cat.color;
+    }
+    return themePrimary;
   }
 
   loadScripts() {

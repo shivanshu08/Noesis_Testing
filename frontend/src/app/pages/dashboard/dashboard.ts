@@ -7,6 +7,7 @@ import { ButtonModule } from 'primeng/button';
 import { TagModule } from 'primeng/tag';
 import { TableModule } from 'primeng/table';
 import { ChartModule } from 'primeng/chart';
+import { TooltipModule } from 'primeng/tooltip';
 import { ExecutionService } from '../../services/execution.service';
 import { ScriptService } from '../../services/script.service';
 import { AuthService } from '../../services/auth.service';
@@ -17,10 +18,35 @@ import { clampPercentage, toPercentage } from '../../utils/percentage';
 import { Subscription } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
+interface SystemHealth {
+  api: string;
+  db: string;
+  dbLatencyMs: number;
+  uptime: number;
+  memoryMB: number;
+  maxMemoryMB: number;
+  memoryPercent: number;
+  cpuLoad: number | null;
+  cpuCores: number;
+  systemLoadAvg: number | null;
+  activeThreads: number;
+  gcCount: number;
+  gcTimeMs: number;
+  diskTotalGB: number;
+  diskFreeGB: number;
+  diskUsedGB: number;
+  diskPercent: number;
+  javaVersion: string;
+  os: string;
+  pid: number;
+  status: string;
+  timestamp: string;
+}
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterModule, CardModule, ButtonModule, TagModule, TableModule, ChartModule],
+  imports: [CommonModule, RouterModule, CardModule, ButtonModule, TagModule, TableModule, ChartModule, TooltipModule],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
 })
@@ -29,7 +55,7 @@ export class Dashboard implements OnInit, OnDestroy {
   recentRuns = signal<ExecutionRun[]>([]);
 
   // System Health
-  systemHealth = signal<{ api: string; db: string; uptime: number; memoryMB: number; status: string } | null>(null);
+  systemHealth = signal<SystemHealth | null>(null);
 
   categoryChartData: any;
   historyChartData: any;
@@ -88,9 +114,17 @@ export class Dashboard implements OnInit, OnDestroy {
     });
 
     // Fetch system health
-    this.http.get<any>(`${environment.apiUrl}/health`).subscribe({
+    this.http.get<SystemHealth>(`${environment.apiUrl}/health`).subscribe({
       next: (data) => this.systemHealth.set(data),
-      error: () => this.systemHealth.set({ api: 'degraded', db: 'unknown', uptime: 0, memoryMB: 0, status: 'degraded' }),
+      error: () => this.systemHealth.set({
+        api: 'degraded', db: 'unknown', dbLatencyMs: 0,
+        uptime: 0, memoryMB: 0, maxMemoryMB: 0, memoryPercent: 0,
+        cpuLoad: null, cpuCores: 0, systemLoadAvg: null, activeThreads: 0,
+        gcCount: 0, gcTimeMs: 0,
+        diskTotalGB: 0, diskFreeGB: 0, diskUsedGB: 0, diskPercent: 0,
+        javaVersion: '-', os: '-', pid: 0,
+        status: 'degraded', timestamp: ''
+      }),
     });
   }
 
@@ -99,9 +133,77 @@ export class Dashboard implements OnInit, OnDestroy {
     const d = Math.floor(seconds / 86400);
     const h = Math.floor((seconds % 86400) / 3600);
     const m = Math.floor((seconds % 3600) / 60);
-    if (d > 0) return `${d}d ${h}h`;
+    if (d > 0) return `${d}d ${h}h ${m}m`;
     if (h > 0) return `${h}h ${m}m`;
     return `${m}m`;
+  }
+
+  getMemoryLevel(percent: number): string {
+    if (percent >= 85) return 'critical';
+    if (percent >= 65) return 'warn';
+    return 'ok';
+  }
+
+  getCpuLevel(load: number | null): string {
+    if (load === null || load < 0) return 'ok';
+    if (load >= 80) return 'critical';
+    if (load >= 50) return 'warn';
+    return 'ok';
+  }
+
+  getDbLatencyLevel(ms: number): string {
+    if (ms >= 500) return 'critical';
+    if (ms >= 100) return 'warn';
+    return 'ok';
+  }
+
+  getOverallStatus(health: SystemHealth): string {
+    if (health.api !== 'ok' || health.db !== 'ok') return 'critical';
+    if (health.memoryPercent >= 85 || (health.cpuLoad !== null && health.cpuLoad >= 80) || health.diskPercent >= 90) return 'warn';
+    return 'ok';
+  }
+
+  getDiskLevel(percent: number): string {
+    if (percent >= 90) return 'critical';
+    if (percent >= 75) return 'warn';
+    return 'ok';
+  }
+
+  formatGcTime(ms: number): string {
+    if (ms < 1000) return `${ms}ms`;
+    return `${(ms / 1000).toFixed(1)}s`;
+  }
+
+  getHealthMetricColor(level: string): string {
+    const theme = this.themeService.theme();
+    const isDark = this.themeService.isDarkMode();
+    
+    switch(level) {
+      case 'ok':
+        return '#10b981'; // Emerald
+      case 'warn':
+        return '#f59e0b'; // Amber
+      case 'critical':
+        return '#ef4444'; // Red
+      default:
+        return theme.primary;
+    }
+  }
+
+  getMemoryColor(): string {
+    const health = this.systemHealth();
+    if (!health) return this.themeService.theme().primary;
+    return this.getHealthMetricColor(this.getMemoryLevel(health.memoryPercent));
+  }
+
+  getCpuColor(): string {
+    const health = this.systemHealth();
+    if (!health) return this.themeService.theme().primary;
+    return this.getHealthMetricColor(this.getCpuLevel(health.cpuLoad));
+  }
+
+  getThreadsColor(): string {
+    return this.themeService.theme().primary;
   }
 
   getPercentage(count: number, total: number | undefined): number {

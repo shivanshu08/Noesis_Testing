@@ -10,8 +10,7 @@ export const authGuard: CanActivateFn = () => {
     return true;
   }
 
-  router.navigate(['/login']);
-  return false;
+  return router.createUrlTree(['/login']);
 };
 
 export const guestGuard: CanActivateFn = () => {
@@ -22,8 +21,7 @@ export const guestGuard: CanActivateFn = () => {
     return true;
   }
 
-  router.navigate(['/dashboard']);
-  return false;
+  return router.createUrlTree(['/dashboard']);
 };
 
 export const adminGuard: CanActivateFn = () => {
@@ -32,8 +30,7 @@ export const adminGuard: CanActivateFn = () => {
 
   if (authService.isAdmin()) return true;
 
-  router.navigate(['/dashboard']);
-  return false;
+  return router.createUrlTree(['/dashboard']);
 };
 
 export const editGuard: CanActivateFn = () => {
@@ -42,6 +39,5 @@ export const editGuard: CanActivateFn = () => {
 
   if (authService.canEdit()) return true;
 
-  router.navigate(['/dashboard']);
-  return false;
+  return router.createUrlTree(['/dashboard']);
 };

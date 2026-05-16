@@ -98,8 +98,8 @@
       />
     </div>
 
-    <div class="category-rail" *ngIf="categories().length > 0">
-      @for (cat of categories(); track cat.id) {
+    <div class="category-rail" *ngIf="visibleCategories().length > 0">
+      @for (cat of visibleCategories(); track cat.id) {
         <button
           type="button"
           class="category-chip"
