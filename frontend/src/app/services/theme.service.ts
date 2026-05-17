@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 
-export type ThemePresetName = 'Aura' | 'Lara' | 'Nora' | 'Drogevate';
+export type ThemePresetName = 'Drogevate' | 'Clinical' | 'Lab Night' | 'Regulatory' | 'Pharma Glass' | 'Aura' | 'Lara' | 'Nora';
 export type ThemeColorMode = 'monochrome' | 'color';
 
 export interface AppTheme {
@@ -43,9 +43,51 @@ interface SurfaceScale {
 
 @Injectable({ providedIn: 'root' })
 export class ThemeService {
-  readonly presets: ThemePresetName[] = ['Aura', 'Lara', 'Nora', 'Drogevate'];
+  readonly presets: ThemePresetName[] = ['Drogevate', 'Clinical', 'Lab Night', 'Regulatory', 'Pharma Glass', 'Aura', 'Lara', 'Nora'];
 
   private readonly colorPalettes: Record<ThemePresetName, ThemeSwatch[]> = {
+    Drogevate: [
+      { label: 'Drogevate Blue', value: '#204985' },
+      { label: 'Deep Navy', value: '#173b6d' },
+      { label: 'Clinical Blue', value: '#2f67a7' },
+      { label: 'Signal Cyan', value: '#1aa7c8' },
+      { label: 'Digital Teal', value: '#18b7a6' },
+      { label: 'Action Orange', value: '#ff6b2c' },
+      { label: 'Review Amber', value: '#f5a623' },
+      { label: 'Alert Rose', value: '#e83e6f' }
+    ],
+    Clinical: [
+      { label: 'Surgical Teal', value: '#0f766e' },
+      { label: 'Sterile Blue', value: '#2563eb' },
+      { label: 'Vitals Green', value: '#16a34a' },
+      { label: 'Scrub Cyan', value: '#0891b2' },
+      { label: 'Review Amber', value: '#d97706' },
+      { label: 'Specimen Rose', value: '#e11d48' }
+    ],
+    'Lab Night': [
+      { label: 'Neon Cyan', value: '#22d3ee' },
+      { label: 'Data Sky', value: '#38bdf8' },
+      { label: 'Lime Signal', value: '#84cc16' },
+      { label: 'Ion Violet', value: '#8b5cf6' },
+      { label: 'Pulse Amber', value: '#f59e0b' },
+      { label: 'Fault Red', value: '#ef4444' }
+    ],
+    Regulatory: [
+      { label: 'Authority Blue', value: '#1d4ed8' },
+      { label: 'Audit Slate', value: '#475569' },
+      { label: 'Seal Indigo', value: '#4338ca' },
+      { label: 'Approval Green', value: '#15803d' },
+      { label: 'Finding Amber', value: '#b45309' },
+      { label: 'Exception Red', value: '#b91c1c' }
+    ],
+    'Pharma Glass': [
+      { label: 'Glass Blue', value: '#0ea5e9' },
+      { label: 'Aqua Teal', value: '#14b8a6' },
+      { label: 'Molecule Violet', value: '#8b5cf6' },
+      { label: 'Soft Emerald', value: '#10b981' },
+      { label: 'Warm Signal', value: '#f97316' },
+      { label: 'Formula Pink', value: '#ec4899' }
+    ],
     Aura: [
       { label: 'Indigo', value: '#6366f1' },
       { label: 'Sky', value: '#0ea5e9' },
@@ -75,20 +117,40 @@ export class ThemeService {
       { label: 'Magenta', value: '#c026d3' },
       { label: 'Coral', value: '#e11d48' },
       { label: 'Graphite', value: '#475569' }
-    ],
-    Drogevate: [
-      { label: 'Drogevate Blue', value: '#204985' },
-      { label: 'Deep Navy', value: '#173b6d' },
-      { label: 'Clinical Blue', value: '#2f67a7' },
-      { label: 'Signal Cyan', value: '#1aa7c8' },
-      { label: 'Digital Teal', value: '#18b7a6' },
-      { label: 'Action Orange', value: '#ff6b2c' },
-      { label: 'Review Amber', value: '#f5a623' },
-      { label: 'Alert Rose', value: '#e83e6f' }
     ]
   };
 
   private readonly monochromePalettes: Record<ThemePresetName, ThemeSwatch[]> = {
+    Drogevate: [
+      { label: 'Navy Mono', value: '#244569' },
+      { label: 'Blue Gray', value: '#3d5875' },
+      { label: 'Slate Blue', value: '#50657e' },
+      { label: 'Cool Steel', value: '#64748b' }
+    ],
+    Clinical: [
+      { label: 'Clinical Slate', value: '#334155' },
+      { label: 'Clean Graphite', value: '#3f4b5b' },
+      { label: 'Sterile Gray', value: '#64748b' },
+      { label: 'Deep Teal Gray', value: '#31524f' }
+    ],
+    'Lab Night': [
+      { label: 'Night Graphite', value: '#1f2937' },
+      { label: 'Blue Charcoal', value: '#243447' },
+      { label: 'Carbon', value: '#27272a' },
+      { label: 'Signal Slate', value: '#334155' }
+    ],
+    Regulatory: [
+      { label: 'Audit Ink', value: '#1e293b' },
+      { label: 'Ledger Slate', value: '#334155' },
+      { label: 'Archive Gray', value: '#475569' },
+      { label: 'Seal Charcoal', value: '#374151' }
+    ],
+    'Pharma Glass': [
+      { label: 'Frost Slate', value: '#475569' },
+      { label: 'Glass Gray', value: '#64748b' },
+      { label: 'Mist Blue', value: '#4b6b88' },
+      { label: 'Soft Carbon', value: '#3f3f46' }
+    ],
     Aura: [
       { label: 'Slate', value: '#334155' },
       { label: 'Zinc', value: '#52525b' },
@@ -106,16 +168,34 @@ export class ThemeService {
       { label: 'Smoke', value: '#52525b' },
       { label: 'Ash', value: '#64748b' },
       { label: 'Ink', value: '#1f2937' }
-    ],
-    Drogevate: [
-      { label: 'Navy Mono', value: '#244569' },
-      { label: 'Blue Gray', value: '#3d5875' },
-      { label: 'Slate Blue', value: '#50657e' },
-      { label: 'Cool Steel', value: '#64748b' }
     ]
   };
 
   readonly surfaceSwatches: SurfaceSwatch[] = [
+    {
+      label: 'Clinical',
+      value: '#d8eef0',
+      light: { bg: '#f5f9fb', surface: '#ffffff', section: '#fafdff', overlay: '#ffffff', border: '#d8e6ee', hover: '#eef6f8', text: '#102033', muted: '#607285' },
+      dark: { bg: '#08131c', surface: '#101f2b', section: '#0c1823', overlay: '#132635', border: '#274154', hover: '#183142', text: '#eef7fb', muted: '#8fb0c2' }
+    },
+    {
+      label: 'Lab Night',
+      value: '#0f2433',
+      light: { bg: '#eef7fb', surface: '#ffffff', section: '#f7fbfd', overlay: '#ffffff', border: '#cfe1ea', hover: '#e4f2f7', text: '#102033', muted: '#5f7382' },
+      dark: { bg: '#071018', surface: '#0d1b26', section: '#0a1620', overlay: '#122434', border: '#214153', hover: '#162f42', text: '#e9f8ff', muted: '#8db4c7' }
+    },
+    {
+      label: 'Glass',
+      value: '#c9f0f6',
+      light: { bg: '#f1f8fb', surface: 'rgba(255, 255, 255, 0.86)', section: '#f7fbfd', overlay: 'rgba(255, 255, 255, 0.94)', border: '#cfe3ec', hover: '#e7f4f8', text: '#102033', muted: '#5b7181' },
+      dark: { bg: '#08151d', surface: 'rgba(17, 34, 47, 0.86)', section: '#0b1822', overlay: 'rgba(19, 42, 58, 0.94)', border: '#25465a', hover: '#173346', text: '#edf9ff', muted: '#91b5c8' }
+    },
+    {
+      label: 'Console',
+      value: '#b8c4d4',
+      light: { bg: '#f3f5f8', surface: '#ffffff', section: '#f9fafb', overlay: '#ffffff', border: '#d7dde5', hover: '#eceff4', text: '#172033', muted: '#647184' },
+      dark: { bg: '#0b0f14', surface: '#141a22', section: '#10161d', overlay: '#18202a', border: '#2b3542', hover: '#1d2733', text: '#f3f6f9', muted: '#9aa6b5' }
+    },
     {
       label: 'Slate',
       value: '#cbd5e1',
@@ -251,22 +331,25 @@ export class ThemeService {
   private createTheme(primary: string, label: string, preset: ThemePresetName): AppTheme {
     const [r, g, b] = this.hexToRgb(primary);
     const isDrogevate = preset === 'Drogevate';
+    const isLabNight = preset === 'Lab Night';
+    const isRegulatory = preset === 'Regulatory';
+    const isGlass = preset === 'Pharma Glass';
 
     return {
       name: `${preset.toLowerCase()}-${primary.replace('#', '')}`,
       label,
       preset,
       primary,
-      primaryDark: this.mixWithBlack(primary, isDrogevate ? 0.22 : 0.14),
-      accent: isDrogevate ? '#9ed8f5' : this.mixWithWhite(primary, 0.32),
-      sidebarBgLight: isDrogevate ? '#204985' : '#ffffff',
-      sidebarBgDark: isDrogevate ? '#14345f' : '#111827',
-      sidebarActiveLight: isDrogevate ? 'rgba(255, 255, 255, 0.14)' : `rgba(${r}, ${g}, ${b}, 0.12)`,
-      sidebarActiveDark: isDrogevate ? 'rgba(158, 216, 245, 0.18)' : `rgba(${r}, ${g}, ${b}, 0.18)`,
+      primaryDark: this.mixWithBlack(primary, isDrogevate || isRegulatory ? 0.22 : 0.14),
+      accent: isDrogevate ? '#9ed8f5' : isLabNight ? '#a3e635' : isGlass ? '#bff4ff' : this.mixWithWhite(primary, 0.32),
+      sidebarBgLight: isDrogevate ? '#204985' : isRegulatory ? '#f8fafc' : isGlass ? 'rgba(255, 255, 255, 0.78)' : '#ffffff',
+      sidebarBgDark: isDrogevate ? '#14345f' : isLabNight ? '#071018' : isRegulatory ? '#111827' : isGlass ? 'rgba(13, 27, 38, 0.88)' : '#111827',
+      sidebarActiveLight: isDrogevate ? 'rgba(255, 255, 255, 0.14)' : `rgba(${r}, ${g}, ${b}, ${isGlass ? '0.16' : '0.12'})`,
+      sidebarActiveDark: isDrogevate ? 'rgba(158, 216, 245, 0.18)' : `rgba(${r}, ${g}, ${b}, ${isLabNight ? '0.24' : '0.18'})`,
       sidebarTextLight: isDrogevate ? '#ffffff' : '#0f172a',
       sidebarTextDark: '#f8fafc',
       sidebarMutedLight: isDrogevate ? '#c4d9f3' : '#64748b',
-      sidebarMutedDark: isDrogevate ? '#bdd4f4' : '#94a3b8'
+      sidebarMutedDark: isDrogevate ? '#bdd4f4' : isLabNight ? '#89b7cb' : '#94a3b8'
     };
   }
 
@@ -297,7 +380,7 @@ export class ThemeService {
 
   private loadPreset(): ThemePresetName {
     const saved = localStorage.getItem('noesis_theme_preset') as ThemePresetName | null;
-    return saved && this.presets.includes(saved) ? saved : 'Aura';
+    return saved && this.presets.includes(saved) ? saved : 'Drogevate';
   }
 
   private loadColorMode(): ThemeColorMode {
@@ -320,6 +403,7 @@ export class ThemeService {
     const [r, g, b] = this.hexToRgb(theme.primary);
 
     root.dataset['noesisPreset'] = theme.preset.toLowerCase();
+    root.dataset['themePreset'] = theme.preset.toLowerCase().replace(/\s+/g, '-');
     root.style.setProperty('--noesis-primary', theme.primary);
     root.style.setProperty('--noesis-primary-rgb', `${r}, ${g}, ${b}`);
     root.style.setProperty('--noesis-primary-dark', theme.primaryDark);
@@ -349,6 +433,7 @@ export class ThemeService {
     root.style.setProperty('--noesis-text', surface.text);
     root.style.setProperty('--noesis-text-secondary', surface.muted);
     root.style.setProperty('--noesis-border', surface.border);
+    root.style.setProperty('--noesis-hover', surface.hover);
 
     root.style.setProperty('--surface-ground', surface.bg);
     root.style.setProperty('--surface-section', surface.section);

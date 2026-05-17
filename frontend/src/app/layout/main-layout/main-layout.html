@@ -52,19 +52,41 @@
 
       @if (showThemeMenu && !sidebarCollapsed()) {
         <div class="sidebar-theme-panel" (mouseleave)="showThemeMenu = false">
+          <div class="theme-panel-header">
+            <div>
+              <h3>Theme Settings</h3>
+              <span>{{ themeService.preset() }} · {{ themeService.isDarkMode() ? 'Dark' : 'Light' }}</span>
+            </div>
+            <button type="button" class="theme-close-btn" aria-label="Close theme menu" (click)="showThemeMenu = false">
+              <i class="pi pi-times"></i>
+            </button>
+          </div>
+
           <section class="theme-section">
             <h3>Colour Scheme</h3>
             <div class="segmented-control">
-              <button type="button" [class.active]="!themeService.isDarkMode()" (click)="setDarkMode(false)">Light</button>
-              <button type="button" [class.active]="themeService.isDarkMode()" (click)="setDarkMode(true)">Dark</button>
+              <button type="button" [class.active]="!themeService.isDarkMode()" (click)="setDarkMode(false)">
+                <i class="pi pi-sun"></i>
+                Light
+              </button>
+              <button type="button" [class.active]="themeService.isDarkMode()" (click)="setDarkMode(true)">
+                <i class="pi pi-moon"></i>
+                Dark
+              </button>
             </div>
           </section>
 
           <section class="theme-section">
             <h3>Color Mode</h3>
             <div class="segmented-control color-mode">
-              <button type="button" [class.active]="themeService.mode() === 'monochrome'" (click)="setThemeColorMode('monochrome')">Monochrome</button>
-              <button type="button" [class.active]="themeService.mode() === 'color'" (click)="setThemeColorMode('color')">Color</button>
+              <button type="button" [class.active]="themeService.mode() === 'monochrome'" (click)="setThemeColorMode('monochrome')">
+                <i class="pi pi-circle-fill"></i>
+                Monochrome
+              </button>
+              <button type="button" [class.active]="themeService.mode() === 'color'" (click)="setThemeColorMode('color')">
+                <i class="pi pi-palette"></i>
+                Color
+              </button>
             </div>
           </section>
 
@@ -72,7 +94,7 @@
             <h3>Primary</h3>
             <div class="swatch-grid primary-grid">
               @for (swatch of primarySwatches(); track swatch.value) {
-                <button type="button" class="color-swatch" [class.active]="themeService.theme().primary === swatch.value" [style.background]="swatch.value" [attr.aria-label]="swatch.label" (click)="selectPrimary(swatch.value, swatch.label)"></button>
+                <button type="button" class="color-swatch" [class.active]="themeService.theme().primary === swatch.value" [style.background]="swatch.value" [attr.aria-label]="swatch.label" [pTooltip]="swatch.label" tooltipPosition="top" (click)="selectPrimary(swatch.value, swatch.label)"></button>
               }
             </div>
           </section>
@@ -81,7 +103,7 @@
             <h3>Surface</h3>
             <div class="swatch-grid">
               @for (surface of surfaceSwatches; track surface.label) {
-                <button type="button" class="color-swatch surface-swatch" [class.active]="themeService.surface().label === surface.label" [style.background]="surface.value" [attr.aria-label]="surface.label" (click)="selectSurface(surface.label)"></button>
+                <button type="button" class="color-swatch surface-swatch" [class.active]="themeService.surface().label === surface.label" [style.background]="surface.value" [attr.aria-label]="surface.label" [pTooltip]="surface.label" tooltipPosition="top" (click)="selectSurface(surface.label)"></button>
               }
             </div>
           </section>
