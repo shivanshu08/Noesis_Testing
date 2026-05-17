@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 *.log
+local_data*.sql
 .angular/
 out-tsc/
 backend/node_modules/
