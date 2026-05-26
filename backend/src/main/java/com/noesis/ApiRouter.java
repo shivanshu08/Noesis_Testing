@@ -20,10 +20,6 @@ class ApiRouter extends NotificationFeature {
       String path = ex.getRequestURI().getPath();
       Map<String, String> query = query(ex.getRequestURI());
 
-      if (method.equals("GET") && path.equals("/api/health")) {
-        health(ex);
-        return;
-      }
       if (method.equals("POST") && path.equals("/api/auth/login")) {
         login(ex);
         return;

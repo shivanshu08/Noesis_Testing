@@ -25,7 +25,7 @@
 
 **Noesis Testing Platform** is a full-stack web application designed to centralize and streamline the management of automated system tests. It provides a unified interface for browsing test scripts, organizing them into reusable test suites, triggering executions (on-demand or scheduled), and reviewing results — all with real-time feedback through live log streaming.
 
-The platform bridges the gap between test automation frameworks (Maven + TestNG) and QA teams by providing an intuitive web dashboard that surfaces execution trends, failure analysis, system health metrics, and notification-based alerting.
+The platform bridges the gap between test automation frameworks (Maven + TestNG) and QA teams by providing an intuitive web dashboard that surfaces execution trends, failure analysis, and notification-based alerting.
 
 ---
 
@@ -35,7 +35,6 @@ The platform bridges the gap between test automation frameworks (Maven + TestNG)
 - **Execution overview** with total runs, pass/fail rates, and script counts
 - **Execution Trend Graph** — 30-day rolling timeline of test results
 - **Failure Analysis Heatmap** — visual hot-spots for frequently failing scripts
-- **System Health Monitor** — real-time API, database, and memory status
 - **Last Run Summary** — quick-glance status of the most recent execution
 
 ### 📝 Script Management
@@ -352,7 +351,6 @@ Discovered scripts are automatically categorized based on naming conventions and
 ### System
 | Method | Endpoint                  | Description               | Access   |
 |:-------|:--------------------------|:--------------------------|:---------|
-| GET    | `/api/health`             | System health check       | Public   |
 | GET    | `/api/logs`               | Query application logs    | Auth     |
 | GET    | `/api/users`              | List all users            | Admin    |
 

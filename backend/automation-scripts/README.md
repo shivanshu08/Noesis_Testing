@@ -6,7 +6,6 @@ Automation scripts are organized by feature or screen under:
 
 Use descriptive class names that match the Java file name:
 
-- `api/ApiHealthCheck.java`
 - `dashboard/DashboardLoadTest.java`
 - `manual/ManualWorkflowTest.java`
 - `scriptmanagement/DuplicateScriptImportTest.java`
