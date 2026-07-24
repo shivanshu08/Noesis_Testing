@@ -17,6 +17,7 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: () => import('./layout/main-layout/main-layout').then(m => m.MainLayout),
     children: [
+      { path: 'product/:platform', canActivate: [platformGuard], loadComponent: () => import('./pages/product-home/product-home').then(m => m.ProductHome) },
       { path: 'dashboard', loadComponent: () => import('./pages/dashboard/dashboard').then(m => m.Dashboard) },
       { path: 'scripts', loadComponent: () => import('./pages/scripts/scripts').then(m => m.Scripts) },
       { path: 'scripts/:id/configuration/attachments', loadComponent: () => import('./pages/script-attachments/script-attachments').then(m => m.ScriptAttachments) },

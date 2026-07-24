@@ -17,6 +17,12 @@ export class PlatformLauncher implements OnInit {
   ];
   constructor(public auth: AuthService, private router: Router, @Inject(DOCUMENT) private document: Document) {}
   ngOnInit() { this.document.documentElement.classList.remove('dark-mode', 'p-dark'); }
-  visiblePlatforms() { const access = this.auth.user()?.platformAccess; return this.auth.isLoggedIn() && access?.length ? this.platforms.filter(p => access.includes(p.id)) : this.platforms; }
+  visiblePlatforms() {
+    if (!this.auth.isLoggedIn()) return this.platforms;
+    const access = this.auth.user()?.platformAccess ?? ['test-automation'];
+    return this.platforms.filter(platform => access.includes(platform.id));
+  }
+  workspaceHeading() { return this.auth.isLoggedIn() ? 'My applications' : 'Select an application'; }
+  workspaceKicker() { return this.auth.isLoggedIn() ? 'ASSIGNED TO YOU' : 'WORKSPACES'; }
   launch(platform: NoesisPlatform) { this.router.navigate(this.auth.isLoggedIn() ? [platform.destination] : ['/login', platform.id]); }
 }

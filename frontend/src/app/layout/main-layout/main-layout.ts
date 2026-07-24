@@ -33,6 +33,8 @@ import { environment } from '../../../environments/environment';
 })
 export class MainLayout implements OnInit, OnDestroy {
   sidebarCollapsed = signal(false);
+  activeProduct = signal<'csd-studio' | 'tenant-provisioning' | null>(null);
+  workspaceName = computed(() => this.activeProduct() === 'csd-studio' ? 'CSD Studio' : this.activeProduct() === 'tenant-provisioning' ? 'Tenant Provisioning' : 'Noesis');
   showThemeMenu = false;
   showNotifications = false;
   showCommandPalette = false;
@@ -50,6 +52,14 @@ export class MainLayout implements OnInit, OnDestroy {
   }
 
   navItems = computed(() => {
+    const product = this.activeProduct();
+    if (product) {
+      return [
+        { label: product === 'csd-studio' ? 'CSD Studio' : 'Tenant Provisioning', icon: product === 'csd-studio' ? 'pi pi-file-edit' : 'pi pi-cog', route: '/product/' + product },
+        { label: 'Switch Application', icon: 'pi pi-th-large', route: '/' }
+      ];
+    }
+
     const items = [
       { label: 'Dashboard', icon: 'pi pi-home', route: '/dashboard' },
       { label: 'Scripts', icon: 'pi pi-file-edit', route: '/scripts' },
@@ -93,6 +103,10 @@ export class MainLayout implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit() {
+    const productMatch = this.router.url.match(/^\/product\/(csd-studio|tenant-provisioning)/);
+    this.activeProduct.set(productMatch ? productMatch[1] as 'csd-studio' | 'tenant-provisioning' : null);
+    if (this.activeProduct()) return;
+
     // Load historical notifications from database on init
     this.notificationService.load();
     

@@ -1,5 +1,18 @@
-import { Component } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
-import { AuthService } from '../../services/auth.service';
-@Component({selector:'app-product-home',standalone:true,imports:[RouterLink],template:`<div class="product-home"><header><a routerLink="/" class="brand"><b>N</b> NOESIS</a><a routerLink="/" class="switch"><i class="pi pi-th-large"></i> Switch workspace</a></header><main><div class="product-icon"><i [class]="icon"></i></div><p class="eyebrow">NOESIS WORKSPACE</p><h1>{{title}}</h1><p>{{description}}</p><div class="notice"><i class="pi pi-check-circle"></i><div><strong>Your access is active</strong><span>This workspace foundation is ready for its business workflow to be connected.</span></div></div></main></div>`,styles:[`:host{display:block}.product-home{min-height:100vh;background:radial-gradient(circle at 50% 0,rgba(103,82,221,.18),transparent 34%),#f8fbff;color:#112342;font-family:Inter,"Segoe UI",sans-serif}header{height:82px;display:flex;align-items:center;justify-content:space-between;padding:0 5vw}.brand,.switch{text-decoration:none;color:inherit;font-weight:800;letter-spacing:.1em}.brand b{display:inline-grid;place-items:center;width:42px;height:42px;border-radius:12px;background:#20396d;color:white;margin-right:12px}.switch{font-size:12px;letter-spacing:0;border:1px solid #d8e0ed;padding:11px 14px;border-radius:10px;background:white}main{max-width:680px;margin:10vh auto;text-align:center;padding:30px}.product-icon{width:80px;height:80px;margin:auto;border-radius:22px;background:linear-gradient(145deg,#5834b8,#8360ea);display:grid;place-items:center;color:white;font-size:30px;box-shadow:0 18px 35px rgba(92,56,189,.25)}.eyebrow{margin-top:28px;font-size:11px;font-weight:800;letter-spacing:.18em;color:#6953d8}h1{font-size:48px;letter-spacing:-.04em;margin:12px 0}main>p:not(.eyebrow){color:#6b7890;font-size:18px;line-height:1.55}.notice{margin:38px auto 0;background:white;border:1px solid #dce4ef;border-radius:18px;padding:20px;text-align:left;display:flex;gap:15px;box-shadow:0 15px 40px rgba(27,44,81,.08)}.notice i{color:#15a777;font-size:25px}.notice strong,.notice span{display:block}.notice span{color:#738097;font-size:13px;margin-top:5px}`]})
-export class ProductHome { title='Workspace'; description=''; icon='pi pi-box'; constructor(route:ActivatedRoute, public auth:AuthService){const id=route.snapshot.paramMap.get('platform'); if(id==='csd-studio'){this.title='CSD Studio';this.description='Generate and manage consistent, compliant CSD deliverables.';this.icon='pi pi-file-edit'}else{this.title='Tenant Provisioning';this.description='Create, configure, and track customer tenant environments.';this.icon='pi pi-building'}}}
+import { Component, inject } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
+
+@Component({
+  selector: 'app-product-home',
+  standalone: true,
+  templateUrl: './product-home.html',
+  styleUrl: './product-home.scss'
+})
+export class ProductHome {
+  private readonly route = inject(ActivatedRoute);
+  private readonly platform = this.route.snapshot.paramMap.get('platform');
+  readonly title = this.platform === 'csd-studio' ? 'CSD Studio' : 'Tenant Provisioning';
+  readonly description = this.platform === 'csd-studio'
+    ? 'Document generation workspace'
+    : 'Tenant creation and provisioning workspace';
+  readonly icon = this.platform === 'csd-studio' ? 'pi pi-file-edit' : 'pi pi-cog';
+}

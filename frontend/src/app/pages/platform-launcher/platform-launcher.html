@@ -1,24 +1,38 @@
 <div class="launcher-page">
-  <header class="launcher-header">
-    <a class="brand" routerLink="/"><span class="brand-mark">N</span><span class="brand-name">NOESIS <sup>Manager</sup></span></a>
-    <button class="language-control" type="button" aria-label="Language: English"><span><small>Language</small><strong>English</strong></span><i class="pi pi-language"></i></button>
+  <header class="topbar">
+    <a class="brand" routerLink="/" aria-label="Noesis Manager home">
+      <span class="brand-mark">N</span>
+      <span class="brand-lockup"><strong>NOESIS</strong><em>Manager</em></span>
+    </a>
   </header>
+
   <main>
     <section class="hero">
-      <div class="hero-badge"><img src="/assets/images/noesis-manager-mark.svg" alt="Noesis" /></div>
-      <h1>Welcome to <span class="hero-wordmark">NOESIS <sup>Manager</sup></span></h1>
-      <p class="subtitle">Select an application to get started</p>
+      <div class="hero-logo"><img src="/assets/images/noesis-manager-mark.svg" alt="Noesis Manager" /></div>
+      <h1>Welcome to <span>NOESIS <sup>Manager</sup></span></h1>
+      <p>Select an application to get started</p>
     </section>
-    <section class="platform-grid" aria-label="Noesis applications">
-      @for (platform of visiblePlatforms(); track platform.id) {
-        <button class="platform-card" [class]="'platform-card ' + platform.accent" (click)="launch(platform)">
-          <span class="card-heading"><span class="icon-wrap"><i [class]="'pi ' + platform.icon"></i></span><span class="card-title">{{platform.name}}</span></span>
-          <span class="card-copy">{{platform.description}}</span>
-          <span class="launch-link">Launch <i class="pi pi-arrow-right"></i></span>
-        </button>
+
+    <section class="workspace-section">
+      <div class="section-heading"><div><span class="section-kicker">{{workspaceKicker()}}</span><h2>{{workspaceHeading()}}</h2></div>@if (auth.isLoggedIn() && visiblePlatforms().length) { <span class="assigned-summary"><i class="pi pi-check-circle"></i> {{visiblePlatforms().length}} assigned</span> }</div>
+      <div class="platform-grid" aria-label="Noesis applications">
+        @for (platform of visiblePlatforms(); track platform.id; let index = $index) {
+          <button class="platform-card" [class]="'platform-card ' + platform.accent" (click)="launch(platform)">
+            <span class="card-accent"></span>
+            <span class="card-header"><span class="icon-wrap"><i [class]="'pi ' + platform.icon"></i></span><span class="card-number">0{{index + 1}}</span></span>
+            <span class="card-body"><span class="card-title">{{platform.name}}</span><span class="card-copy">{{platform.description}}</span></span>
+            <span class="card-footer"><span>{{auth.isLoggedIn() ? 'Open workspace' : 'Sign in to continue'}}</span><span class="arrow"><i class="pi pi-arrow-up-right"></i></span></span>
+          </button>
+        }
+      </div>
+      @if (auth.isLoggedIn() && visiblePlatforms().length === 0) {
+        <div class="empty-access">
+          <span class="empty-icon"><i class="pi pi-lock"></i></span>
+          <div><h3>No applications assigned</h3><p>Your account is active, but no workspace access has been granted. Contact a Noesis administrator.</p></div>
+        </div>
       }
     </section>
-    @if (auth.isLoggedIn()) { <p class="access-note">Showing applications assigned to {{auth.user()?.fullName || auth.user()?.username}}.</p> }
   </main>
-  <footer>&copy; {{year}} Drogevate. All rights reserved.</footer>
+
+  <footer><span>&copy; {{year}} Drogevate. All rights reserved.</span><span>Noesis Manager</span></footer>
 </div>
