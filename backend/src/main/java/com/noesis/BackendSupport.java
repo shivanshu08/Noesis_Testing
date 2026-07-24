@@ -188,6 +188,10 @@ class BackendSupport {
     try { db.update("ALTER TABLE users ADD COLUMN IF NOT EXISTS unlocked_by INT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL"); } catch (Exception ignored) {}
   }
 
+  protected void ensurePlatformAccess() {
+    try { db.update("ALTER TABLE users ADD COLUMN IF NOT EXISTS platform_access TEXT[] NOT NULL DEFAULT ARRAY['test-automation']::TEXT[]"); } catch (Exception ignored) {}
+    try { db.update("UPDATE users SET platform_access = ARRAY['test-automation','csd-studio','tenant-provisioning']::TEXT[] WHERE role = 'admin' AND platform_access = ARRAY['test-automation']::TEXT[]"); } catch (Exception ignored) {}
+  }
   protected Auth auth(HttpExchange ex) throws IOException, SQLException {
     String header = ex.getRequestHeaders().getFirst("Authorization");
     if (header == null || !header.startsWith("Bearer ")) {
@@ -381,6 +385,11 @@ class BackendSupport {
   protected Map<String, Object> userDto(Map<String, Object> u) {
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("id", u.get("id")); out.put("username", u.get("username")); out.put("email", u.get("email")); out.put("fullName", u.get("fullName")); out.put("role", u.get("role")); out.put("avatarUrl", u.get("avatarUrl"));
+    Object access = u.get("platformAccess");
+    if (access instanceof java.sql.Array sqlArray) {
+      try { access = sqlArray.getArray(); } catch (SQLException ignored) { access = new String[] {"test-automation"}; }
+    }
+    out.put("platformAccess", access == null ? new String[] {"test-automation"} : access);
     return out;
   }
   protected Path resolveScriptPath(Object filePath) {

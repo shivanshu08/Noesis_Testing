@@ -1,5 +1,5 @@
 import { inject } from '@angular/core';
-import { CanActivateFn, Router } from '@angular/router';
+import { ActivatedRouteSnapshot, CanActivateFn, Router } from '@angular/router';
 import { AuthService } from '../services/auth.service';
 
 export const authGuard: CanActivateFn = () => {
@@ -10,7 +10,7 @@ export const authGuard: CanActivateFn = () => {
     return true;
   }
 
-  return router.createUrlTree(['/login']);
+  return router.createUrlTree(['/']);
 };
 
 export const guestGuard: CanActivateFn = () => {
@@ -40,4 +40,12 @@ export const editGuard: CanActivateFn = () => {
   if (authService.canEdit()) return true;
 
   return router.createUrlTree(['/dashboard']);
+};
+
+export const platformGuard: CanActivateFn = (route: ActivatedRouteSnapshot) => {
+  const authService = inject(AuthService);
+  const router = inject(Router);
+  const platform = route.paramMap.get('platform');
+  const access = authService.user()?.platformAccess || ['test-automation'];
+  return platform && access.includes(platform as any) ? true : router.createUrlTree(['/']);
 };

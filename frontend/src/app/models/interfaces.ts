@@ -10,11 +10,15 @@ export interface User {
   lastLogin?: string;
   createdAt?: string;
   assignedScriptCount?: number;
+  platformAccess?: PlatformId[];
 }
+
+export type PlatformId = 'test-automation' | 'csd-studio' | 'tenant-provisioning';
 
 export interface LoginRequest {
   username: string;
   password: string;
+  platform?: PlatformId;
 }
 
 export interface ScriptAssignmentEntry {

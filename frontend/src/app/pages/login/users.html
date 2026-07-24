@@ -101,6 +101,9 @@
               <i [class]="'pi ' + (user.role === 'admin' ? 'pi-shield' : (user.role === 'tester' ? 'pi-cog' : 'pi-eye'))"></i>
               <span>{{user.role | titlecase}}</span>
             </div>
+            <div class="platform-pills">
+              @for (platform of user.platformAccess; track platform) { <span>{{platformLabel(platform)}}</span> }
+            </div>
           </td>
           <td>
             <div class="activity-cell">
@@ -217,6 +220,19 @@
         <small class="text-muted mt-1 block">Determines platform permissions.</small>
       </div>
 
+      <div class="form-field full">
+        <label>Application Access</label>
+        <div class="platform-access-grid">
+          @for (platform of platforms; track platform.id) {
+            <label class="platform-access-option" [class.selected]="hasPlatform(platform.id)">
+              <p-checkbox [binary]="true" [ngModel]="hasPlatform(platform.id)" (ngModelChange)="togglePlatform(platform.id, $event)"></p-checkbox>
+              <i [class]="'pi ' + platform.icon"></i>
+              <span>{{platform.label}}</span>
+            </label>
+          }
+        </div>
+        <small class="text-muted mt-1 block">Users can sign in only to selected applications.</small>
+      </div>
       @if (!isEdit) {
         <div class="form-field">
           <label>Initial Password</label>

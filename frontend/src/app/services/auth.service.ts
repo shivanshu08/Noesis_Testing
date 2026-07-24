@@ -66,7 +66,7 @@ export class AuthService {
     this.clearLocalSession();
     this.sessionService.clearExecutionTimeoutHolds();
     this.sessionService.reset();
-    this.router.navigate(['/login']);
+    this.router.navigate(['/']);
   }
 
   renewSession(): Observable<{ token: string }> {
@@ -83,7 +83,7 @@ export class AuthService {
     this.clearLocalSession();
     this.sessionService.clearExecutionTimeoutHolds();
     this.sessionService.reset();
-    this.router.navigate(['/login']);
+    this.router.navigate(['/']);
   }
 
   private clearLocalSession(): void {

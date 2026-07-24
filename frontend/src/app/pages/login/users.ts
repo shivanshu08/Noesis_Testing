@@ -44,6 +44,12 @@ export class Users implements OnInit {
   activeCount = signal(0);
   lockedCount = signal(0);
 
+  platforms = [
+    { id: 'test-automation', label: 'Test Automation', icon: 'pi-bolt' },
+    { id: 'csd-studio', label: 'CSD Studio', icon: 'pi-file-edit' },
+    { id: 'tenant-provisioning', label: 'Tenant Provisioning', icon: 'pi-building' }
+  ];
+
   roles = [
     { label: 'Admin', value: 'admin' },
     { label: 'Tester', value: 'tester' },
@@ -77,7 +83,8 @@ export class Users implements OnInit {
           avatar_url: user.avatar_url ?? user.avatarUrl,
           run_count: user.run_count ?? user.runCount ?? 0,
           suites_created: user.suites_created ?? user.suitesCreated ?? 0,
-          scripts_registered: user.scripts_registered ?? user.scriptsRegistered ?? 0
+          scripts_registered: user.scripts_registered ?? user.scriptsRegistered ?? 0,
+          platformAccess: user.platform_access ?? user.platformAccess ?? ['test-automation']
         }));
         this.users.set(users);
         
@@ -98,7 +105,7 @@ export class Users implements OnInit {
   }
 
   openNew() {
-    this.userForm = { role: 'tester', isActive: true, avatarUrl: '' };
+    this.userForm = { role: 'tester', isActive: true, avatarUrl: '', platformAccess: ['test-automation'] };
     this.isEdit = false;
     this.userDialog = true;
   }
@@ -143,6 +150,14 @@ export class Users implements OnInit {
     if (event.options && event.options.clear) event.options.clear();
   }
 
+  hasPlatform(id: string): boolean { return (this.userForm.platformAccess || []).includes(id); }
+
+  togglePlatform(id: string, enabled: boolean) {
+    const current: string[] = this.userForm.platformAccess || [];
+    this.userForm.platformAccess = enabled ? [...new Set([...current, id])] : current.filter(value => value !== id);
+  }
+
+  platformLabel(id: string): string { return this.platforms.find(platform => platform.id === id)?.label || id; }
   saveUser() {
     const headers = this.getHeaders();
     const request = this.isEdit 

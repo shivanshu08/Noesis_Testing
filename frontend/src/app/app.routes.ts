@@ -1,15 +1,14 @@
 import { Routes } from '@angular/router';
-import { authGuard, guestGuard, adminGuard, editGuard } from './guards/auth.guard';
+import { authGuard, guestGuard, adminGuard, editGuard, platformGuard } from './guards/auth.guard';
 
 export const routes: Routes = [
   {
     path: '',
     pathMatch: 'full',
-    canActivate: [guestGuard],
-    loadComponent: () => import('./pages/login/login').then(m => m.Login),
+    loadComponent: () => import('./pages/platform-launcher/platform-launcher').then(m => m.PlatformLauncher),
   },
   {
-    path: 'login',
+    path: 'login/:platform',
     canActivate: [guestGuard],
     loadComponent: () => import('./pages/login/login').then(m => m.Login),
   },
@@ -32,5 +31,5 @@ export const routes: Routes = [
       { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
     ],
   },
-  { path: '**', redirectTo: 'login' },
+  { path: '**', redirectTo: '' },
 ];

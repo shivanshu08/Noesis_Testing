@@ -11,8 +11,10 @@ class AuthFeature extends BackendSupport {
     Map<String, Object> body = body(ex);
     String username = str(body.get("username"));
     String password = str(body.get("password"));
+    String platform = str(body.get("platform"));
     if (username.isBlank() || password.isBlank()) throw new ApiException(400, "Username and password are required.");
     ensureUserLockout();
+    ensurePlatformAccess();
     Map<String, Object> user = db.one("SELECT * FROM users WHERE username = ? OR email = ?", username, username);
     if (user == null) throw new ApiException(401, "User does not exist.");
     if (Boolean.FALSE.equals(user.get("isActive"))) throw new ApiException(403, "This account has been disabled. Please contact an administrator.");
@@ -27,6 +29,10 @@ class AuthFeature extends BackendSupport {
       int left = 3 - failed;
       throw new ApiException(401, "Invalid credentials. " + left + " attempt" + (left == 1 ? "" : "s") + " remaining before lock.");
     }
+    if (!platform.isBlank()) {
+      Map<String, Object> allowed = db.one("SELECT ? = ANY(platform_access) AS allowed FROM users WHERE id = ?", platform, user.get("id"));
+      if (allowed == null || !Boolean.TRUE.equals(allowed.get("allowed"))) throw new ApiException(403, "You do not have access to this application. Contact an administrator.");
+    }
     db.update("UPDATE users SET last_login = NOW(), failed_login_attempts = 0, unlocked_at = NULL, unlocked_by = NULL WHERE id = ?", user.get("id"));
     Map<String, Object> publicUser = userDto(user);
     if ("tester".equals(user.get("role"))) {
@@ -36,7 +42,7 @@ class AuthFeature extends BackendSupport {
   }
 
   protected void me(HttpExchange ex, Auth auth) throws IOException, SQLException {
-    Map<String, Object> user = db.one("SELECT id, username, email, full_name, role, avatar_url, is_locked, failed_login_attempts, last_login, created_at FROM users WHERE id = ?", auth.userId);
+    Map<String, Object> user = db.one("SELECT id, username, email, full_name, role, avatar_url, platform_access, is_locked, failed_login_attempts, last_login, created_at FROM users WHERE id = ?", auth.userId);
     if (user == null) throw new ApiException(404, "User not found.");
     Map<String, Object> out = userDto(user);
     out.put("isLocked", user.get("isLocked"));

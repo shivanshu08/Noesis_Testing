@@ -1,7 +1,8 @@
 import { Component, signal, OnInit, OnDestroy, Inject } from '@angular/core';
 import { CommonModule, DOCUMENT } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { PlatformId } from '../../models/interfaces';
 import { InputTextModule } from 'primeng/inputtext';
 import { PasswordModule } from 'primeng/password';
 import { ButtonModule } from 'primeng/button';
@@ -24,7 +25,7 @@ import { ThemeService } from '../../services/theme.service';
   selector: 'app-login',
   standalone: true,
   imports: [
-    CommonModule, FormsModule, InputTextModule, PasswordModule, ButtonModule,
+    CommonModule, RouterLink, FormsModule, InputTextModule, PasswordModule, ButtonModule,
     MessageModule, CheckboxModule, IconFieldModule, InputIconModule,
     InputGroupModule, InputGroupAddonModule, CardModule, DividerModule,
     FloatLabelModule, SelectModule, AlertOverlayComponent
@@ -41,6 +42,8 @@ export class Login implements OnInit, OnDestroy {
   error = signal('');
   successMsg = signal('');
   currentYear = new Date().getFullYear();
+  platform: PlatformId = 'test-automation';
+  platformName = 'Test Automation';
   rotatingWords = ['Precision', 'Excellence', 'Compliance', 'You', 'Safety'];
   activeWordIndex = signal(0);
   wordChanging = signal(false);
@@ -49,12 +52,16 @@ export class Login implements OnInit, OnDestroy {
   constructor(
     private auth: AuthService,
     private router: Router,
+    private route: ActivatedRoute,
     public themeService: ThemeService,
     private messageService: MessageService,
     @Inject(DOCUMENT) private document: Document
   ) {}
 
   ngOnInit() {
+    const requested = this.route.snapshot.paramMap.get('platform') as PlatformId;
+    const names: Record<PlatformId, string> = { 'test-automation': 'Test Automation', 'csd-studio': 'CSD Studio', 'tenant-provisioning': 'Tenant Provisioning' };
+    if (names[requested]) { this.platform = requested; this.platformName = names[requested]; }
     // Force Light Mode strictly for the Login page
     this.document.documentElement.classList.remove('dark-mode', 'p-dark');
     this.wordTimer = setInterval(() => {
@@ -84,10 +91,10 @@ export class Login implements OnInit, OnDestroy {
     }
     this.loading.set(true);
 
-    this.auth.login({ username: this.username, password: this.password }).subscribe({
+    this.auth.login({ username: this.username, password: this.password, platform: this.platform }).subscribe({
       next: () => {
         this.loading.set(false);
-        this.router.navigate(['/dashboard']);
+        this.router.navigate([this.platform === 'test-automation' ? '/dashboard' : '/product/' + this.platform]);
       },
       error: (err) => {
         this.loading.set(false);

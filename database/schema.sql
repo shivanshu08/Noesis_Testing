@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS users (
     locked_by INT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
     unlocked_at TIMESTAMP DEFAULT NULL,
     unlocked_by INT DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
+    platform_access TEXT[] NOT NULL DEFAULT ARRAY['test-automation']::TEXT[],
     last_login TIMESTAMP DEFAULT NULL,
     run_count INT NOT NULL DEFAULT 0,
     suites_created INT NOT NULL DEFAULT 0,

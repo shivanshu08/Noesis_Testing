@@ -1,0 +1,24 @@
+<div class="launcher-page">
+  <header class="launcher-header">
+    <a class="brand" routerLink="/"><span class="brand-mark">N</span><span class="brand-name">NOESIS <sup>Manager</sup></span></a>
+    <button class="language-control" type="button" aria-label="Language: English"><span><small>Language</small><strong>English</strong></span><i class="pi pi-language"></i></button>
+  </header>
+  <main>
+    <section class="hero">
+      <div class="hero-badge"><img src="/assets/images/noesis-manager-mark.svg" alt="Noesis" /></div>
+      <h1>Welcome to <span class="hero-wordmark">NOESIS <sup>Manager</sup></span></h1>
+      <p class="subtitle">Select an application to get started</p>
+    </section>
+    <section class="platform-grid" aria-label="Noesis applications">
+      @for (platform of visiblePlatforms(); track platform.id) {
+        <button class="platform-card" [class]="'platform-card ' + platform.accent" (click)="launch(platform)">
+          <span class="card-heading"><span class="icon-wrap"><i [class]="'pi ' + platform.icon"></i></span><span class="card-title">{{platform.name}}</span></span>
+          <span class="card-copy">{{platform.description}}</span>
+          <span class="launch-link">Launch <i class="pi pi-arrow-right"></i></span>
+        </button>
+      }
+    </section>
+    @if (auth.isLoggedIn()) { <p class="access-note">Showing applications assigned to {{auth.user()?.fullName || auth.user()?.username}}.</p> }
+  </main>
+  <footer>&copy; {{year}} Drogevate. All rights reserved.</footer>
+</div>
